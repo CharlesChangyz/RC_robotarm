@@ -1,5 +1,5 @@
 import numpy as np
-from rc_robotarm_mujoco.utils.transform_utils import (
+from manipulator_mujoco.utils.transform_utils import (
     quat_multiply,
     quat2mat,
     axisangle2quat,

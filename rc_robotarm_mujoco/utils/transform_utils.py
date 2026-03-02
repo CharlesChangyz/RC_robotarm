@@ -188,7 +188,7 @@ def quat_slerp(quat0, quat1, fraction, shortestpath=True):
     if shortestpath and d < 0.0:
         # invert rotation
         d = -d
-        q1 = np.asarray(q1) * -1.0
+        q1 *= -1.0
     angle = math.acos(np.clip(d, -1, 1))
     if abs(angle) < EPS:
         return q0
