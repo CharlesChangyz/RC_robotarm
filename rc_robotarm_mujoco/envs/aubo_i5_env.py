@@ -4,11 +4,11 @@ from dm_control import mjcf
 import mujoco.viewer
 import gymnasium as gym
 from gymnasium import spaces
-from manipulator_mujoco.arenas import StandardArena
-from manipulator_mujoco.robots import AuboI5, AG95
-from manipulator_mujoco.props import Primitive
-from manipulator_mujoco.mocaps import Target
-from manipulator_mujoco.controllers import OperationalSpaceController
+from rc_robotarm_mujoco.arenas import StandardArena
+from rc_robotarm_mujoco.robots import AuboI5, AG95
+from rc_robotarm_mujoco.props import Primitive
+from rc_robotarm_mujoco.mocaps import Target
+from rc_robotarm_mujoco.controllers import OperationalSpaceController
 
 class AuboI5Env(gym.Env):
 

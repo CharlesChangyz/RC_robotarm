@@ -5,10 +5,10 @@ from dm_control import mjcf
 import mujoco.viewer
 import gymnasium as gym
 from gymnasium import spaces
-from manipulator_mujoco.arenas import StandardArena
-from manipulator_mujoco.robots import Arm
-from manipulator_mujoco.mocaps import Target
-from manipulator_mujoco.controllers import OperationalSpaceController
+from rc_robotarm_mujoco.arenas import StandardArena
+from rc_robotarm_mujoco.robots import Arm
+from rc_robotarm_mujoco.mocaps import Target
+from rc_robotarm_mujoco.controllers import OperationalSpaceController
 
 class UR5eEnv(gym.Env):
 
@@ -74,7 +74,7 @@ class UR5eEnv(gym.Env):
         )
 
         # for GUI and time keeping
-        self._timestep = self._physics.model.opt.timestep
+        self._timestep = self._physics.timestep()
         self._viewer = None
         self._step_start = None
 

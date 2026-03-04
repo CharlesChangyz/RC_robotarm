@@ -1,1 +1,1 @@
-from manipulator_mujoco.mocaps.target import Target
+from rc_robotarm_mujoco.mocaps.target import Target

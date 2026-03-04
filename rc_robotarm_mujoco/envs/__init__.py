@@ -1,2 +1,2 @@
-from manipulator_mujoco.envs.aubo_i5_env import AuboI5Env
-from manipulator_mujoco.envs.ur5e_env import UR5eEnv
+from rc_robotarm_mujoco.envs.aubo_i5_env import AuboI5Env
+from rc_robotarm_mujoco.envs.ur5e_env import UR5eEnv

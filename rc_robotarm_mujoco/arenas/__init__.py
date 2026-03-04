@@ -1,1 +1,1 @@
-from manipulator_mujoco.arenas.standard import StandardArena
+from rc_robotarm_mujoco.arenas.standard import StandardArena
