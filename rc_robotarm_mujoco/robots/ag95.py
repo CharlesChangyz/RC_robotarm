@@ -1,5 +1,5 @@
 import os
-from manipulator_mujoco.robots.gripper import Gripper
+from rc_robotarm_mujoco.robots.gripper import Gripper
 
 _AG95_XML = os.path.join(
     os.path.dirname(__file__),

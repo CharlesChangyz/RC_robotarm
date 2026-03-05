@@ -1,5 +1,5 @@
 import os
-from manipulator_mujoco.robots.arm import Arm
+from rc_robotarm_mujoco.robots.arm import Arm
 
 _AUBOI5_XML = os.path.join(
     os.path.dirname(__file__),

@@ -17,7 +17,7 @@
     <global azimuth="120" elevation="-20"/>
   </visual>
 
-  <compiler angle="radian" meshdir="../meshes/" texturedir="../meshes/" autolimits="true"/>
+  <compiler angle="radian" meshdir="meshes/" texturedir="meshes/" autolimits="true"/>
 
   <worldbody>
     <light pos=" 6 0 10." dir="0 0 -1"/>

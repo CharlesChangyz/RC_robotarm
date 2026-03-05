@@ -1,5 +1,5 @@
 from dm_control import mjcf
-from manipulator_mujoco.utils.transform_utils import (
+from rc_robotarm_mujoco.utils.transform_utils import (
     mat2quat
 )
 import numpy as np
