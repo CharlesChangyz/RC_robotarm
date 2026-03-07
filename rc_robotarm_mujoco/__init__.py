@@ -25,6 +25,12 @@ register(
     max_episode_steps=1000,
 )
 
+register(
+    id="rc_robotarm_mujoco/RC_ARM_2Env-v0",
+    entry_point="rc_robotarm_mujoco.envs:RC_ARM_2Env",
+    max_episode_steps=1000,
+)
+
 # 可以添加您自己的环境
 register(
     id="rc_robotarm_mujoco/CustomEnv-v0",

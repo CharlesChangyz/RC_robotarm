@@ -6,7 +6,7 @@
   name="0-臂-anOt">
   <mujoco>
         <compiler 
-        meshdir="eshes/" 
+        meshdir="meshes/" 
         balanceinertia="true" 
         discardvisual="false" />
   </mujoco>

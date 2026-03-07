@@ -6,11 +6,11 @@ import mujoco.viewer
 import gymnasium as gym
 from gymnasium import spaces
 from rc_robotarm_mujoco.arenas import StandardArena
-from rc_robotarm_mujoco.robots import Arm, RCArm
+from rc_robotarm_mujoco.robots import Arm, RCArm_2
 from rc_robotarm_mujoco.mocaps import Target
 from rc_robotarm_mujoco.controllers import OperationalSpaceController
 
-class RC_ARMEnv(gym.Env):
+class RC_ARM_2Env(gym.Env):
 
     metadata = {
         "render_modes": ["human", "rgb_array"],
@@ -41,7 +41,7 @@ class RC_ARMEnv(gym.Env):
         # mocap target that OSC will try to follow
         self._target = Target(self._arena.mjcf_model)
 
-        self._arm = RCArm()
+        self._arm = RCArm_2()
 
         # attach arm to arena
         self._arena.attach(
@@ -88,10 +88,6 @@ class RC_ARMEnv(gym.Env):
                 1.0,
                 1.0,
                 1.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
                 0.0,
             ]
             # put target in a reasonable starting position

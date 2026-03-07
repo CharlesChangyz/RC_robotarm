@@ -13,7 +13,7 @@ import numpy as np
 
 
 # 以 human 模式创建并渲染环境
-env = gymnasium.make('rc_robotarm_mujoco/RC_ARMEnv-v0', render_mode='human')
+env = gymnasium.make('rc_robotarm_mujoco/RC_ARM_2Env-v0', render_mode='human')
 
 # 使用指定种子重置环境以便结果可复现
 observation, info = env.reset(seed=42)
@@ -22,7 +22,7 @@ observation, info = env.reset(seed=42)
 # for _ in range(1000):
 while True:
     # 固定动作：不移动
-    action = np.zeros(6)
+    action = env.action_space.sample()
 
     # 使用选定动作在环境中执行一步
     observation, reward, terminated, truncated, info = env.step(action)
