@@ -8,10 +8,14 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 import rc_robotarm_mujoco
+print(f"rc_robotarm_mujoco file: {rc_robotarm_mujoco.__file__}")
+from rc_robotarm_mujoco.envs.rc_arm_env import RC_ARMEnv
+print(f"RC_ARMEnv file: {sys.modules['rc_robotarm_mujoco.envs.rc_arm_env'].__file__}")
+
 
 
 # 以 human 模式创建并渲染环境
-env = gymnasium.make('rc_robotarm_mujoco/AuboI5Env-v0', render_mode='human')
+env = gymnasium.make('rc_robotarm_mujoco/RC_ARMEnv-v0', render_mode='human')
 
 # 使用指定种子重置环境以便结果可复现
 observation, info = env.reset(seed=42)

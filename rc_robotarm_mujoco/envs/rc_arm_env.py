@@ -6,11 +6,11 @@ import mujoco.viewer
 import gymnasium as gym
 from gymnasium import spaces
 from rc_robotarm_mujoco.arenas import StandardArena
-from rc_robotarm_mujoco.robots import Arm
+from rc_robotarm_mujoco.robots import Arm, RCArm
 from rc_robotarm_mujoco.mocaps import Target
 from rc_robotarm_mujoco.controllers import OperationalSpaceController
 
-class UR5eEnv(gym.Env):
+class RC_ARMEnv(gym.Env):
 
     metadata = {
         "render_modes": ["human", "rgb_array"],
@@ -41,19 +41,11 @@ class UR5eEnv(gym.Env):
         # mocap target that OSC will try to follow
         self._target = Target(self._arena.mjcf_model)
 
-        # ur5e arm
-        self._arm = Arm(
-            xml_path= os.path.join(
-                os.path.dirname(__file__),
-                '../assets/robots/ur5e/ur5e.xml',
-            ),
-            eef_site_name='eef_site',
-            attachment_site_name='attachment_site'
-        )
+        self._arm = RCArm()
 
         # attach arm to arena
         self._arena.attach(
-            self._arm.mjcf_model, pos=[0,0,0], quat=[0.7071068, 0, 0, -0.7071068]
+            self._arm.mjcf_model, pos=[1,1,0], quat=[0.7071068, 0, 0, -0.7071068]
         )
        
         # generate model
@@ -64,8 +56,8 @@ class UR5eEnv(gym.Env):
             physics=self._physics,
             joints=self._arm.joints,
             eef_site=self._arm.eef_site,
-            min_effort=-150.0,
-            max_effort=150.0,
+            min_effort=-250.0,
+            max_effort=250.0,
             kp=200,
             ko=200,
             kv=50,
@@ -94,14 +86,20 @@ class UR5eEnv(gym.Env):
             # put arm in a reasonable starting position
             self._physics.bind(self._arm.joints).qpos = [
                 0.0,
-                -1.5707,
-                1.5707,
-                -1.5707,
-                -1.5707,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
                 0.0,
             ]
             # put target in a reasonable starting position
-            self._target.set_mocap_pose(self._physics, position=[0.5, 0, 0.3], quaternion=[0, 0, 0, 1])
+            # self._target.set_mocap_pose(self._physics, position=[0.5, 0, 0.3], quaternion=[0, 0, 0, 1])
+
+        self._physics.forward()
+        ee_pose = self._arm.get_eef_pose(self._physics)
+        self._target.set_mocap_pose(self._physics, position=ee_pose[:3], quaternion=ee_pose[3:])
 
         observation = self._get_obs()
         info = self._get_info()
