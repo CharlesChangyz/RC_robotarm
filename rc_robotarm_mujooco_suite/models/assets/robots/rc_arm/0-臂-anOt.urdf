@@ -1,0 +1,761 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="0-臂-anOt">
+  <mujoco>
+        <compiler 
+        meshdir="meshes/" 
+        balanceinertia="true" 
+        discardvisual="false" />
+  </mujoco>
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-0.023814 -0.0026552 -0.015693"
+        rpy="0 0 0" />
+      <mass
+        value="1.1888" />
+      <inertia
+        ixx="0.002597"
+        ixy="9.3692E-06"
+        ixz="5.7808E-10"
+        iyy="0.0065925"
+        iyz="4.4993E-09"
+        izz="0.0089454" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="Link_1">
+    <inertial>
+      <origin
+        xyz="-0.01219 -0.025726 0.049914"
+        rpy="0 0 0" />
+      <mass
+        value="1.3823" />
+      <inertia
+        ixx="0.003172"
+        ixy="-5.8376E-08"
+        ixz="8.6382E-08"
+        iyy="0.0025087"
+        iyz="-1.9847E-05"
+        izz="0.0050515" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J1"
+    type="revolute">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_1" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-3.1416"
+      upper="3.1416"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link_2">
+    <inertial>
+      <origin
+        xyz="-0.068871 0.15511 0.014607"
+        rpy="0 0 0" />
+      <mass
+        value="1.1524" />
+      <inertia
+        ixx="0.001704"
+        ixy="0.00023512"
+        ixz="-5.1657E-08"
+        iyy="0.0006544"
+        iyz="6.5818E-08"
+        izz="0.0022314" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J2"
+    type="revolute">
+    <origin
+      xyz="0 0 0.07535"
+      rpy="0 1.5708 0" />
+    <parent
+      link="Link_1" />
+    <child
+      link="Link_2" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="2.227"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link_3">
+    <inertial>
+      <origin
+        xyz="-0.041769 -0.12706 -3.4379E-06"
+        rpy="0 0 0" />
+      <mass
+        value="1.2359" />
+      <inertia
+        ixx="0.0016938"
+        ixy="-0.00046129"
+        ixz="-1.6737E-07"
+        iyy="0.00046522"
+        iyz="-4.6317E-08"
+        izz="0.0019604" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_3.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J3"
+    type="revolute">
+    <origin
+      xyz="-0.10725 0.48836 0"
+      rpy="-3.1416 0 3.1416" />
+    <parent
+      link="Link_2" />
+    <child
+      link="Link_3" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="4.276"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link_4">
+    <inertial>
+      <origin
+        xyz="-0.0066335 0.11402 -0.0088916"
+        rpy="0 0 0" />
+      <mass
+        value="0.29689" />
+      <inertia
+        ixx="0.00018066"
+        ixy="-7.6982E-06"
+        ixz="8.0472E-07"
+        iyy="5.4517E-05"
+        iyz="3.6489E-06"
+        izz="0.00017554" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_4.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J4"
+    type="revolute">
+    <origin
+      xyz="-0.12444 -0.38015 0"
+      rpy="0 0 0" />
+    <parent
+      link="Link_3" />
+    <child
+      link="Link_4" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="3.927"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link_5">
+    <inertial>
+      <origin
+        xyz="-5.288E-09 -1.8999E-08 0.024128"
+        rpy="0 0 0" />
+      <mass
+        value="0.18435" />
+      <inertia
+        ixx="4.0172E-05"
+        ixy="1.7614E-11"
+        ixz="-1.4768E-11"
+        iyy="4.0172E-05"
+        iyz="2.6365E-11"
+        izz="6.112E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_5.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_5.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J5"
+    type="continuous">
+    <origin
+      xyz="5.6187E-05 0.16772 0"
+      rpy="-1.5708 0 -0.22908" />
+    <parent
+      link="Link_4" />
+    <child
+      link="Link_5" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link_6">
+    <inertial>
+      <origin
+        xyz="0.055976 0.032844 -0.0012151"
+        rpy="0 0 0" />
+      <mass
+        value="0.293" />
+      <inertia
+        ixx="5.6773E-05"
+        ixy="-8.8043E-06"
+        ixz="6.2497E-07"
+        iyy="5.4862E-05"
+        iyz="-4.1564E-07"
+        izz="7.9991E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_6.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_6.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J6"
+    type="revolute">
+    <origin
+      xyz="-0.12444 -0.38015 0"
+      rpy="0 0 0" />
+    <parent
+      link="Link_3" />
+    <child
+      link="Link_6" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="3.927"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link_7">
+    <inertial>
+      <origin
+        xyz="-0.00042817 9.5866E-05 0.057354"
+        rpy="0 0 0" />
+      <mass
+        value="0.22142" />
+      <inertia
+        ixx="5.3758E-05"
+        ixy="-3.354E-13"
+        ixz="-3.1765E-08"
+        iyy="3.2995E-05"
+        iyz="4.5984E-14"
+        izz="4.2714E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_7.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_7.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J7"
+    type="revolute">
+    <origin
+      xyz="0.068192 0.079743 0"
+      rpy="-1.5708 0 -0.31635" />
+    <parent
+      link="Link_6" />
+    <child
+      link="Link_7" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-3.1416"
+      upper="3.1416"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link_11">
+    <inertial>
+      <origin
+        xyz="-0.0020481 0.022277 0.01533"
+        rpy="0 0 0" />
+      <mass
+        value="0.057886" />
+      <inertia
+        ixx="2.1118E-05"
+        ixy="-1.7157E-07"
+        ixz="5.3889E-08"
+        iyy="1.9679E-05"
+        iyz="-4.585E-07"
+        izz="4.9289E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_11.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_11.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="PJ11"
+    type="prismatic">
+    <origin
+      xyz="0 -0.00047701 0.083"
+      rpy="0 0 0" />
+    <parent
+      link="Link_7" />
+    <child
+      link="Link_11" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0.02"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link_12">
+    <inertial>
+      <origin
+        xyz="0.0021095 -0.022277 0.01533"
+        rpy="0 0 0" />
+      <mass
+        value="0.057886" />
+      <inertia
+        ixx="2.1118E-05"
+        ixy="1.0603E-07"
+        ixz="7.2362E-08"
+        iyy="1.9679E-05"
+        iyz="4.585E-07"
+        izz="4.9289E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_12.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_12.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="PJ12"
+    type="prismatic">
+    <origin
+      xyz="0 0.00047701 0.083"
+      rpy="0 0 0" />
+    <parent
+      link="Link_7" />
+    <child
+      link="Link_12" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="0"
+      upper="0.02"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="PJ11"
+      multiplier="1"
+      offset="0" />
+  </joint>
+  <link
+    name="Link_10">
+    <inertial>
+      <origin
+        xyz="0.0069421 -0.0076704 6.7336E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.37505" />
+      <inertia
+        ixx="0.00013244"
+        ixy="5.1144E-05"
+        ixz="1.5517E-14"
+        iyy="0.00012212"
+        iyz="-7.9145E-14"
+        izz="0.0002094" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_10.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_10.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J10"
+    type="revolute">
+    <origin
+      xyz="-0.10725 0.48836 0"
+      rpy="-3.1416 0 3.1416" />
+    <parent
+      link="Link_2" />
+    <child
+      link="Link_10" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-4"
+      upper="4"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="J2"
+      multiplier="1"
+      offset="0" />
+  </joint>
+  <link
+    name="Link_8">
+    <inertial>
+      <origin
+        xyz="-0.030242 0.13807 -8.0308E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.84442" />
+      <inertia
+        ixx="0.0031168"
+        ixy="0.00066818"
+        ixz="-7.5352E-10"
+        iyy="0.00022098"
+        iyz="-1.6546E-10"
+        izz="0.0032793" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_8.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_8.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J8"
+    type="revolute">
+    <origin
+      xyz="0 -0.08 0.14768"
+      rpy="0 1.5708 0" />
+    <parent
+      link="Link_1" />
+    <child
+      link="Link_8" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-4"
+      upper="4"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="J2"
+      multiplier="1"
+      offset="0" />
+  </joint>
+  <link
+    name="Link_9">
+    <inertial>
+      <origin
+        xyz="-0.056215 -0.044198 1.4175E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.64642" />
+      <inertia
+        ixx="0.0001483"
+        ixy="-0.00012251"
+        ixz="-4.0303E-08"
+        iyy="0.00019787"
+        iyz="-3.4606E-08"
+        izz="0.00032157" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_9.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://0-臂-anOt/meshes/Link_9.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J9"
+    type="revolute">
+    <origin
+      xyz="0 -0.08 0.06835"
+      rpy="0 1.5708 0" />
+    <parent
+      link="Link_1" />
+    <child
+      link="Link_9" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-4"
+      upper="4"
+      effort="0"
+      velocity="0" />
+  </joint>
+</robot>
