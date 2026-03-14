@@ -28,7 +28,8 @@ register(
 register(
     id="rc_robotarm_mujoco/RC_ARM_2Env-v0",
     entry_point="rc_robotarm_mujoco.envs:RC_ARM_2Env",
-    max_episode_steps=1000,
+    # 延长每次仿真时长，避免 TimeLimit 提前截断
+    max_episode_steps=5000,
 )
 
 # 可以添加您自己的环境

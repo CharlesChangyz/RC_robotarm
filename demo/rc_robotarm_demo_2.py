@@ -13,7 +13,14 @@ import numpy as np
 
 
 # 以 human 模式创建并渲染环境
-env = gymnasium.make('rc_robotarm_mujoco/RC_ARM_2Env-v0', render_mode='human')
+# 4 自由度机械臂适合跟踪 4 维任务：这里配置为 XYZ + 末端局部 Z 轴旋转。
+# orientation_axis 使用末端工具坐标系下的轴，不是世界坐标系。
+orientation_axis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+env = gymnasium.make(
+    'rc_robotarm_mujoco/RC_ARM_2Env-v0',
+    render_mode='human',
+    orientation_axis=orientation_axis,
+)
 
 # 使用指定种子重置环境以便结果可复现
 observation, info = env.reset(seed=42)

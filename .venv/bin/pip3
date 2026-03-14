@@ -1,4 +1,4 @@
-#!/media/dust/新加卷1/rc_robotarm_mujoco/.venv/bin/python
+#!/home/dust/rc_robotarm_mujoco/.venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys

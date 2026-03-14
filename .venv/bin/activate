@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV='/media/dust/新加卷1/rc_robotarm_mujoco/.venv'
+VIRTUAL_ENV=/home/dust/rc_robotarm_mujoco/.venv
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

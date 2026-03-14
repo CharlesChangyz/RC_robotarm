@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV '/media/dust/新加卷1/rc_robotarm_mujoco/.venv'
+set -gx VIRTUAL_ENV /home/dust/rc_robotarm_mujoco/.venv
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/"bin $PATH

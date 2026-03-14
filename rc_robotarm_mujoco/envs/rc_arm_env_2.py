@@ -17,7 +17,7 @@ class RC_ARM_2Env(gym.Env):
         "render_fps": None,
     }  # TODO add functionality to render_fps
 
-    def __init__(self, render_mode=None):
+    def __init__(self, render_mode=None, task_mask=None, orientation_axis=None):
         # TODO come up with an observation space that makes sense
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(6,), dtype=np.float64
@@ -45,7 +45,7 @@ class RC_ARM_2Env(gym.Env):
 
         # attach arm to arena
         self._arena.attach(
-            self._arm.mjcf_model, pos=[1,1,0], quat=[0.7071068, 0, 0, -0.7071068]
+            self._arm.mjcf_model, pos=[0.5,0.5,0.2], quat=[0.7071068, 0, 0, -0.7071068]
         )
        
         # generate model
@@ -56,17 +56,20 @@ class RC_ARM_2Env(gym.Env):
             physics=self._physics,
             joints=self._arm.joints,
             eef_site=self._arm.eef_site,
-            min_effort=-250.0,
-            max_effort=250.0,
+            min_effort=-700.0,
+            max_effort=700.0,
             kp=200,
-            ko=200,
+            ko=50,
             kv=50,
             vmax_xyz=1.0,
             vmax_abg=2.0,
+            control_orientation=True,
+            orientation_axis=orientation_axis,
+            task_mask=task_mask,
         )
 
-        # for GUI and time keeping
-        self._timestep = self._physics.model.opt.timestep
+         # for GUI and time keeping
+        self._timestep = self._physics.timestep()
         self._viewer = None
         self._step_start = None
 
@@ -91,11 +94,7 @@ class RC_ARM_2Env(gym.Env):
                 0.0,
             ]
             # put target in a reasonable starting position
-            # self._target.set_mocap_pose(self._physics, position=[0.5, 0, 0.3], quaternion=[0, 0, 0, 1])
-
-        self._physics.forward()
-        ee_pose = self._arm.get_eef_pose(self._physics)
-        self._target.set_mocap_pose(self._physics, position=ee_pose[:3], quaternion=ee_pose[3:])
+            self._target.set_mocap_pose(self._physics, position=[0.5, 0, 0.3], quaternion=[0, 0, 0, 1])
 
         observation = self._get_obs()
         info = self._get_info()
