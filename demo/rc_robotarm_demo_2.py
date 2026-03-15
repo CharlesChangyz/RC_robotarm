@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 import gymnasium
 import mujoco
 
@@ -21,9 +22,10 @@ try:
     import rclpy
     from rclpy.node import Node
     from geometry_msgs.msg import PoseStamped
+    from sensor_msgs.msg import JointState
 except Exception as exc:  # pragma: no cover
     raise SystemExit(
-        "未找到 ROS2 依赖。请先确保 rclpy 与 geometry_msgs 已安装并可用。"
+        "未找到 ROS2 依赖。请先确保 rclpy、geometry_msgs、sensor_msgs 已安装并可用。"
     ) from exc
 
 
@@ -40,9 +42,10 @@ env = gymnasium.make(
 
 # 使用指定种子重置环境以便结果可复现
 observation, info = env.reset(seed=42)
+joint_dof_ids = env.unwrapped._physics.bind(env.unwrapped._arm.joints).dofadr
 
 # 目标位置（XYZ）和 j4 角度（弧度）
-target_xyz = np.array([0.5, 0.0, 0.3], dtype=np.float64)
+target_xyz = np.array([-0.2, 1.8, 0.6], dtype=np.float64)
 target_j4 = 0.0  # radians
 
 # 以当前末端姿态作为“工具零位姿”
@@ -63,12 +66,21 @@ class TargetPoseNode(Node):
         super().__init__("rc_arm_2_target_pose_listener")
         self._latest_pose = None
         self.create_subscription(PoseStamped, topic, self._on_pose, 10)
+        self._torque_pub = self.create_publisher(JointState, "/rc_arm_2/joint_torque", 10)
+        self._torque_msg = JointState()
+        self._torque_msg.name = ["j1", "j2", "j3", "j4"]
 
     def _on_pose(self, msg: PoseStamped) -> None:
         self._latest_pose = msg.pose
 
     def get_latest_pose(self):
         return self._latest_pose
+
+    def publish_torque(self, torques):
+        msg = self._torque_msg
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.effort = [float(t) for t in torques]
+        self._torque_pub.publish(msg)
 
 
 def _pose_to_arrays(pose):
@@ -85,30 +97,52 @@ def _pose_to_arrays(pose):
     return pos, quat
 
 
+def _find_geom_id_by_suffix(model, suffix: str) -> int:
+    for i in range(model.ngeom):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, i)
+        if name and name.endswith(suffix):
+            return i
+    return -1
+
+
+def _collect_kfs_geom_ids(model):
+    ids = []
+    for gid in range(model.ngeom):
+        body_id = model.geom_bodyid[gid]
+        body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id) or ""
+        short_name = body_name.split("/")[-1]
+        if short_name.startswith("kfs_"):
+            ids.append((gid, short_name))
+    return ids
+
+
 def _attachment_hits_kfs(physics):
-    model = physics.model
-    data = physics.data
-    att_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "attachment_geom")
+    model = physics.model.ptr
+    data = physics.data.ptr
+    att_id = _find_geom_id_by_suffix(model, "attachment_geom")
     if att_id < 0:
         return False, []
 
+    if not hasattr(_attachment_hits_kfs, "_kfs_geom_ids"):
+        _attachment_hits_kfs._kfs_geom_ids = _collect_kfs_geom_ids(model)
+
+    att_pos = data.geom_xpos[att_id]
+    att_r = model.geom_rbound[att_id]
+
     hits = set()
-    for i in range(data.ncon):
-        con = data.contact[i]
-        if con.geom1 != att_id and con.geom2 != att_id:
-            continue
-        other = con.geom2 if con.geom1 == att_id else con.geom1
-        body_id = model.geom_bodyid[other]
-        body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id) or ""
-        if body_name.startswith("kfs_"):
-            hits.add(body_name)
+    for gid, short_name in _attachment_hits_kfs._kfs_geom_ids:
+        other_pos = data.geom_xpos[gid]
+        other_r = model.geom_rbound[gid]
+        if np.linalg.norm(att_pos - other_pos) <= (att_r + other_r-0.23):
+            hits.add(short_name)
 
     return len(hits) > 0, sorted(hits)
 
 
 rclpy.init()
 node = TargetPoseNode()
-was_touching = False
+sim_timestep = float(env.unwrapped._physics.timestep())
+last_step_time = time.time()
 
 try:
     # 运行仿真（示例为无限循环），也可以使用固定步数：
@@ -136,11 +170,24 @@ try:
         # 使用选定动作在环境中执行一步
         observation, reward, terminated, truncated, info = env.step(action)
 
-        touching, bodies = _attachment_hits_kfs(env.unwrapped._physics)
-        if touching and not was_touching:
-            print("attachment_site 触碰到 kfs:", bodies)
-        was_touching = touching
+        # 发布四个关节的力矩（与控制频率一致）
+        torques = env.unwrapped._physics.data.qfrc_applied[joint_dof_ids]
+        node.publish_torque(torques)
 
+        # 限速到现实时间：1 秒现实 = 1 秒仿真
+        now = time.time()
+        elapsed = now - last_step_time
+        if elapsed < sim_timestep:
+            time.sleep(sim_timestep - elapsed)
+            last_step_time = last_step_time + sim_timestep
+        else:
+            last_step_time = now
+
+        touching, bodies = _attachment_hits_kfs(env.unwrapped._physics)
+        if touching:
+            print("attachment_site 触碰到 kfs:", bodies)
+        else:
+            print("attachment_site 没有触碰到任何 kfs。")   
         # 检查回合是否结束（terminated）或被截断（truncated）
         if terminated or truncated:
             # 回合结束或被截断时重置环境

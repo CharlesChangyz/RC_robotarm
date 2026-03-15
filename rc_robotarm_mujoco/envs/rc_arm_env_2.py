@@ -45,7 +45,7 @@ class RC_ARM_2Env(gym.Env):
 
         # attach arm to arena
         self._arena.attach(
-            self._arm.mjcf_model, pos=[0.5,0.5,0.2], quat=[0.7071068, 0, 0, -0.7071068]
+            self._arm.mjcf_model, pos=[0.0,1.8,0.61], quat=[0.7071068, 0, 0, -0.7071068]
         )
        
         # generate model
@@ -58,9 +58,9 @@ class RC_ARM_2Env(gym.Env):
             eef_site=self._arm.eef_site,
             min_effort=-1000.0,
             max_effort=1000.0,
-            kp=300,
-            ko=1050,
-            kv=50,
+            kp=800,
+            ko=1800,
+            kv=80,
             vmax_xyz=5.0,
             vmax_abg=100.0,
             control_orientation=True,
@@ -94,7 +94,7 @@ class RC_ARM_2Env(gym.Env):
                 0.0,
             ]
             # put target in a reasonable starting position
-            self._target.set_mocap_pose(self._physics, position=[0.5, 0, 0.3], quaternion=[0, 0, 0, 1])
+            self._target.set_mocap_pose(self._physics, position=[0.5, 0.2, 0.7], quaternion=[1, 0, 0, 0])
 
         observation = self._get_obs()
         info = self._get_info()
@@ -153,11 +153,7 @@ class RC_ARM_2Env(gym.Env):
             # render viewer
             self._viewer.sync()
 
-            # TODO come up with a better frame rate keeping strategy
-            time_until_next_step = self._timestep - (time.time() - self._step_start)
-            if time_until_next_step > 0:
-                time.sleep(time_until_next_step)
-
+            # Viewer rendering only; rate limiting is handled by the caller.
             self._step_start = time.time()
 
         else:  # rgb_array
