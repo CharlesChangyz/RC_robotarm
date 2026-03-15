@@ -38,8 +38,8 @@ class RC_ARM_2Env(gym.Env):
         # checkerboard floor
         self._arena = StandardArena()
 
-        # mocap target that OSC will try to follow
-        self._target = Target(self._arena.mjcf_model)
+        # mocap target that OSC will try to follow (hidden)
+        self._target = Target(self._arena.mjcf_model, visible=False)
 
         self._arm = RCArm_2()
 
@@ -56,13 +56,13 @@ class RC_ARM_2Env(gym.Env):
             physics=self._physics,
             joints=self._arm.joints,
             eef_site=self._arm.eef_site,
-            min_effort=-700.0,
-            max_effort=700.0,
-            kp=200,
-            ko=50,
+            min_effort=-1000.0,
+            max_effort=1000.0,
+            kp=300,
+            ko=1050,
             kv=50,
-            vmax_xyz=1.0,
-            vmax_abg=2.0,
+            vmax_xyz=5.0,
+            vmax_abg=100.0,
             control_orientation=True,
             orientation_axis=orientation_axis,
             task_mask=task_mask,

@@ -5,7 +5,7 @@ class Target(object):
     A class representing a pool cue with motion capture capabilities.
     """
 
-    def __init__(self, mjcf_root):
+    def __init__(self, mjcf_root, visible: bool = True):
         """
         Initializes a new instance of the PoolCueMoCap class.
 
@@ -16,11 +16,12 @@ class Target(object):
 
         # Add a mocap body to the worldbody
         self._mocap = self._mjcf_root.worldbody.add("body", name="mocap", mocap=True)
+        rgba = [1, 0, 0, 0.2] if visible else [1, 0, 0, 0.0]
         self._mocap.add(
             "geom",
             type="box",
             size=[0.015] * 3,
-            rgba=[1, 0, 0, 0.2],
+            rgba=rgba,
             conaffinity=0,
             contype=0,
         )
