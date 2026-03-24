@@ -1,0 +1,252 @@
+<?xml version="1.0"?>
+<robot name="rc_arm_2" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="use_mock_hardware" default="false"/>
+  <xacro:arg name="can_interface" default="can0"/>
+  <xacro:arg name="host_can_id" default="253"/>
+  <xacro:arg name="can_enabled" default="true"/>
+  <xacro:arg name="external_feedback_enabled" default="false"/>
+  <xacro:arg name="external_feedback_topic" default="/rc_arm_2/mujoco_joint_states"/>
+  <xacro:arg name="external_feedback_timeout" default="0.2"/>
+  <xacro:arg name="s_curve_enabled" default="true"/>
+  <xacro:arg name="scalar_path_time_enabled" default="true"/>
+  <xacro:arg name="smoothing_alpha" default="0.2"/>
+  <xacro:arg name="max_velocity" default="2.0"/>
+  <xacro:arg name="max_acceleration" default="8.0"/>
+  <xacro:arg name="max_jerk" default="50.0"/>
+  <xacro:arg name="low_stiffness_mode" default="false"/>
+  <xacro:arg name="low_stiffness_kp" default="20.0"/>
+  <xacro:arg name="low_stiffness_kd" default="2.0"/>
+  <xacro:arg name="low_stiffness_kp_j1" default="0.0"/>
+  <xacro:arg name="low_stiffness_kd_j1" default="0.0"/>
+  <xacro:arg name="low_stiffness_kp_j2" default="0.0"/>
+  <xacro:arg name="low_stiffness_kd_j2" default="0.0"/>
+  <xacro:arg name="low_stiffness_kp_j3" default="0.0"/>
+  <xacro:arg name="low_stiffness_kd_j3" default="0.0"/>
+  <xacro:arg name="low_stiffness_kp_j4" default="0.0"/>
+  <xacro:arg name="low_stiffness_kd_j4" default="0.0"/>
+  <xacro:arg name="low_stiffness_torque_bias" default="0.0"/>
+  <xacro:arg name="use_pinocchio_gravity" default="true"/>
+  <xacro:arg name="gravity_feedforward_ratio" default="1.0"/>
+  <xacro:arg name="use_pinocchio_inverse_dynamics" default="true"/>
+  <xacro:arg name="urdf_path" default="$(find rc_arm_description)/urdf/rc_arm_2/rc_arm_2.pinocchio.urdf"/>
+
+  <xacro:include filename="rc_arm_2_ros2_control.xacro"/>
+
+  <material name="dark_gray">
+    <color rgba="0.3 0.3 0.3 1.0"/>
+  </material>
+  <material name="light_gray">
+    <color rgba="0.85 0.85 0.85 1.0"/>
+  </material>
+  <material name="blue_gray">
+    <color rgba="0.75 0.8 0.9 1.0"/>
+  </material>
+
+  <link name="base_link">
+    <inertial>
+      <origin xyz="-0.0188823543579507 -0.056778161374344 0.0186316009957921" rpy="0 0 0"/>
+      <mass value="0.382585168766289"/>
+      <inertia
+        ixx="0.00082815416350795"
+        ixy="-7.29640465452341E-05"
+        ixz="1.99037630868571E-10"
+        iyy="0.000576119793831662"
+        iyz="3.09456703607723E-09"
+        izz="0.00139690479026751"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rc_arm_description/meshes/rc_arm_2/base_link.STL"/>
+      </geometry>
+      <material name="dark_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rc_arm_description/meshes/rc_arm_2/base_link.STL"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="l1">
+    <inertial>
+      <origin xyz="-0.00218169653363401 0.00954899868424938 0.0424398037727069" rpy="0 0 0"/>
+      <mass value="0.445365070024422"/>
+      <inertia
+        ixx="0.000349710703636588"
+        ixy="-8.74801250935224E-07"
+        ixz="5.7841876423728E-06"
+        iyy="0.000494944126340276"
+        iyz="-8.50815789238056E-08"
+        izz="0.000494784132001916"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rc_arm_description/meshes/rc_arm_2/l1.STL"/>
+      </geometry>
+      <material name="light_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rc_arm_description/meshes/rc_arm_2/l1.STL"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="j1_joint" type="revolute">
+    <origin xyz="0 -0.00169679105026498 0.0135" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="l1"/>
+    <axis xyz="0 0 -1"/>
+    <limit lower="-1.865" upper="2.365" effort="14.0" velocity="12.0"/>
+  </joint>
+
+  <link name="l2">
+    <inertial>
+      <origin xyz="-0.09612108825745 -0.0492047953769805 0.152550503428174" rpy="0 0 0"/>
+      <mass value="0.66066950131522"/>
+      <inertia
+        ixx="0.00370138700167397"
+        ixy="1.25377482841611E-05"
+        ixz="0.00212590021931993"
+        iyy="0.00510682905939535"
+        iyz="-1.74886949186245E-05"
+        izz="0.00150230118954672"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rc_arm_description/meshes/rc_arm_2/l2.STL"/>
+      </geometry>
+      <material name="blue_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rc_arm_description/meshes/rc_arm_2/l2.STL"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="j2_joint" type="revolute">
+    <origin xyz="0 0.0573000000000001 0.071" rpy="0 0 0"/>
+    <parent link="l1"/>
+    <child link="l2"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0.0" upper="1.85" effort="14.0" velocity="12.0"/>
+  </joint>
+
+  <link name="l3">
+    <inertial>
+      <origin xyz="0.179461336363371 -0.0547822826914877 -0.119425228144451" rpy="0 0 0"/>
+      <mass value="0.366439493147188"/>
+      <inertia
+        ixx="0.000328823125447746"
+        ixy="8.56658575293569E-07"
+        ixz="0.000345338078938459"
+        iyy="0.000835932856081032"
+        iyz="-6.12931618014208E-07"
+        izz="0.000619560605110811"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rc_arm_description/meshes/rc_arm_2/l3.STL"/>
+      </geometry>
+      <material name="light_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rc_arm_description/meshes/rc_arm_2/l3.STL"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="j3_joint" type="revolute">
+    <origin xyz="-0.229899368475058 -0.00250000000000023 0.375161672315776" rpy="0 0 0"/>
+    <parent link="l2"/>
+    <child link="l3"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="0.0" upper="2.13861" effort="14.0" velocity="12.0"/>
+  </joint>
+
+  <link name="l4">
+    <inertial>
+      <origin xyz="0.0124065274807902 -0.0173865596838172 0.0296215915855369" rpy="0 0 0"/>
+      <mass value="0.0723669216572841"/>
+      <inertia
+        ixx="4.93092728814008E-06"
+        ixy="9.58295916234749E-07"
+        ixz="-5.07024039279827E-12"
+        iyy="1.25530593705886E-05"
+        iyz="-4.97267313424938E-12"
+        izz="1.33062083909566E-05"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rc_arm_description/meshes/rc_arm_2/l4.STL"/>
+      </geometry>
+      <material name="light_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rc_arm_description/meshes/rc_arm_2/l4.STL"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="j4_joint" type="revolute">
+    <origin xyz="0.329384899716621 -0.0272999999999999 -0.218015109198307" rpy="1.5707963267949 0 0"/>
+    <parent link="l3"/>
+    <child link="l4"/>
+    <axis xyz="0 0 -1"/>
+    <limit lower="-0.5313" upper="1.2963" effort="6.0" velocity="20.0"/>
+  </joint>
+
+  <link name="end_effector"/>
+
+  <joint name="l4_to_end_effector" type="fixed">
+    <parent link="l4"/>
+    <child link="end_effector"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <xacro:rc_arm_2_ros2_control
+    use_mock_hardware="$(arg use_mock_hardware)"
+    can_interface="$(arg can_interface)"
+    host_can_id="$(arg host_can_id)"
+    can_enabled="$(arg can_enabled)"
+    external_feedback_enabled="$(arg external_feedback_enabled)"
+    external_feedback_topic="$(arg external_feedback_topic)"
+    external_feedback_timeout="$(arg external_feedback_timeout)"
+    s_curve_enabled="$(arg s_curve_enabled)"
+    scalar_path_time_enabled="$(arg scalar_path_time_enabled)"
+    smoothing_alpha="$(arg smoothing_alpha)"
+    max_velocity="$(arg max_velocity)"
+    max_acceleration="$(arg max_acceleration)"
+    max_jerk="$(arg max_jerk)"
+    low_stiffness_mode="$(arg low_stiffness_mode)"
+    low_stiffness_kp="$(arg low_stiffness_kp)"
+    low_stiffness_kd="$(arg low_stiffness_kd)"
+    low_stiffness_kp_j1="$(arg low_stiffness_kp_j1)"
+    low_stiffness_kd_j1="$(arg low_stiffness_kd_j1)"
+    low_stiffness_kp_j2="$(arg low_stiffness_kp_j2)"
+    low_stiffness_kd_j2="$(arg low_stiffness_kd_j2)"
+    low_stiffness_kp_j3="$(arg low_stiffness_kp_j3)"
+    low_stiffness_kd_j3="$(arg low_stiffness_kd_j3)"
+    low_stiffness_kp_j4="$(arg low_stiffness_kp_j4)"
+    low_stiffness_kd_j4="$(arg low_stiffness_kd_j4)"
+    low_stiffness_torque_bias="$(arg low_stiffness_torque_bias)"
+    use_pinocchio_gravity="$(arg use_pinocchio_gravity)"
+    gravity_feedforward_ratio="$(arg gravity_feedforward_ratio)"
+    use_pinocchio_inverse_dynamics="$(arg use_pinocchio_inverse_dynamics)"
+    urdf_path="$(arg urdf_path)"/>
+
+</robot>

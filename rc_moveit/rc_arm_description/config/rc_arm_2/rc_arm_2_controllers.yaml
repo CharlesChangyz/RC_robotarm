@@ -1,0 +1,43 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 200
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+arm_controller:
+  ros__parameters:
+    joints:
+      - j1_joint
+      - j2_joint
+      - j3_joint
+      - j4_joint
+
+    command_interfaces:
+      - position
+
+    state_interfaces:
+      - position
+      - velocity
+
+    open_loop_control: true
+    allow_nonzero_velocity_at_trajectory_end: true
+    interpolation_method: splines
+
+    state_publish_rate: 200.0
+    action_monitor_rate: 50.0
+
+    constraints:
+      stopped_velocity_tolerance: 0.1
+      goal_time: 0.0
+      j1_joint:
+        goal: 0.03
+      j2_joint:
+        goal: 0.03
+      j3_joint:
+        goal: 0.03
+      j4_joint:
+        goal: 0.03

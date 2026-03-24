@@ -1,0 +1,142 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="rc_arm_2_ros2_control" params="use_mock_hardware can_interface host_can_id can_enabled external_feedback_enabled external_feedback_topic external_feedback_timeout s_curve_enabled scalar_path_time_enabled smoothing_alpha max_velocity max_acceleration max_jerk low_stiffness_mode low_stiffness_kp low_stiffness_kd low_stiffness_kp_j1 low_stiffness_kd_j1 low_stiffness_kp_j2 low_stiffness_kd_j2 low_stiffness_kp_j3 low_stiffness_kd_j3 low_stiffness_kp_j4 low_stiffness_kd_j4 low_stiffness_torque_bias use_pinocchio_gravity gravity_feedforward_ratio use_pinocchio_inverse_dynamics urdf_path">
+
+
+    <ros2_control name="RcArm2System" type="system">
+      <hardware>
+        <xacro:if value="${use_mock_hardware}">
+          <plugin>mock_components/GenericSystem</plugin>
+          <param name="mock_sensor_commands">false</param>
+        </xacro:if>
+
+        <xacro:unless value="${use_mock_hardware}">
+          <plugin>rc_arm_hardware/RsA3HardwareInterface</plugin>
+          <param name="can_interface">${can_interface}</param>
+          <param name="host_can_id">${host_can_id}</param>
+          <param name="can_enabled">${can_enabled}</param>
+          <param name="external_feedback_enabled">${external_feedback_enabled}</param>
+          <param name="external_feedback_topic">${external_feedback_topic}</param>
+          <param name="external_feedback_timeout">${external_feedback_timeout}</param>
+          <param name="position_kp">60.0</param>
+          <param name="position_kd">3.0</param>
+          <param name="velocity_limit">8.0</param>
+          <param name="s_curve_enabled">${s_curve_enabled}</param>
+          <param name="scalar_path_time_enabled">${scalar_path_time_enabled}</param>
+          <param name="smoothing_alpha">${smoothing_alpha}</param>
+          <param name="max_velocity">${max_velocity}</param>
+          <param name="max_acceleration">${max_acceleration}</param>
+          <param name="max_jerk">${max_jerk}</param>
+          <param name="low_stiffness_mode">${low_stiffness_mode}</param>
+          <param name="low_stiffness_kp">${low_stiffness_kp}</param>
+          <param name="low_stiffness_kd">${low_stiffness_kd}</param>
+          <param name="low_stiffness_torque_bias">${low_stiffness_torque_bias}</param>
+          <param name="use_pinocchio_gravity">${use_pinocchio_gravity}</param>
+          <param name="gravity_feedforward_ratio">${gravity_feedforward_ratio}</param>
+          <param name="use_pinocchio_inverse_dynamics">${use_pinocchio_inverse_dynamics}</param>
+          <param name="urdf_path">${urdf_path}</param>
+        </xacro:unless>
+      </hardware>
+
+      <joint name="j1_joint">
+        <param name="motor_id">1</param>
+        <param name="motor_type">RS00</param>
+        <param name="position_offset">0.0</param>
+        <param name="direction">-1.0</param>
+        <param name="low_stiffness_kp">${low_stiffness_kp_j1}</param>
+        <param name="low_stiffness_kd">${low_stiffness_kd_j1}</param>
+        <command_interface name="position">
+          <param name="min">-1.865</param>
+          <param name="max">2.365</param>
+        </command_interface>
+        <command_interface name="velocity">
+          <param name="min">-12.0</param>
+          <param name="max">12.0</param>
+        </command_interface>
+        <command_interface name="effort">
+          <param name="min">-14.0</param>
+          <param name="max">14.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+
+      <joint name="j2_joint">
+        <param name="motor_id">2</param>
+        <param name="motor_type">RS00</param>
+        <param name="position_offset">0.0</param>
+        <param name="direction">1.0</param>
+        <param name="low_stiffness_kp">${low_stiffness_kp_j2}</param>
+        <param name="low_stiffness_kd">${low_stiffness_kd_j2}</param>
+        <command_interface name="position">
+          <param name="min">0.0</param>
+          <param name="max">1.85</param>
+        </command_interface>
+        <command_interface name="velocity">
+          <param name="min">-12.0</param>
+          <param name="max">12.0</param>
+        </command_interface>
+        <command_interface name="effort">
+          <param name="min">-14.0</param>
+          <param name="max">14.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+
+      <joint name="j3_joint">
+        <param name="motor_id">3</param>
+        <param name="motor_type">RS00</param>
+        <param name="position_offset">0.0</param>
+        <param name="direction">-1.0</param>
+        <param name="low_stiffness_kp">${low_stiffness_kp_j3}</param>
+        <param name="low_stiffness_kd">${low_stiffness_kd_j3}</param>
+        <command_interface name="position">
+          <param name="min">0.0</param>
+          <param name="max">2.13861</param>
+        </command_interface>
+        <command_interface name="velocity">
+          <param name="min">-12.0</param>
+          <param name="max">12.0</param>
+        </command_interface>
+        <command_interface name="effort">
+          <param name="min">-14.0</param>
+          <param name="max">14.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+
+      <joint name="j4_joint">
+        <param name="motor_id">4</param>
+        <param name="motor_type">EL05</param>
+        <param name="position_offset">0.0</param>
+        <param name="direction">-1.0</param>
+        <param name="low_stiffness_kp">${low_stiffness_kp_j4}</param>
+        <param name="low_stiffness_kd">${low_stiffness_kd_j4}</param>
+        <command_interface name="position">
+          <param name="min">-0.5313</param>
+          <param name="max">1.2963</param>
+        </command_interface>
+        <command_interface name="velocity">
+          <param name="min">-20.0</param>
+          <param name="max">20.0</param>
+        </command_interface>
+        <command_interface name="effort">
+          <param name="min">-6.0</param>
+          <param name="max">6.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+
+    </ros2_control>
+
+  </xacro:macro>
+
+</robot>

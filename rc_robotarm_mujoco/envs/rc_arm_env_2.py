@@ -88,9 +88,9 @@ class RC_ARM_2Env(gym.Env):
         with self._physics.reset_context():
             # put arm in a reasonable starting position
             self._physics.bind(self._arm.joints).qpos = [
-                1.0,
-                1.0,
-                1.0,
+                0.0,
+                0.0,
+                0.0,
                 0.0,
             ]
             # put target in a reasonable starting position
