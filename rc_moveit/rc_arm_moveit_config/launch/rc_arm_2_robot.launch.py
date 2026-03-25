@@ -47,24 +47,12 @@ def generate_launch_description():
             description='Pinocchio 模型加载器使用的 URDF 路径'
         ),
         DeclareLaunchArgument('use_rviz', default_value='true', description='是否启动带 MoveIt 插件的 RViz2'),
-        DeclareLaunchArgument('use_mujoco_bridge', default_value='false', description='是否启动 MuJoCo 低刚度桥接'),
         DeclareLaunchArgument('use_tf_target_bridge', default_value='true', description='是否启动 TF->Pose 目标桥接（放在 rc_moveit 中订阅 TF）'),
         DeclareLaunchArgument('tf_target_topic', default_value='/tf', description='TF 动态变换话题'),
         DeclareLaunchArgument('tf_target_static_topic', default_value='/tf_static', description='TF 静态变换话题'),
         DeclareLaunchArgument('tf_target_parent_frame', default_value='world', description='目标 TF 的父坐标系'),
         DeclareLaunchArgument('tf_target_child_frame', default_value='rc_arm_2_target', description='目标 TF 的子坐标系（目标坐标来源）'),
         DeclareLaunchArgument('tf_target_pose_topic', default_value='/rc_arm_2/target_pose', description='TF 桥接输出的 Pose 话题'),
-        DeclareLaunchArgument('mujoco_joint_command_topic', default_value='/debug/final_joint_command_joint_frame', description='MuJoCo 桥接订阅的最终关节控制包话题（position/velocity）'),
-        DeclareLaunchArgument('mujoco_pd_gains_topic', default_value='/debug/final_pd_gains', description='MuJoCo 桥接订阅的最终 PD 参数话题（position=Kp, velocity=Kd）'),
-        DeclareLaunchArgument('mujoco_torque_ff_topic', default_value='/debug/final_joint_torque_ff', description='MuJoCo 桥接订阅的最终前馈力矩话题（JointState.effort）'),
-        DeclareLaunchArgument('mujoco_torque_input_topic', default_value='', description='MuJoCo 桥接订阅的外部关节力矩输入话题（可留空）'),
-        DeclareLaunchArgument('mujoco_torque_output_topic', default_value='/rc_arm_2/joint_torque', description='MuJoCo 桥接发布的关节力矩话题'),
-        DeclareLaunchArgument('mujoco_torque_input_scale', default_value='0.9', description='外部力矩输入缩放系数'),
-        DeclareLaunchArgument('mujoco_kp_scale', default_value='1.0', description='MuJoCo 桥接中的 Kp 缩放系数'),
-        DeclareLaunchArgument('mujoco_kd_scale', default_value='1.0', description='MuJoCo 桥接中的 Kd 缩放系数'),
-        DeclareLaunchArgument('mujoco_ff_scale', default_value='1.0', description='MuJoCo 桥接中的前馈力矩缩放系数'),
-        DeclareLaunchArgument('mujoco_torque_limit', default_value='14.0', description='MuJoCo 关节力矩限幅（Nm）'),
-        DeclareLaunchArgument('mujoco_bridge_rate', default_value='500.0', description='MuJoCo 桥接循环频率（Hz）'),
         DeclareLaunchArgument('use_torque_printer', default_value='true', description='是否打印各关节力矩'),
         DeclareLaunchArgument('torque_print_topic', default_value='/rc_arm_2/joint_torque', description='力矩打印订阅话题（JointState.effort）'),
         DeclareLaunchArgument('torque_print_rate', default_value='10.0', description='力矩打印频率（Hz）'),
@@ -137,42 +125,6 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_tf_target_bridge')),
     )
 
-    mujoco_bridge = ExecuteProcess(
-        cmd=[
-            'python3',
-            PathJoinSubstitution([
-                FindPackageShare('rc_arm_moveit_config'),
-                'launch',
-                'mujoco_joint_state_bridge.py',
-            ]),
-            '--joint-command-topic',
-            LaunchConfiguration('mujoco_joint_command_topic'),
-            '--pd-gains-topic',
-            LaunchConfiguration('mujoco_pd_gains_topic'),
-            '--torque-ff-topic',
-            LaunchConfiguration('mujoco_torque_ff_topic'),
-            '--torque-input-topic',
-            LaunchConfiguration('mujoco_torque_input_topic'),
-            '--torque-output-topic',
-            LaunchConfiguration('mujoco_torque_output_topic'),
-            '--torque-input-scale',
-            LaunchConfiguration('mujoco_torque_input_scale'),
-            '--kp-scale',
-            LaunchConfiguration('mujoco_kp_scale'),
-            '--kd-scale',
-            LaunchConfiguration('mujoco_kd_scale'),
-            '--ff-scale',
-            LaunchConfiguration('mujoco_ff_scale'),
-            '--torque-limit',
-            LaunchConfiguration('mujoco_torque_limit'),
-            '--rate',
-            LaunchConfiguration('mujoco_bridge_rate'),
-        ],
-        output='screen',
-        condition=IfCondition(LaunchConfiguration('use_mujoco_bridge')),
-    )
-
-
     torque_printer = ExecuteProcess(
         cmd=[
             'python3',
@@ -190,4 +142,4 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_torque_printer')),
     )
 
-    return LaunchDescription(declared_arguments + [include_robot, tf_target_bridge, mujoco_bridge, torque_printer])
+    return LaunchDescription(declared_arguments + [include_robot, tf_target_bridge, torque_printer])
