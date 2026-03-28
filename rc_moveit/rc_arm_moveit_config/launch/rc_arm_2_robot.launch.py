@@ -53,7 +53,22 @@ def generate_launch_description():
         DeclareLaunchArgument('tf_target_parent_frame', default_value='world', description='目标 TF 的父坐标系'),
         DeclareLaunchArgument('tf_target_child_frame', default_value='rc_arm_2_target', description='目标 TF 的子坐标系（目标坐标来源）'),
         DeclareLaunchArgument('tf_target_pose_topic', default_value='/rc_arm_2/target_pose', description='TF 桥接输出的 Pose 话题'),
-        DeclareLaunchArgument('use_torque_printer', default_value='true', description='是否打印各关节力矩'),
+        DeclareLaunchArgument('use_target_pose_moveit_executor', default_value='true', description='是否启用 target_pose -> MoveIt 规划执行链路'),
+        DeclareLaunchArgument('target_pose_executor_group', default_value='arm', description='target_pose 执行器的 MoveIt 规划组'),
+        DeclareLaunchArgument('target_pose_executor_joint_names', default_value='j1_joint,j2_joint,j3_joint,j4_joint', description='target_pose 执行器使用的关节顺序'),
+        DeclareLaunchArgument('target_pose_executor_default_frame', default_value='world', description='target_pose 没有 frame_id 时使用的默认坐标系'),
+        DeclareLaunchArgument('target_pose_executor_pos_threshold', default_value='0.003', description='新目标触发阈值：位置变化（m）'),
+        DeclareLaunchArgument('target_pose_executor_rot_threshold', default_value='0.03', description='新目标触发阈值：旋转变化（rad）'),
+        DeclareLaunchArgument('target_pose_executor_planning_time', default_value='2.0', description='MoveIt 单次规划时间（s）'),
+        DeclareLaunchArgument('target_pose_executor_planning_attempts', default_value='5', description='MoveIt 单次规划尝试次数'),
+        DeclareLaunchArgument('target_pose_executor_vel_scale', default_value='0.5', description='MoveIt 速度缩放（0~1）'),
+        DeclareLaunchArgument('target_pose_executor_acc_scale', default_value='0.5', description='MoveIt 加速度缩放（0~1）'),
+        DeclareLaunchArgument('target_pose_executor_joint_tolerance', default_value='0.02', description='MoveIt 关节目标容差（rad）'),
+        DeclareLaunchArgument('target_pose_executor_check_period', default_value='0.05', description='target_pose 执行器轮询周期（s）'),
+        DeclareLaunchArgument('target_pose_executor_status_log_period', default_value='1.0', description='target_pose 执行器状态心跳打印周期（秒，<=0 关闭）'),
+        DeclareLaunchArgument('target_pose_executor_status_base_frame', default_value='world', description='状态打印使用的基坐标系'),
+        DeclareLaunchArgument('target_pose_executor_status_eef_frame', default_value='end_effector', description='状态打印使用的末端坐标系'),
+        DeclareLaunchArgument('use_torque_printer', default_value='false', description='是否打印各关节力矩'),
         DeclareLaunchArgument('torque_print_topic', default_value='/rc_arm_2/joint_torque', description='力矩打印订阅话题（JointState.effort）'),
         DeclareLaunchArgument('torque_print_rate', default_value='10.0', description='力矩打印频率（Hz）'),
     ]
@@ -125,6 +140,49 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_tf_target_bridge')),
     )
 
+    target_pose_executor = ExecuteProcess(
+        cmd=[
+            'python3',
+            PathJoinSubstitution([
+                FindPackageShare('rc_arm_moveit_config'),
+                'launch',
+                'target_pose_moveit_executor.py',
+            ]),
+            '--target-topic',
+            LaunchConfiguration('tf_target_pose_topic'),
+            '--planning-group',
+            LaunchConfiguration('target_pose_executor_group'),
+            '--joint-names',
+            LaunchConfiguration('target_pose_executor_joint_names'),
+            '--default-frame',
+            LaunchConfiguration('target_pose_executor_default_frame'),
+            '--pos-threshold',
+            LaunchConfiguration('target_pose_executor_pos_threshold'),
+            '--rot-threshold',
+            LaunchConfiguration('target_pose_executor_rot_threshold'),
+            '--planning-time',
+            LaunchConfiguration('target_pose_executor_planning_time'),
+            '--planning-attempts',
+            LaunchConfiguration('target_pose_executor_planning_attempts'),
+            '--vel-scale',
+            LaunchConfiguration('target_pose_executor_vel_scale'),
+            '--acc-scale',
+            LaunchConfiguration('target_pose_executor_acc_scale'),
+            '--joint-tolerance',
+            LaunchConfiguration('target_pose_executor_joint_tolerance'),
+            '--check-period',
+            LaunchConfiguration('target_pose_executor_check_period'),
+            '--status-log-period',
+            LaunchConfiguration('target_pose_executor_status_log_period'),
+            '--status-base-frame',
+            LaunchConfiguration('target_pose_executor_status_base_frame'),
+            '--status-eef-frame',
+            LaunchConfiguration('target_pose_executor_status_eef_frame'),
+        ],
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('use_target_pose_moveit_executor')),
+    )
+
     torque_printer = ExecuteProcess(
         cmd=[
             'python3',
@@ -142,4 +200,4 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_torque_printer')),
     )
 
-    return LaunchDescription(declared_arguments + [include_robot, tf_target_bridge, torque_printer])
+    return LaunchDescription(declared_arguments + [include_robot, tf_target_bridge, target_pose_executor, torque_printer])
