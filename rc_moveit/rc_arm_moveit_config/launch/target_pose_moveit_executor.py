@@ -42,6 +42,11 @@ def _copy_pose_stamped(msg: PoseStamped) -> PoseStamped:
     return copied
 
 
+def _parse_bool(text: str) -> bool:
+    v = (text or "").strip().lower()
+    return v in {"1", "true", "yes", "y", "on"}
+
+
 class TargetPoseMoveItExecutor(Node):
     def __init__(
         self,
@@ -60,6 +65,9 @@ class TargetPoseMoveItExecutor(Node):
         joint_tolerance: float,
         check_period: float,
         avoid_collisions: bool,
+        enforce_j4_from_target: bool,
+        j4_joint_name: str,
+        j4_axis: str,
         status_log_period: float,
         status_base_frame: str,
         status_eef_frame: str,
@@ -77,6 +85,11 @@ class TargetPoseMoveItExecutor(Node):
         self._acc_scale = max(0.01, min(1.0, float(acc_scale)))
         self._joint_tolerance = max(1.0e-4, float(joint_tolerance))
         self._avoid_collisions = bool(avoid_collisions)
+        self._enforce_j4_from_target = bool(enforce_j4_from_target)
+        self._j4_joint_name = str(j4_joint_name).strip() or "j4_joint"
+        self._j4_axis = str(j4_axis).strip().lower() if str(j4_axis).strip() else "x"
+        if self._j4_axis not in {"x", "y", "z"}:
+            self._j4_axis = "x"
         self._status_log_period = max(0.0, float(status_log_period))
 
         self._status_base_frame = _normalize_frame_id(status_base_frame)
@@ -273,6 +286,22 @@ class TargetPoseMoveItExecutor(Node):
         future = self._ik_client.call_async(req)
         future.add_done_callback(lambda f, target=target: self._on_ik_done(f, target))
 
+    def _extract_j4_target_rad(self, target: PoseStamped) -> float:
+        q = target.pose.orientation
+        qx, qy, qz, qw = _normalize_quat_xyzw((float(q.x), float(q.y), float(q.z), float(q.w)))
+        axis_comp = qx
+        if self._j4_axis == "y":
+            axis_comp = qy
+        elif self._j4_axis == "z":
+            axis_comp = qz
+
+        angle = 2.0 * math.atan2(axis_comp, qw)
+        while angle > math.pi:
+            angle -= 2.0 * math.pi
+        while angle < -math.pi:
+            angle += 2.0 * math.pi
+        return angle
+
     def _extract_joint_targets(self, joint_state) -> Optional[Dict[str, float]]:
         mapping = {name: float(pos) for name, pos in zip(joint_state.name, joint_state.position)}
         missing = [j for j in self._joint_names if j not in mapping]
@@ -310,6 +339,14 @@ class TargetPoseMoveItExecutor(Node):
             self._event("ik_missing_joint", target)
             self._set_busy(False, "ik_missing_joint")
             return
+
+        if self._enforce_j4_from_target:
+            if self._j4_joint_name in q_target:
+                q_target[self._j4_joint_name] = self._extract_j4_target_rad(target)
+            else:
+                self.get_logger().warn(
+                    "j4 override skipped: joint '%s' not found in IK result" % self._j4_joint_name
+                )
 
         self._send_goal(target, q_target)
 
@@ -401,6 +438,9 @@ def parse_args():
     parser.add_argument("--joint-tolerance", type=float, default=0.02)
     parser.add_argument("--check-period", type=float, default=0.05)
     parser.add_argument("--avoid-collisions", action="store_true")
+    parser.add_argument("--enforce-j4-from-target", default="true")
+    parser.add_argument("--j4-joint-name", default="j4_joint")
+    parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--status-log-period", type=float, default=1.0, help="state log period, <=0 to disable")
     parser.add_argument("--status-base-frame", default="world")
     parser.add_argument("--status-eef-frame", default="end_effector")
@@ -430,6 +470,9 @@ def main() -> None:
         joint_tolerance=args.joint_tolerance,
         check_period=args.check_period,
         avoid_collisions=args.avoid_collisions,
+        enforce_j4_from_target=_parse_bool(args.enforce_j4_from_target),
+        j4_joint_name=args.j4_joint_name,
+        j4_axis=args.j4_axis,
         status_log_period=args.status_log_period,
         status_base_frame=args.status_base_frame,
         status_eef_frame=args.status_eef_frame,

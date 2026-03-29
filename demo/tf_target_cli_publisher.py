@@ -42,6 +42,7 @@ class InteractiveTfPublisher(Node):
         parent_frame: str,
         child_frame: str,
         publish_rate: float,
+        print_publish: bool,
         j4_axis: str,
         input_in_radians: bool,
         initial_xyz,
@@ -52,6 +53,7 @@ class InteractiveTfPublisher(Node):
         self._tf_topic = tf_topic
         self._parent_frame = normalize_frame_id(parent_frame)
         self._child_frame = normalize_frame_id(child_frame)
+        self._print_publish = bool(print_publish)
         self._j4_axis = j4_axis
         self._input_in_radians = input_in_radians
 
@@ -197,7 +199,8 @@ class InteractiveTfPublisher(Node):
         tf_msg.transform.rotation.w = qw
 
         self._tf_pub.publish(TFMessage(transforms=[tf_msg]))
-        self._print_state(prefix="Published target")
+        if self._print_publish:
+            self._print_state(prefix="Published target")
 
 
 def parse_args():
@@ -206,6 +209,7 @@ def parse_args():
     parser.add_argument("--parent-frame", default="world")
     parser.add_argument("--child-frame", default="rc_arm_2_target")
     parser.add_argument("--rate", type=float, default=2.0)
+    parser.add_argument("--print-publish", action="store_true", help="Print every publish (verbose)")
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--radians", action="store_true", help="Treat input j4 as radians (default: degrees)")
     parser.add_argument("--init-x", type=float, default=0.30)
@@ -223,6 +227,7 @@ def main() -> None:
         parent_frame=args.parent_frame,
         child_frame=args.child_frame,
         publish_rate=args.rate,
+        print_publish=args.print_publish,
         j4_axis=args.j4_axis,
         input_in_radians=args.radians,
         initial_xyz=(args.init_x, args.init_y, args.init_z),
