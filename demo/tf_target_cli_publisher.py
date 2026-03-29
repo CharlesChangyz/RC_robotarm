@@ -212,9 +212,9 @@ def parse_args():
     parser.add_argument("--print-publish", action="store_true", help="Print every publish (verbose)")
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--radians", action="store_true", help="Treat input j4 as radians (default: degrees)")
-    parser.add_argument("--init-x", type=float, default=0.30)
-    parser.add_argument("--init-y", type=float, default=0.00)
-    parser.add_argument("--init-z", type=float, default=0.25)
+    parser.add_argument("--init-x", type=float, default=0.099)
+    parser.add_argument("--init-y", type=float, default=0.026)
+    parser.add_argument("--init-z", type=float, default=0.242)
     parser.add_argument("--init-j4", type=float, default=0.0, help="deg by default, rad with --radians")
     return parser.parse_args()
 

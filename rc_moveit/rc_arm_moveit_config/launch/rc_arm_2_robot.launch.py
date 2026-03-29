@@ -34,7 +34,7 @@ def generate_launch_description():
         DeclareLaunchArgument('low_stiffness_kd_j4', default_value='0.04', description='j4 低刚度模式阻尼增益覆盖（0 表示使用全局 low_stiffness_kd）'),
         DeclareLaunchArgument('low_stiffness_torque_bias', default_value='0.0', description='低刚度模式力矩偏置（Nm）'),
         DeclareLaunchArgument('use_pinocchio_gravity', default_value='false', description='是否启用 Pinocchio 重力补偿力矩'),
-        DeclareLaunchArgument('gravity_feedforward_ratio', default_vlue='0.99', description='重力补偿前馈比例（0~1）'),
+        DeclareLaunchArgument('gravity_feedforward_ratio', default_value='0.99', description='重力补偿前馈比例（0~1）'),
         DeclareLaunchArgument('use_pinocchio_inverse_dynamics', default_value='true', description='是否启用 Pinocchio 全逆动力学前馈'),
         DeclareLaunchArgument(
             'urdf_path',
@@ -46,7 +46,7 @@ def generate_launch_description():
             ]),
             description='Pinocchio 模型加载器使用的 URDF 路径'
         ),
-        DeclareLaunchArgument('use_rviz', default_value='true', description='是否启动带 MoveIt 插件的 RViz2'),
+        DeclareLaunchArgument('use_rviz', default_value='false', description='是否启动带 MoveIt 插件的 RViz2'),
         DeclareLaunchArgument('use_tf_target_bridge', default_value='true', description='是否启动 TF->Pose 目标桥接（放在 rc_moveit 中订阅 TF）'),
         DeclareLaunchArgument('tf_target_topic', default_value='/tf', description='TF 动态变换话题'),
         DeclareLaunchArgument('tf_target_static_topic', default_value='/tf_static', description='TF 静态变换话题'),
@@ -68,9 +68,12 @@ def generate_launch_description():
         DeclareLaunchArgument('target_pose_executor_enforce_j4_from_target', default_value='true', description='位置优先 IK 下是否从目标姿态提取并强制写回 j4'),
         DeclareLaunchArgument('target_pose_executor_j4_joint_name', default_value='j4_joint', description='j4 关节名称（用于强制写回）'),
         DeclareLaunchArgument('target_pose_executor_j4_axis', default_value='x', description='目标姿态中 j4 对应的旋转轴（x/y/z）'),
-        DeclareLaunchArgument('target_pose_executor_status_log_period', default_value='1.0', description='target_pose 执行器状态心跳打印周期（秒，<=0 关闭）'),
+        DeclareLaunchArgument('target_pose_executor_status_log_period', default_value='0.0', description='target_pose 执行器状态心跳打印周期（秒，<=0 关闭）'),
         DeclareLaunchArgument('target_pose_executor_status_base_frame', default_value='world', description='状态打印使用的基坐标系'),
         DeclareLaunchArgument('target_pose_executor_status_eef_frame', default_value='end_effector', description='状态打印使用的末端坐标系'),
+        DeclareLaunchArgument('use_position_printer', default_value='true', description='是否打印各关节当前角度'),
+        DeclareLaunchArgument('position_print_topic', default_value='/rc_arm_2/mujoco_joint_positions', description='角度打印订阅话题（JointState.position）'),
+        DeclareLaunchArgument('position_print_rate', default_value='10.0', description='角度打印频率（Hz）'),
         DeclareLaunchArgument('use_torque_printer', default_value='false', description='是否打印各关节力矩'),
         DeclareLaunchArgument('torque_print_topic', default_value='/rc_arm_2/joint_torque', description='力矩打印订阅话题（JointState.effort）'),
         DeclareLaunchArgument('torque_print_rate', default_value='10.0', description='力矩打印频率（Hz）'),
@@ -209,4 +212,23 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_torque_printer')),
     )
 
-    return LaunchDescription(declared_arguments + [include_robot, tf_target_bridge, target_pose_executor, torque_printer])
+    position_printer = ExecuteProcess(
+        cmd=[
+            'python3',
+            PathJoinSubstitution([
+                FindPackageShare('rc_arm_moveit_config'),
+                'launch',
+                'joint_position_printer.py',
+            ]),
+            '--topic',
+            LaunchConfiguration('position_print_topic'),
+            '--rate',
+            LaunchConfiguration('position_print_rate'),
+        ],
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('use_position_printer')),
+    )
+
+    return LaunchDescription(
+        declared_arguments + [include_robot, tf_target_bridge, target_pose_executor, position_printer, torque_printer]
+    )

@@ -319,7 +319,7 @@ def parse_args():
     parser.add_argument("--torque-output-topic", default="/rc_arm_2/joint_torque")
     parser.add_argument("--torque-input-scale", type=float, default=1.0)
     parser.add_argument("--torque-limit", type=float, default=20.0)
-    parser.add_argument("--rate", type=float, default=200.0)
+    parser.add_argument("--rate", type=float, default=400.0)
     parser.add_argument("--joint-state-topic", default="/rc_arm_2/mujoco_joint_states")
     parser.add_argument("--joint-position-topic", default="/rc_arm_2/mujoco_joint_positions")
     parser.add_argument("--eef-pose-topic", default="/rc_arm_2/mujoco_eef_pose")
