@@ -33,3 +33,6 @@ env/
 
 # MuJoCo
 *.mjb
+
+log/
+install/
