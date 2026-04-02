@@ -3,6 +3,8 @@ from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchD
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -12,7 +14,7 @@ def generate_launch_description():
         DeclareLaunchArgument('host_can_id', default_value='253', description='主机端 CAN ID'),
         DeclareLaunchArgument('can_enabled', default_value='false', description='是否启用 CAN 通信（false 时保留完整控制链但不发 CAN）'),
         DeclareLaunchArgument('external_feedback_enabled', default_value='true', description='CAN 关闭时是否启用外部 JointState 反馈（如 MuJoCo）'),
-        DeclareLaunchArgument('external_feedback_topic', default_value='/rc_arm_2/mujoco_joint_positions', description='外部反馈 JointState 话题（建议接位置回传）'),
+        DeclareLaunchArgument('external_feedback_topic', default_value='/rc_arm_2/feedback_joint_states', description='外部反馈 JointState 话题（建议接位置回传）'),
         DeclareLaunchArgument('external_feedback_timeout', default_value='0.2', description='外部反馈超时时间（秒）'),
         DeclareLaunchArgument('use_mock_hardware', default_value='false', description='是否使用 mock 硬件（禁用 CAN 通信）'),
         DeclareLaunchArgument('s_curve_enabled', default_value='true', description='是否启用 S 曲线平滑'),
@@ -22,20 +24,20 @@ def generate_launch_description():
         DeclareLaunchArgument('max_acceleration', default_value='20.0', description='S 曲线最大加速度（rad/s^2）'),
         DeclareLaunchArgument('max_jerk', default_value='120.0', description='S 曲线最大加加速度（rad/s^3）'),
         DeclareLaunchArgument('low_stiffness_mode', default_value='true', description='是否启用低刚度位置+模型前馈模式'),
-        DeclareLaunchArgument('low_stiffness_kp', default_value='6.00', description='低刚度模式位置增益 Kp'),
-        DeclareLaunchArgument('low_stiffness_kd', default_value='2.0', description='低刚度模式阻尼增益 Kd'),
+        DeclareLaunchArgument('low_stiffness_kp', default_value='0.00', description='低刚度模式位置增益 Kp6.0'),
+        DeclareLaunchArgument('low_stiffness_kd', default_value='0.0', description='低刚度模式阻尼增益 Kd2.0'),
         DeclareLaunchArgument('low_stiffness_kp_j1', default_value='0.0', description='j1 低刚度模式位置增益覆盖（0 表示使用全局 low_stiffness_kp）'),
         DeclareLaunchArgument('low_stiffness_kd_j1', default_value='0.0', description='j1 低刚度模式阻尼增益覆盖（0 表示使用全局 low_stiffness_kd）'),
         DeclareLaunchArgument('low_stiffness_kp_j2', default_value='0.0', description='j2 低刚度模式位置增益覆盖（0 表示使用全局 low_stiffness_kp）'),
         DeclareLaunchArgument('low_stiffness_kd_j2', default_value='0.0', description='j2 低刚度模式阻尼增益覆盖（0 表示使用全局 low_stiffness_kd）'),
         DeclareLaunchArgument('low_stiffness_kp_j3', default_value='0.0', description='j3 低刚度模式位置增益覆盖（0 表示使用全局 low_stiffness_kp）'),
         DeclareLaunchArgument('low_stiffness_kd_j3', default_value='0.0', description='j3 低刚度模式阻尼增益覆盖（0 表示使用全局 low_stiffness_kd）'),
-        DeclareLaunchArgument('low_stiffness_kp_j4', default_value='0.035', description='j4 低刚度模式位置增益覆盖（0 表示使用全局 low_stiffness_kp）'),
-        DeclareLaunchArgument('low_stiffness_kd_j4', default_value='0.04', description='j4 低刚度模式阻尼增益覆盖（0 表示使用全局 low_stiffness_kd）'),
+        DeclareLaunchArgument('low_stiffness_kp_j4', default_value='0.0', description='j4 低刚度模式位置增益覆盖0.035（0 表示使用全局 low_stiffness_kp）'),
+        DeclareLaunchArgument('low_stiffness_kd_j4', default_value='0.0', description='j4 低刚度模式阻尼增益覆盖0.04（0 表示使用全局 low_stiffness_kd）'),
         DeclareLaunchArgument('low_stiffness_torque_bias', default_value='0.0', description='低刚度模式力矩偏置（Nm）'),
-        DeclareLaunchArgument('use_pinocchio_gravity', default_value='false', description='是否启用 Pinocchio 重力补偿力矩'),
+        DeclareLaunchArgument('use_pinocchio_gravity', default_value='true', description='是否启用 Pinocchio 重力补偿力矩'),
         DeclareLaunchArgument('gravity_feedforward_ratio', default_value='0.99', description='重力补偿前馈比例（0~1）'),
-        DeclareLaunchArgument('use_pinocchio_inverse_dynamics', default_value='true', description='是否启用 Pinocchio 全逆动力学前馈'),
+        DeclareLaunchArgument('use_pinocchio_inverse_dynamics', default_value='false', description='是否启用 Pinocchio 全逆动力学前馈'),
         DeclareLaunchArgument(
             'urdf_path',
             default_value=PathJoinSubstitution([
@@ -77,6 +79,11 @@ def generate_launch_description():
         DeclareLaunchArgument('use_torque_printer', default_value='false', description='是否打印各关节力矩'),
         DeclareLaunchArgument('torque_print_topic', default_value='/rc_arm_2/joint_torque', description='力矩打印订阅话题（JointState.effort）'),
         DeclareLaunchArgument('torque_print_rate', default_value='10.0', description='力矩打印频率（Hz）'),
+        DeclareLaunchArgument('use_dm_serial', default_value='true', description='是否启动 dmbot_serial 的 USB2CANFD 驱动节点'),
+        DeclareLaunchArgument('dm_sn', default_value='9940F4E149D904A69924737E3DE6629F', description='USB2CANFD 设备序列号'),
+        DeclareLaunchArgument('dm_nom_baud', default_value='1000000', description='CAN 仲裁域波特率'),
+        DeclareLaunchArgument('dm_dat_baud', default_value='2000000', description='CAN 数据域波特率'),
+        DeclareLaunchArgument('dm_control_mode', default_value='0', description='控制模式：0=MIT,1=POS_VEL,2=VEL,3=POS_FORCE'),
     ]
 
     include_robot = IncludeLaunchDescription(
@@ -229,6 +236,20 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_position_printer')),
     )
 
+    dm_serial_node = Node(
+        package='dmbot_serial',
+        executable='usb2canfd_dm_node_cpp',
+        name='usb2canfd_dm_node',
+        output='screen',
+        parameters=[{
+            'sn': ParameterValue(LaunchConfiguration('dm_sn'), value_type=str),
+            'nom_baud': ParameterValue(LaunchConfiguration('dm_nom_baud'), value_type=int),
+            'dat_baud': ParameterValue(LaunchConfiguration('dm_dat_baud'), value_type=int),
+            'control_mode': ParameterValue(LaunchConfiguration('dm_control_mode'), value_type=int),
+        }],
+        condition=IfCondition(LaunchConfiguration('use_dm_serial')),
+    )
+
     return LaunchDescription(
-        declared_arguments + [include_robot, tf_target_bridge, target_pose_executor, position_printer, torque_printer]
+        declared_arguments + [include_robot, tf_target_bridge, target_pose_executor, position_printer, torque_printer, dm_serial_node]
     )
