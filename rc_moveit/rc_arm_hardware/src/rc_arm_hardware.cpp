@@ -927,58 +927,38 @@ std::vector<hardware_interface::CommandInterface> RsA3HardwareInterface::export_
 void RsA3HardwareInterface::externalFeedbackCallback(
   const sensor_msgs::msg::JointState::SharedPtr msg)
 {
-  if (!msg || msg->name.empty()) {
+  if (!msg) {
     return;
   }
-
-  auto resolve_index = [&](const std::string& joint_name) -> int {
-    for (size_t i = 0; i < msg->name.size(); ++i) {
-      if (msg->name[i] == joint_name) {
-        return static_cast<int>(i);
-      }
-    }
-
-    if (joint_name.size() > 6 &&
-        joint_name.compare(joint_name.size() - 6, 6, "_joint") == 0) {
-      const std::string short_name = joint_name.substr(0, joint_name.size() - 6);
-      for (size_t i = 0; i < msg->name.size(); ++i) {
-        if (msg->name[i] == short_name) {
-          return static_cast<int>(i);
-        }
-      }
-    }
-
-    return -1;
-  };
 
   bool got_any_position = false;
   {
     std::lock_guard<std::mutex> lock(external_feedback_mutex_);
-    for (size_t joint_idx = 0; joint_idx < joint_configs_.size(); ++joint_idx) {
-      const int msg_idx = resolve_index(joint_configs_[joint_idx].name);
-      if (msg_idx < 0) {
-        continue;
-      }
 
-      const size_t idx = static_cast<size_t>(msg_idx);
-      if (idx < msg->position.size()) {
-        external_feedback_positions_[joint_idx] = msg->position[idx];
-        got_any_position = true;
-      }
-      if (idx < msg->velocity.size()) {
-        external_feedback_velocities_[joint_idx] = msg->velocity[idx];
-      }
-      if (idx < msg->effort.size()) {
-        external_feedback_efforts_[joint_idx] = msg->effort[idx];
-      }
+    const size_t joint_count = joint_configs_.size();
+    const size_t position_count = std::min(joint_count, msg->position.size());
+    const size_t velocity_count = std::min(joint_count, msg->velocity.size());
+    const size_t effort_count = std::min(joint_count, msg->effort.size());
+
+    // 不再按 name 匹配，直接按数组顺序映射：第 i 个消息元素 -> 第 i 个关节
+    for (size_t i = 0; i < position_count; ++i) {
+      external_feedback_positions_[i] = msg->position[i];
+      got_any_position = true;
+    }
+    for (size_t i = 0; i < velocity_count; ++i) {
+      external_feedback_velocities_[i] = msg->velocity[i];
+    }
+    for (size_t i = 0; i < effort_count; ++i) {
+      external_feedback_efforts_[i] = msg->effort[i];
     }
 
-    if (got_any_position) {
+    if (got_any_position || !msg->velocity.empty() || !msg->effort.empty()) {
       external_feedback_last_time_ = std::chrono::steady_clock::now();
       external_feedback_received_.store(true);
     }
   }
 }
+
 
 hardware_interface::return_type RsA3HardwareInterface::read(
   const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/)
