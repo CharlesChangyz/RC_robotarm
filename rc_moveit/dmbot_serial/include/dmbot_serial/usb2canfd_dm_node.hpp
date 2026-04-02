@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -21,6 +22,10 @@ public:
 private:
   void command_callback(const arm_msgs::msg::RobotCommand::SharedPtr msg);
   void publish_joint_state();
+  void final_joint_command_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
+  void final_pd_gain_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
+  void final_torque_ff_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
+  void send_commands();
 
   damiao::Control_Mode control_mode_{damiao::MIT_MODE};
   std::vector<damiao::DmActData> init_data_;
@@ -29,9 +34,23 @@ private:
   std::unordered_map<uint16_t, std::size_t> motor_id_to_index_;
   std::size_t motor_count_{0};
 
+  // Command arrays
+  std::vector<float> q_arr_;
+  std::vector<float> dq_arr_;
+  std::vector<float> tau_arr_;
+  std::vector<float> kp_arr_;
+  std::vector<float> kd_arr_;
+  std::mutex command_mutex_;
+
   rclcpp::Subscription<arm_msgs::msg::RobotCommand>::SharedPtr command_subscriber_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::TimerBase::SharedPtr command_timer_;
+
+  // New subscribers for debug topics
+  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr final_joint_command_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr final_pd_gain_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr final_torque_ff_sub_;
 };
 
 #endif  // DMBOT_SERIAL_USB2CANFD_DM_NODE_HPP_

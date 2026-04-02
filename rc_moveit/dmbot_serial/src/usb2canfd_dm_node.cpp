@@ -13,11 +13,11 @@ Usb2canfdDMNode::Usb2canfdDMNode()
   this->declare_parameter<int64_t>("nom_baud", 1000000);
   this->declare_parameter<int64_t>("dat_baud", 2000000);
   this->declare_parameter<std::vector<int64_t>>(
-    "motor_ids", std::vector<int64_t>{0x01, 0x02, 0x03, 0x04, 0x05, 0x06});
+    "motor_ids", std::vector<int64_t>{0x01, 0x02, 0x03, 0x04});
   this->declare_parameter<std::vector<int64_t>>(
-    "master_ids", std::vector<int64_t>{0x101, 0x102, 0x103, 0x104, 0x105, 0x106});
+    "master_ids", std::vector<int64_t>{0x101, 0x102, 0x103, 0x104});
   this->declare_parameter<std::vector<int64_t>>(
-    "motor_types", std::vector<int64_t>{1, 1, 1, 1, 1, 1});
+    "motor_types", std::vector<int64_t>{1, 1, 1, 1});
   this->declare_parameter<int64_t>("control_mode", 0);
 
   const auto sn = this->get_parameter("sn").as_string();
@@ -86,16 +86,41 @@ Usb2canfdDMNode::Usb2canfdDMNode()
 
   motor_count_ = motor_ids_.size();
 
+  // Initialize command arrays
+  q_arr_.resize(motor_count_, 0.0f);
+  dq_arr_.resize(motor_count_, 0.0f);
+  tau_arr_.resize(motor_count_, 0.0f);
+  kp_arr_.resize(motor_count_, 0.0f);
+  kd_arr_.resize(motor_count_, 0.0f);
+
   auto qos = rclcpp::QoS(rclcpp::KeepLast(10)).best_effort();
   command_subscriber_ = this->create_subscription<arm_msgs::msg::RobotCommand>(
     "robot_command", qos,
     std::bind(&Usb2canfdDMNode::command_callback, this, std::placeholders::_1));
 
   joint_state_publisher_ =
-    this->create_publisher<sensor_msgs::msg::JointState>("/data_from_lower", 10);
+  //  this->create_publisher<sensor_msgs::msg::JointState>("/data_from_lower", 10);
+    this->create_publisher<sensor_msgs::msg::JointState>("/rc_arm_2/feedback_joint_states", 10);
 
   timer_ = this->create_wall_timer(
     std::chrono::milliseconds(10), std::bind(&Usb2canfdDMNode::publish_joint_state, this));
+
+  // New subscribers for debug topics
+  final_joint_command_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
+    "/debug/final_joint_command", qos,
+    std::bind(&Usb2canfdDMNode::final_joint_command_callback, this, std::placeholders::_1));
+
+  final_pd_gain_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
+    "/debug/final_pd_gains", qos,
+    std::bind(&Usb2canfdDMNode::final_pd_gain_callback, this, std::placeholders::_1));
+
+  final_torque_ff_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
+    "/debug/final_joint_torque_ff", qos,
+    std::bind(&Usb2canfdDMNode::final_torque_ff_callback, this, std::placeholders::_1));
+
+  // Timer for sending commands
+  command_timer_ = this->create_wall_timer(
+    std::chrono::milliseconds(10), std::bind(&Usb2canfdDMNode::send_commands, this));
 
   RCLCPP_INFO(this->get_logger(), "DM Motor Driver Node initialized");
 }
@@ -198,6 +223,54 @@ void Usb2canfdDMNode::publish_joint_state()
     joint_state_publisher_->publish(joint_state_msg);
   } catch (const std::exception & e) {
     RCLCPP_ERROR(this->get_logger(), "Unexpected error in publish_joint_state: %s", e.what());
+  }
+}
+
+void Usb2canfdDMNode::final_joint_command_callback(const sensor_msgs::msg::JointState::SharedPtr msg)
+{
+  std::lock_guard<std::mutex> lock(command_mutex_);
+  if (msg->position.size() >= motor_count_) {
+    for (size_t i = 0; i < motor_count_; ++i) {
+      q_arr_[i] = static_cast<float>(msg->position[i]);
+    }
+  }
+  if (msg->velocity.size() >= motor_count_) {
+    for (size_t i = 0; i < motor_count_; ++i) {
+      dq_arr_[i] = static_cast<float>(msg->velocity[i]);
+    }
+  }
+}
+
+void Usb2canfdDMNode::final_pd_gain_callback(const sensor_msgs::msg::JointState::SharedPtr msg)
+{
+  std::lock_guard<std::mutex> lock(command_mutex_);
+  if (msg->position.size() >= motor_count_) {
+    for (size_t i = 0; i < motor_count_; ++i) {
+      kp_arr_[i] = static_cast<float>(msg->position[i]);
+    }
+  }
+  if (msg->velocity.size() >= motor_count_) {
+    for (size_t i = 0; i < motor_count_; ++i) {
+      kd_arr_[i] = static_cast<float>(msg->velocity[i]);
+    }
+  }
+}
+
+void Usb2canfdDMNode::final_torque_ff_callback(const sensor_msgs::msg::JointState::SharedPtr msg)
+{
+  std::lock_guard<std::mutex> lock(command_mutex_);
+  if (msg->effort.size() >= motor_count_) {
+    for (size_t i = 0; i < motor_count_; ++i) {
+      tau_arr_[i] = static_cast<float>(msg->effort[i]);
+    }
+  }
+}
+
+void Usb2canfdDMNode::send_commands()
+{
+  std::lock_guard<std::mutex> lock(command_mutex_);
+  if (motor_control_) {
+    motor_control_->CtrlMotors(q_arr_.data(), dq_arr_.data(), kp_arr_.data(), kd_arr_.data(), tau_arr_.data());
   }
 }
 
