@@ -103,7 +103,7 @@ Usb2canfdDMNode::Usb2canfdDMNode()
     this->create_publisher<sensor_msgs::msg::JointState>("/rc_arm_2/feedback_joint_states", 10);
 
   timer_ = this->create_wall_timer(
-    std::chrono::milliseconds(10), std::bind(&Usb2canfdDMNode::publish_joint_state, this));
+    std::chrono::milliseconds(2), std::bind(&Usb2canfdDMNode::publish_joint_state, this));
 
   // New subscribers for debug topics
   final_joint_command_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
