@@ -70,6 +70,7 @@ def _parse_forbidden_link_pairs(text: str) -> List[Tuple[str, str]]:
 
 
 def _parse_env_forbidden_boxes_json(text: str) -> List[dict]:
+    """Parse JSON array for environment forbidden boxes, fallback to [] on invalid input."""
     try:
         loaded = json.loads(text or "[]")
     except json.JSONDecodeError:
@@ -78,6 +79,7 @@ def _parse_env_forbidden_boxes_json(text: str) -> List[dict]:
 
 
 def _as_xyz(values, default: Tuple[float, float, float]) -> Tuple[float, float, float]:
+    """Convert [x, y, z] like values to float tuple, otherwise return default."""
     if not isinstance(values, (list, tuple)) or len(values) != 3:
         return default
     try:
@@ -87,6 +89,7 @@ def _as_xyz(values, default: Tuple[float, float, float]) -> Tuple[float, float, 
 
 
 def _as_xyzw(values, default: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+    """Convert [x, y, z, w] like values to float tuple, otherwise return default."""
     if not isinstance(values, (list, tuple)) or len(values) != 4:
         return default
     try:
@@ -342,7 +345,7 @@ class TargetPoseMoveItExecutor(Node):
             return None
 
         idx = {name: i for i, name in enumerate(names)}
-        matrix = [[False for _ in names] for _ in names]
+        matrix = [[True for _ in names] for _ in names]
         for a, b in self._forbidden_link_pairs:
             i, j = idx[a], idx[b]
             matrix[i][j] = False
@@ -407,12 +410,12 @@ class TargetPoseMoveItExecutor(Node):
             scene.world.collision_objects = env_objects
 
         if acm is None and not env_objects:
-            self.get_logger().info("未配置额外碰撞禁区，跳过 PlanningScene 更新")
+            self.get_logger().info("No extra collision forbidden zones configured, skip PlanningScene diff")
             return
 
         self._planning_scene_pub.publish(scene)
         self.get_logger().info(
-            "已发布碰撞禁区配置: self_pairs=%d, env_boxes=%d"
+            "Collision forbidden zones published: self_pairs=%d, env_boxes=%d"
             % (len(self._forbidden_link_pairs), len(env_objects))
         )
 
@@ -583,7 +586,7 @@ def parse_args():
     parser.add_argument("--joint-tolerance", type=float, default=0.02)
     parser.add_argument("--check-period", type=float, default=0.05)
     parser.add_argument("--avoid-collisions", action="store_true")
-    parser.add_argument("--avoid-collisions-enabled", default="false")
+    parser.add_argument("--avoid-collisions-enabled", default="true")
     parser.add_argument("--enforce-j4-from-target", default="true")
     parser.add_argument("--j4-joint-name", default="j4_joint")
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
