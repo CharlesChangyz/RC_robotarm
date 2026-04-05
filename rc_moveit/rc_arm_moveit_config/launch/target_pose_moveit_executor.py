@@ -2,17 +2,26 @@
 """Subscribe PoseStamped targets and drive MoveIt planning/execution."""
 
 import argparse
+import json
 import math
 import threading
 from typing import Dict, List, Optional, Tuple
 
 import rclpy
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Pose, PoseStamped
 from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import Constraints, JointConstraint
+from moveit_msgs.msg import (
+    AllowedCollisionEntry,
+    AllowedCollisionMatrix,
+    CollisionObject,
+    Constraints,
+    JointConstraint,
+    PlanningScene,
+)
 from moveit_msgs.srv import GetPositionIK
 from rclpy.action import ActionClient
 from rclpy.node import Node
+from shape_msgs.msg import SolidPrimitive
 import tf2_ros
 
 
@@ -47,6 +56,45 @@ def _parse_bool(text: str) -> bool:
     return v in {"1", "true", "yes", "y", "on"}
 
 
+def _parse_forbidden_link_pairs(text: str) -> List[Tuple[str, str]]:
+    pairs: List[Tuple[str, str]] = []
+    for raw_item in (text or "").split(","):
+        item = raw_item.strip()
+        if not item or ":" not in item:
+            continue
+        a, b = [s.strip() for s in item.split(":", 1)]
+        if not a or not b or a == b:
+            continue
+        pairs.append((a, b))
+    return pairs
+
+
+def _parse_env_forbidden_boxes_json(text: str) -> List[dict]:
+    try:
+        loaded = json.loads(text or "[]")
+    except json.JSONDecodeError:
+        return []
+    return loaded if isinstance(loaded, list) else []
+
+
+def _as_xyz(values, default: Tuple[float, float, float]) -> Tuple[float, float, float]:
+    if not isinstance(values, (list, tuple)) or len(values) != 3:
+        return default
+    try:
+        return float(values[0]), float(values[1]), float(values[2])
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_xyzw(values, default: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+    if not isinstance(values, (list, tuple)) or len(values) != 4:
+        return default
+    try:
+        return float(values[0]), float(values[1]), float(values[2]), float(values[3])
+    except (TypeError, ValueError):
+        return default
+
+
 class TargetPoseMoveItExecutor(Node):
     def __init__(
         self,
@@ -71,6 +119,9 @@ class TargetPoseMoveItExecutor(Node):
         status_log_period: float,
         status_base_frame: str,
         status_eef_frame: str,
+        forbidden_link_pairs: List[Tuple[str, str]],
+        env_forbidden_boxes: List[dict],
+        planning_scene_topic: str,
     ) -> None:
         super().__init__("rc_arm_target_pose_moveit_executor")
 
@@ -94,6 +145,10 @@ class TargetPoseMoveItExecutor(Node):
 
         self._status_base_frame = _normalize_frame_id(status_base_frame)
         self._status_eef_frame = _normalize_frame_id(status_eef_frame)
+        self._forbidden_link_pairs = list(forbidden_link_pairs)
+        self._env_forbidden_boxes = list(env_forbidden_boxes)
+        self._planning_scene_topic = planning_scene_topic
+        self._planning_scene_initialized = False
 
         self._target_lock = threading.Lock()
         self._latest_target: Optional[PoseStamped] = None
@@ -109,6 +164,7 @@ class TargetPoseMoveItExecutor(Node):
 
         self._ik_client = self.create_client(GetPositionIK, compute_ik_service)
         self._move_group_client = ActionClient(self, MoveGroup, move_action_name)
+        self._planning_scene_pub = self.create_publisher(PlanningScene, planning_scene_topic, 10)
 
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
@@ -117,6 +173,7 @@ class TargetPoseMoveItExecutor(Node):
         self._timer = self.create_timer(max(0.02, float(check_period)), self._on_timer)
         if self._status_log_period > 0.0:
             self._status_timer = self.create_timer(self._status_log_period, self._log_status)
+        self._scene_timer = self.create_timer(1.0, self._publish_planning_scene_diff_once)
 
         self.get_logger().info(
             "TargetPose->MoveIt executor started: topic=%s group=%s status_tf=%s->%s"
@@ -270,6 +327,94 @@ class TargetPoseMoveItExecutor(Node):
         self._set_busy(True, "request_ik")
         self._event("ik_request", target)
         self._request_ik(target)
+
+    def _build_acm_forbidden_links(self) -> Optional[AllowedCollisionMatrix]:
+        if not self._forbidden_link_pairs:
+            return None
+
+        names: List[str] = []
+        for a, b in self._forbidden_link_pairs:
+            if a not in names:
+                names.append(a)
+            if b not in names:
+                names.append(b)
+        if not names:
+            return None
+
+        idx = {name: i for i, name in enumerate(names)}
+        matrix = [[False for _ in names] for _ in names]
+        for a, b in self._forbidden_link_pairs:
+            i, j = idx[a], idx[b]
+            matrix[i][j] = False
+            matrix[j][i] = False
+
+        acm = AllowedCollisionMatrix()
+        acm.entry_names = names
+        for i in range(len(names)):
+            row = AllowedCollisionEntry()
+            row.enabled = [matrix[i][j] for j in range(len(names))]
+            acm.entry_values.append(row)
+        return acm
+
+    def _build_env_collision_objects(self) -> List[CollisionObject]:
+        objects: List[CollisionObject] = []
+        for idx, box_cfg in enumerate(self._env_forbidden_boxes, start=1):
+            if not isinstance(box_cfg, dict):
+                continue
+            sx, sy, sz = _as_xyz(box_cfg.get("size"), (0.2, 0.2, 0.2))
+            px, py, pz = _as_xyz(box_cfg.get("position"), (0.0, 0.0, 0.0))
+            qx, qy, qz, qw = _as_xyzw(box_cfg.get("orientation"), (0.0, 0.0, 0.0, 1.0))
+            frame_id = _normalize_frame_id(str(box_cfg.get("frame_id", ""))) or self._default_frame
+            obj_id = str(box_cfg.get("id", f"forbidden_box_{idx}")).strip() or f"forbidden_box_{idx}"
+
+            primitive = SolidPrimitive()
+            primitive.type = SolidPrimitive.BOX
+            primitive.dimensions = [abs(sx), abs(sy), abs(sz)]
+
+            pose = Pose()
+            pose.position.x = px
+            pose.position.y = py
+            pose.position.z = pz
+            pose.orientation.x = qx
+            pose.orientation.y = qy
+            pose.orientation.z = qz
+            pose.orientation.w = qw
+
+            obj = CollisionObject()
+            obj.id = obj_id
+            obj.header.frame_id = frame_id
+            obj.primitives = [primitive]
+            obj.primitive_poses = [pose]
+            obj.operation = CollisionObject.ADD
+            objects.append(obj)
+        return objects
+
+    def _publish_planning_scene_diff_once(self) -> None:
+        if self._planning_scene_initialized:
+            return
+        self._planning_scene_initialized = True
+        self._scene_timer.cancel()
+
+        scene = PlanningScene()
+        scene.is_diff = True
+
+        acm = self._build_acm_forbidden_links()
+        if acm is not None:
+            scene.allowed_collision_matrix = acm
+
+        env_objects = self._build_env_collision_objects()
+        if env_objects:
+            scene.world.collision_objects = env_objects
+
+        if acm is None and not env_objects:
+            self.get_logger().info("未配置额外碰撞禁区，跳过 PlanningScene 更新")
+            return
+
+        self._planning_scene_pub.publish(scene)
+        self.get_logger().info(
+            "已发布碰撞禁区配置: self_pairs=%d, env_boxes=%d"
+            % (len(self._forbidden_link_pairs), len(env_objects))
+        )
 
     def _request_ik(self, target: PoseStamped) -> None:
         req = GetPositionIK.Request()
@@ -438,12 +583,24 @@ def parse_args():
     parser.add_argument("--joint-tolerance", type=float, default=0.02)
     parser.add_argument("--check-period", type=float, default=0.05)
     parser.add_argument("--avoid-collisions", action="store_true")
+    parser.add_argument("--avoid-collisions-enabled", default="false")
     parser.add_argument("--enforce-j4-from-target", default="true")
     parser.add_argument("--j4-joint-name", default="j4_joint")
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--status-log-period", type=float, default=1.0, help="state log period, <=0 to disable")
     parser.add_argument("--status-base-frame", default="world")
     parser.add_argument("--status-eef-frame", default="end_effector")
+    parser.add_argument(
+        "--forbidden-link-pairs",
+        default="",
+        help="forbid robot self-collision pairs, format: link_a:link_b,link_c:link_d",
+    )
+    parser.add_argument(
+        "--env-forbidden-boxes-json",
+        default="[]",
+        help='environment forbidden boxes in JSON list, e.g. [{"id":"box1","frame_id":"world","size":[0.2,0.2,0.2],"position":[0.3,0,0.4]}]',
+    )
+    parser.add_argument("--planning-scene-topic", default="/planning_scene")
     return parser.parse_args()
 
 
@@ -469,13 +626,16 @@ def main() -> None:
         acc_scale=args.acc_scale,
         joint_tolerance=args.joint_tolerance,
         check_period=args.check_period,
-        avoid_collisions=args.avoid_collisions,
+        avoid_collisions=(args.avoid_collisions or _parse_bool(args.avoid_collisions_enabled)),
         enforce_j4_from_target=_parse_bool(args.enforce_j4_from_target),
         j4_joint_name=args.j4_joint_name,
         j4_axis=args.j4_axis,
         status_log_period=args.status_log_period,
         status_base_frame=args.status_base_frame,
         status_eef_frame=args.status_eef_frame,
+        forbidden_link_pairs=_parse_forbidden_link_pairs(args.forbidden_link_pairs),
+        env_forbidden_boxes=_parse_env_forbidden_boxes_json(args.env_forbidden_boxes_json),
+        planning_scene_topic=args.planning_scene_topic,
     )
 
     try:
