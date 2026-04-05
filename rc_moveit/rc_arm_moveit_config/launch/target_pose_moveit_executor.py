@@ -410,7 +410,7 @@ class TargetPoseMoveItExecutor(Node):
             scene.world.collision_objects = env_objects
 
         if acm is None and not env_objects:
-            self.get_logger().info("No extra collision forbidden zones configured, skip PlanningScene diff")
+            self.get_logger().info("No extra collision forbidden zones configured, skipping PlanningScene diff")
             return
 
         self._planning_scene_pub.publish(scene)
