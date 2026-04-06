@@ -995,6 +995,10 @@ hardware_interface::return_type RsA3HardwareInterface::read(
         }
         used_external_feedback = true;
       }
+      else{
+        RCLCPP_WARN_THROTTLE(rclcpp::get_logger("RsA3HardwareInterface"), *debug_node_->get_clock(), 5000,
+                             "外部反馈数据过旧 (%.2f 秒)，已放弃使用", feedback_age);
+      }
     }
 
     if (!used_external_feedback) {
@@ -1075,7 +1079,7 @@ hardware_interface::return_type RsA3HardwareInterface::write(
                 s_curve_enabled_ ? "启用" : "禁用");
   }
 
-  const double command_change_eps = 1e-6;
+  const double command_change_eps = 1e-3;
   bool command_changed = false;
   for (size_t i = 0; i < joint_configs_.size(); ++i) {
     if (std::abs(hw_commands_positions_[i] - last_hw_commands_positions_[i]) > command_change_eps) {
