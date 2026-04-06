@@ -251,6 +251,8 @@ namespace damiao
         float mit_kp[MOTOR_NUM] = {0};
         float mit_kd[MOTOR_NUM] = {0};
 
+        float current_motor_distance;
+
         /**************************************************************************************************************************** */
 
         std::shared_ptr<Motor> getMotor(uint16_t id) const

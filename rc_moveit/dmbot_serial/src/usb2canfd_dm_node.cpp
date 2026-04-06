@@ -104,6 +104,11 @@ Usb2canfdDMNode::Usb2canfdDMNode()
 
   timer_ = this->create_wall_timer(
     std::chrono::milliseconds(2), std::bind(&Usb2canfdDMNode::publish_joint_state, this));
+  
+  ee_distance_publisher_ = this->create_publisher<std_msgs::msg::Float32>("/rc_arm_2/ee_distance", 10);
+
+  ee_distance_timer_ = this->create_wall_timer(
+    std::chrono::milliseconds(2), std::bind(&Usb2canfdDMNode::publish_ee_distance, this));
 
   // New subscribers for debug topics
   final_joint_command_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
@@ -120,7 +125,7 @@ Usb2canfdDMNode::Usb2canfdDMNode()
 
   // Timer for sending commands
   command_timer_ = this->create_wall_timer(
-    std::chrono::milliseconds(10), std::bind(&Usb2canfdDMNode::send_commands, this));
+    std::chrono::milliseconds(2), std::bind(&Usb2canfdDMNode::send_commands, this));
 
   RCLCPP_INFO(this->get_logger(), "DM Motor Driver Node initialized");
 }
@@ -223,6 +228,17 @@ void Usb2canfdDMNode::publish_joint_state()
     joint_state_publisher_->publish(joint_state_msg);
   } catch (const std::exception & e) {
     RCLCPP_ERROR(this->get_logger(), "Unexpected error in publish_joint_state: %s", e.what());
+  }
+}
+
+void Usb2canfdDMNode::publish_ee_distance()
+{
+  try {
+    std_msgs::msg::Float32 distance_msg;
+    distance_msg.data = static_cast<float>(motor_control_->current_motor_distance);
+    ee_distance_publisher_->publish(distance_msg);
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(this->get_logger(), "Unexpected error in publish_ee_distance: %s", e.what());
   }
 }
 

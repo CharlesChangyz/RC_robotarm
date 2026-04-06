@@ -706,11 +706,11 @@ namespace damiao
         };
 
         uint32_t canID = value.head.id;
-        std::cout<<"canID:"<<canID<<std::endl;
+        //std::cout<<"canID:"<<canID<<std::endl;
 
         if (read_write_save == true && motors.find(canID) != motors.end())
         { 
-            std::cout<<"1"<<std::endl;
+            std::cout<<"save para"<<std::endl;
             // 这是发送保存参数或者写参数或者读参数返回的数据
             if (value.data[2] == 0x33 || value.data[2] == 0x55 || value.data[2] == 0xAA)
             { // 发的是读参数或写参数命令，返回对应寄存器参数
@@ -724,14 +724,14 @@ namespace damiao
         }
         else
         {
-            std::cout<<"2"<<std::endl;
+            // std::cout<<"2"<<std::endl;
             // if (value.data[0] == 0xAB)
             // {
             // 这是正常返回的位置速度力矩数据
             uint16_t q_uint = (uint16_t(value.data[1]) << 8) | value.data[2];
             uint16_t dq_uint = (uint16_t(value.data[3]) << 4) | (value.data[4] >> 4);
             uint16_t tau_uint = (uint16_t(value.data[4] & 0xf) << 8) | value.data[5];
-
+            uint16_t distance = (uint16_t(value.data[6]) << 8) | value.data[7];
             // if (motors.find(canID) == motors.end())
             // {
             //     std::cout<<"return"<<std::endl;
@@ -742,13 +742,14 @@ namespace damiao
             float receive_q = uint_to_float(q_uint, P_MIN_4340, P_MAX_4340, 16);
             float receive_dq = uint_to_float(dq_uint, V_MIN_4340, V_MAX_4340, 12);
             float receive_tau = uint_to_float(tau_uint, T_MIN_4340, T_MAX_4340, 12);
-            
-            std::cout << "[Rx Motor ID: " << int(motor_id) << "] Pos: " << receive_q << " Vel: " << receive_dq << " Tau: " << receive_tau << std::endl;
+
+            //std::cout << "[Rx Motor ID: " << int(motor_id) << "] Pos: " << receive_q << " Vel: " << receive_dq << " Tau: " << receive_tau << std::endl;
            
             //std::cout<< "a" <<std::endl;
             current_motor_pos[motor_id] = receive_q;
             current_motor_vel[motor_id] = receive_dq;
             current_motor_tor[motor_id] = receive_tau;
+            current_motor_distance = distance;
             //std::cout<< "b" <<std::endl;
             //m->receive_data(receive_q, receive_dq, receive_tau);
             //std::cout<< "c" <<std::endl;
