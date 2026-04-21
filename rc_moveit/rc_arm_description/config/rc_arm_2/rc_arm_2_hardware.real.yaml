@@ -1,0 +1,127 @@
+# rc_arm_2 实机后端硬件配置
+# 这份 YAML 只描述硬件插件参数，不包含关节结构、方向和接口定义。
+
+# 后端类型：
+# real = 实机 ros2_control 后端
+backend: real
+
+# CAN 接口名称，例如 can0 / can1
+can_interface: can0
+
+# 主机侧 CAN ID，通常保持 253（0xFD）
+host_can_id: 253
+
+# 外部反馈话题：
+# 实机模式下一般不会主动使用，但保留统一字段，便于 real / mujoco 两份配置共用同一 schema
+external_feedback_topic: /rc_arm_2/mujoco_joint_states
+
+# 外部反馈超时时间，单位秒；
+# 当使用外部反馈模式时，超过该时间未收到消息则认为反馈失效
+external_feedback_timeout: 0.2
+
+# MuJoCo 命令输出话题：
+# 实机模式通常不会用到，但保留统一字段
+mujoco_command_topic: /rc_arm_2/mujoco_joint_command
+
+# USB2CANFD 设备序列号
+dm_sn: 9940F4E149D904A69924737E3DE6629F
+
+# CAN 仲裁域波特率
+dm_nom_baud: 1000000
+
+# CAN 数据域波特率
+dm_dat_baud: 2000000
+
+# dmbot_serial 控制模式：
+# 0=MIT, 1=POS_VEL, 2=VEL, 3=POS_FORCE
+dm_control_mode: 0
+
+# 位置环比例增益 Kp
+position_kp: 60.0
+
+# 位置环微分增益 Kd
+position_kd: 3.0
+
+# 硬件层统一速度限制，单位 rad/s
+velocity_limit: 8.0
+
+# 是否启用逐关节 S 曲线平滑
+s_curve_enabled: true
+
+# 是否启用“几何路径 q(s) + 公共标量 s(t)”参数化
+scalar_path_time_enabled: true
+
+# 平滑滤波系数 alpha，越小越平滑
+smoothing_alpha: 0.2
+
+# S 曲线最大速度，单位 rad/s
+max_velocity: 40.0
+
+# S 曲线最大加速度，单位 rad/s^2
+max_acceleration: 20.0
+
+# S 曲线最大加加速度，单位 rad/s^3
+max_jerk: 120.0
+
+# 是否启用低刚度模式
+low_stiffness_mode: true
+
+# 低刚度模式全局 Kp
+low_stiffness_kp: 0.0
+
+# 低刚度模式全局 Kd
+low_stiffness_kd: 0.0
+
+# 低刚度模式额外常量力矩偏置，单位 Nm
+low_stiffness_torque_bias: 0.0
+
+# j1 低刚度 Kp 覆盖值；
+# 0 表示回退到 low_stiffness_kp
+low_stiffness_kp_j1: 0.0
+
+# j1 低刚度 Kd 覆盖值；
+# 0 表示回退到 low_stiffness_kd
+low_stiffness_kd_j1: 0.0
+
+# j2 低刚度 Kp 覆盖值
+low_stiffness_kp_j2: 0.0
+
+# j2 低刚度 Kd 覆盖值
+low_stiffness_kd_j2: 0.0
+
+# j3 低刚度 Kp 覆盖值
+low_stiffness_kp_j3: 0.0
+
+# j3 低刚度 Kd 覆盖值
+low_stiffness_kd_j3: 0.0
+
+# j4 低刚度 Kp 覆盖值
+low_stiffness_kp_j4: 0.0
+
+# j4 低刚度 Kd 覆盖值
+low_stiffness_kd_j4: 0.0
+
+# 是否启用 Pinocchio 重力补偿项
+use_pinocchio_gravity: false
+
+# 重力补偿前馈比例，范围 0~1
+gravity_feedforward_ratio: 0.95
+
+# 是否启用 Pinocchio 全逆动力学前馈
+use_pinocchio_inverse_dynamics: true
+
+# Pinocchio 使用的 URDF 路径；
+# 这里写相对 rc_arm_description 包目录的路径
+urdf_path: urdf/rc_arm_2/rc_arm_2.pinocchio.urdf
+
+# 关节接近限位时开始减速的边界，单位 rad
+limit_margin: 0.15
+
+# 关节进入硬停止保护区的边界，单位 rad
+limit_stop_margin: 0.02
+
+# 限位减速系数，范围 0~1，越小减速越明显
+limit_decel_factor: 0.3
+
+# 当 controller_manager 提供的周期异常时，硬件层采用的回退控制周期，单位秒
+fallback_control_period: 0.005

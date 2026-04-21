@@ -2,34 +2,7 @@
 <robot name="rc_arm_2" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <xacro:arg name="use_mock_hardware" default="false"/>
-  <xacro:arg name="can_interface" default="can0"/>
-  <xacro:arg name="host_can_id" default="253"/>
-  <xacro:arg name="can_enabled" default="true"/>
-  <xacro:arg name="external_feedback_enabled" default="false"/>
-  <xacro:arg name="external_feedback_topic" default="/rc_arm_2/mujoco_joint_states"/>
-  <xacro:arg name="external_feedback_timeout" default="0.2"/>
-  <xacro:arg name="s_curve_enabled" default="true"/>
-  <xacro:arg name="scalar_path_time_enabled" default="true"/>
-  <xacro:arg name="smoothing_alpha" default="0.2"/>
-  <xacro:arg name="max_velocity" default="2.0"/>
-  <xacro:arg name="max_acceleration" default="8.0"/>
-  <xacro:arg name="max_jerk" default="50.0"/>
-  <xacro:arg name="low_stiffness_mode" default="false"/>
-  <xacro:arg name="low_stiffness_kp" default="20.0"/>
-  <xacro:arg name="low_stiffness_kd" default="2.0"/>
-  <xacro:arg name="low_stiffness_kp_j1" default="0.0"/>
-  <xacro:arg name="low_stiffness_kd_j1" default="0.0"/>
-  <xacro:arg name="low_stiffness_kp_j2" default="0.0"/>
-  <xacro:arg name="low_stiffness_kd_j2" default="0.0"/>
-  <xacro:arg name="low_stiffness_kp_j3" default="0.0"/>
-  <xacro:arg name="low_stiffness_kd_j3" default="0.0"/>
-  <xacro:arg name="low_stiffness_kp_j4" default="0.0"/>
-  <xacro:arg name="low_stiffness_kd_j4" default="0.0"/>
-  <xacro:arg name="low_stiffness_torque_bias" default="0.0"/>
-  <xacro:arg name="use_pinocchio_gravity" default="true"/>
-  <xacro:arg name="gravity_feedforward_ratio" default="1.0"/>
-  <xacro:arg name="use_pinocchio_inverse_dynamics" default="true"/>
-  <xacro:arg name="urdf_path" default="$(find rc_arm_description)/urdf/rc_arm_2/rc_arm_2.pinocchio.urdf"/>
+  <xacro:arg name="hardware_config_file" default="$(find rc_arm_description)/config/rc_arm_2/rc_arm_2_hardware.real.yaml"/>
 
   <xacro:include filename="rc_arm_2_ros2_control.xacro"/>
 
@@ -220,33 +193,6 @@
 
   <xacro:rc_arm_2_ros2_control
     use_mock_hardware="$(arg use_mock_hardware)"
-    can_interface="$(arg can_interface)"
-    host_can_id="$(arg host_can_id)"
-    can_enabled="$(arg can_enabled)"
-    external_feedback_enabled="$(arg external_feedback_enabled)"
-    external_feedback_topic="$(arg external_feedback_topic)"
-    external_feedback_timeout="$(arg external_feedback_timeout)"
-    s_curve_enabled="$(arg s_curve_enabled)"
-    scalar_path_time_enabled="$(arg scalar_path_time_enabled)"
-    smoothing_alpha="$(arg smoothing_alpha)"
-    max_velocity="$(arg max_velocity)"
-    max_acceleration="$(arg max_acceleration)"
-    max_jerk="$(arg max_jerk)"
-    low_stiffness_mode="$(arg low_stiffness_mode)"
-    low_stiffness_kp="$(arg low_stiffness_kp)"
-    low_stiffness_kd="$(arg low_stiffness_kd)"
-    low_stiffness_kp_j1="$(arg low_stiffness_kp_j1)"
-    low_stiffness_kd_j1="$(arg low_stiffness_kd_j1)"
-    low_stiffness_kp_j2="$(arg low_stiffness_kp_j2)"
-    low_stiffness_kd_j2="$(arg low_stiffness_kd_j2)"
-    low_stiffness_kp_j3="$(arg low_stiffness_kp_j3)"
-    low_stiffness_kd_j3="$(arg low_stiffness_kd_j3)"
-    low_stiffness_kp_j4="$(arg low_stiffness_kp_j4)"
-    low_stiffness_kd_j4="$(arg low_stiffness_kd_j4)"
-    low_stiffness_torque_bias="$(arg low_stiffness_torque_bias)"
-    use_pinocchio_gravity="$(arg use_pinocchio_gravity)"
-    gravity_feedforward_ratio="$(arg gravity_feedforward_ratio)"
-    use_pinocchio_inverse_dynamics="$(arg use_pinocchio_inverse_dynamics)"
-    urdf_path="$(arg urdf_path)"/>
+    hardware_config_file="$(arg hardware_config_file)"/>
 
 </robot>

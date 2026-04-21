@@ -95,6 +95,7 @@ class XboxTeleopNode(Node):
         
         # Master-slave teleoperation parameters (Menu button triggered)
         self.declare_parameter('master_slave_enabled', True)
+        self.declare_parameter('direct_can_enabled', False)
         self.declare_parameter('master_joint_state_topic', '/arm1/joint_states')
         self.declare_parameter('master_trajectory_topic', '/arm1/arm1_arm_controller/joint_trajectory')
         self.declare_parameter('master_zero_torque_service', '/rc_arm/set_zero_torque_mode')
@@ -138,6 +139,7 @@ class XboxTeleopNode(Node):
         
         # Master-slave teleoperation parameters
         self.master_slave_enabled = self.get_parameter('master_slave_enabled').value
+        self.direct_can_enabled = self.get_parameter('direct_can_enabled').value
         master_joint_state_topic = self.get_parameter('master_joint_state_topic').value
         master_trajectory_topic = self.get_parameter('master_trajectory_topic').value
         master_zero_torque_service = self.get_parameter('master_zero_torque_service').value
@@ -222,14 +224,17 @@ class XboxTeleopNode(Node):
         # Initialize CAN socket for direct gripper command sending
         self.can_socket = None
         self.gripper_enabled = False
-        try:
-            self.can_socket = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
-            self.can_socket.bind(('can0',))
-            self.get_logger().info('CAN socket 初始化成功，已启用夹爪控制')
-            # Enable gripper motor
-            self.enable_gripper_motor()
-        except Exception as e:
-            self.get_logger().warn(f'CAN socket 初始化失败，已禁用夹爪控制：{e}')
+        if self.direct_can_enabled:
+            try:
+                self.can_socket = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
+                self.can_socket.bind(('can0',))
+                self.get_logger().info('CAN socket 初始化成功，已启用夹爪控制')
+                # Enable gripper motor
+                self.enable_gripper_motor()
+            except Exception as e:
+                self.get_logger().warn(f'CAN socket 初始化失败，已禁用夹爪控制：{e}')
+        else:
+            self.get_logger().info('direct_can_enabled=false，teleop 不直接访问 CAN')
         
         # Motor 7 (gripper) parameter ranges for MIT mode
         self.P_MIN, self.P_MAX = -12.57, 12.57
@@ -259,7 +264,7 @@ class XboxTeleopNode(Node):
         
         # CAN1 socket for Motor 7 slave follow (only if master-slave enabled)
         self.can1_socket = None
-        if self.master_slave_enabled:
+        if self.master_slave_enabled and self.direct_can_enabled:
             try:
                 self.can1_socket = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
                 self.can1_socket.bind(('can1',))

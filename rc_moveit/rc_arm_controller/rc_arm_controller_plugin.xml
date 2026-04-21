@@ -1,0 +1,10 @@
+<library path="rc_arm_controller">
+  <class
+    name="rc_arm_controller/RcArmController"
+    type="rc_arm_controller::RcArmController"
+    base_class_type="controller_interface::ControllerInterface">
+    <description>
+      FollowJointTrajectory-compatible position/velocity/effort controller for rc_arm.
+    </description>
+  </class>
+</library>

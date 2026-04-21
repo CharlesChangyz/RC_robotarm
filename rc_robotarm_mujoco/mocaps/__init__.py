@@ -1,1 +1,0 @@
-from rc_robotarm_mujoco.mocaps.target import Target

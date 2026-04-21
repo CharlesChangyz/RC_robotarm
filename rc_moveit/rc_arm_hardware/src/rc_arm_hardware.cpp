@@ -35,9 +35,16 @@ bool parseBoolParam(const std::string& raw_value)
 }  // namespace
 
 RsA3HardwareInterface::RsA3HardwareInterface()
-  : can_interface_("can0")
+  : backend_mode_(BackendMode::REAL)
+  , can_interface_("can0")
   , host_can_id_(0xFD)
   , can_enabled_(true)
+  , backend_name_("real")
+  , dm_serial_number_("9940F4E149D904A69924737E3DE6629F")
+  , dm_nominal_baud_(1000000)
+  , dm_data_baud_(2000000)
+  , dm_control_mode_(0)
+  , mujoco_command_topic_("/rc_arm_2/mujoco_joint_command")
   , position_kp_(60.0)    // 降低 Kp 以减小振荡
   , position_kd_(3.5)     // 增大 Kd 以提高阻尼
   , velocity_limit_(10.0)
@@ -91,14 +98,14 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   }
 
   // 解析参数
+  if (info_.hardware_parameters.count("backend")) {
+    backend_name_ = info_.hardware_parameters.at("backend");
+  }
   if (info_.hardware_parameters.count("can_interface")) {
     can_interface_ = info_.hardware_parameters.at("can_interface");
   }
   if (info_.hardware_parameters.count("host_can_id")) {
     host_can_id_ = std::stoi(info_.hardware_parameters.at("host_can_id"));
-  }
-  if (info_.hardware_parameters.count("can_enabled")) {
-    can_enabled_ = parseBoolParam(info_.hardware_parameters.at("can_enabled"));
   }
   if (info_.hardware_parameters.count("position_kp")) {
     position_kp_ = std::stod(info_.hardware_parameters.at("position_kp"));
@@ -112,9 +119,6 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   if (info_.hardware_parameters.count("use_mock_hardware")) {
     use_mock_hardware_ = parseBoolParam(info_.hardware_parameters.at("use_mock_hardware"));
   }
-  if (info_.hardware_parameters.count("external_feedback_enabled")) {
-    external_feedback_enabled_ = parseBoolParam(info_.hardware_parameters.at("external_feedback_enabled"));
-  }
   if (info_.hardware_parameters.count("external_feedback_topic")) {
     external_feedback_topic_ = info_.hardware_parameters.at("external_feedback_topic");
   }
@@ -122,6 +126,39 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
     external_feedback_timeout_sec_ = std::stod(info_.hardware_parameters.at("external_feedback_timeout"));
   }
   external_feedback_timeout_sec_ = std::max(0.0, external_feedback_timeout_sec_);
+  if (info_.hardware_parameters.count("mujoco_command_topic")) {
+    mujoco_command_topic_ = info_.hardware_parameters.at("mujoco_command_topic");
+  }
+  if (info_.hardware_parameters.count("dm_sn")) {
+    dm_serial_number_ = info_.hardware_parameters.at("dm_sn");
+  }
+  if (info_.hardware_parameters.count("dm_nom_baud")) {
+    dm_nominal_baud_ = static_cast<uint32_t>(std::stoul(info_.hardware_parameters.at("dm_nom_baud")));
+  }
+  if (info_.hardware_parameters.count("dm_dat_baud")) {
+    dm_data_baud_ = static_cast<uint32_t>(std::stoul(info_.hardware_parameters.at("dm_dat_baud")));
+  }
+  if (info_.hardware_parameters.count("dm_control_mode")) {
+    dm_control_mode_ = std::stoi(info_.hardware_parameters.at("dm_control_mode"));
+  }
+
+  std::string backend_lower = backend_name_;
+  std::transform(
+    backend_lower.begin(), backend_lower.end(), backend_lower.begin(),
+    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (backend_lower == "real") {
+    backend_mode_ = BackendMode::REAL;
+  } else if (backend_lower == "mujoco") {
+    backend_mode_ = BackendMode::MUJOCO;
+  } else {
+    RCLCPP_ERROR(
+      rclcpp::get_logger("RsA3HardwareInterface"),
+      "unsupported backend '%s', expected 'real' or 'mujoco'",
+      backend_name_.c_str());
+    return hardware_interface::CallbackReturn::ERROR;
+  }
+  external_feedback_enabled_ = backend_mode_ == BackendMode::MUJOCO;
+  can_enabled_ = backend_mode_ == BackendMode::REAL;
 
   if (info_.hardware_parameters.count("low_stiffness_mode")) {
     low_stiffness_mode_ = parseBoolParam(info_.hardware_parameters.at("low_stiffness_mode"));
@@ -189,7 +226,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   max_velocity_ = 2.0;          // 最大速度 2 rad/s
   max_acceleration_ = 8.0;      // 最大加速度 8 rad/s²
   max_jerk_ = 50.0;             // 最大加加速度 50 rad/s³（S 曲线规划）
-  control_period_ = 0.005;      // 默认 200Hz -> 5ms
+  fallback_control_period_ = 0.005;  // 默认 200Hz -> 5ms
   first_command_ = true;
   gravity_feedforward_ratio_ = 0.5;  // 默认 50% 重力补偿前馈
   s_curve_enabled_ = true;      // 默认启用 S 曲线
@@ -214,6 +251,11 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   if (info_.hardware_parameters.count("max_jerk")) {
     max_jerk_ = std::stod(info_.hardware_parameters.at("max_jerk"));
   }
+
+  if (info_.hardware_parameters.count("fallback_control_period")) {
+    fallback_control_period_ = std::stod(info_.hardware_parameters.at("fallback_control_period"));
+  }
+  fallback_control_period_ = std::max(1e-4, fallback_control_period_);
   
   // 从参数读取 S 曲线开关
   if (info_.hardware_parameters.count("s_curve_enabled")) {
@@ -291,12 +333,15 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   }
 
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "已初始化：%zu 个关节，CAN 接口：%s（CAN %s）",
-              num_joints, can_interface_.c_str(), can_enabled_ ? "启用" : "禁用");
+              "已初始化：%zu 个关节，backend=%s",
+              num_joints, backend_name_.c_str());
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "  S 曲线：%s，max_vel=%.1f rad/s，max_acc=%.1f rad/s²，max_jerk=%.1f rad/s³",
               s_curve_enabled_ ? "启用" : "禁用",
               max_velocity_, max_acceleration_, max_jerk_);
+  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
+              "  回退控制周期：%.4f s",
+              fallback_control_period_);
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "  公共标量路径参数化：%s",
               scalar_path_time_enabled_ ? "启用" : "禁用");
@@ -319,7 +364,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
 
   if (external_feedback_enabled_) {
     RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-                "  外部反馈：启用，topic=%s，timeout=%.3fs",
+                "  MuJoCo 状态输入：topic=%s，timeout=%.3fs",
                 external_feedback_topic_.c_str(), external_feedback_timeout_sec_);
   }
 
@@ -335,6 +380,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   final_pd_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/final_pd_gains", 10);
   final_torque_ff_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/final_joint_torque_ff", 10);
   scalar_path_debug_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/scalar_path_state", 10);
+  mujoco_command_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>(mujoco_command_topic_, 10);
 
   if (external_feedback_enabled_) {
     external_feedback_sub_ = debug_node_->create_subscription<sensor_msgs::msg::JointState>(
@@ -626,41 +672,51 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_configure(
     return hardware_interface::CallbackReturn::SUCCESS;
   }
 
-  if (!can_enabled_) {
-    RCLCPP_WARN(rclcpp::get_logger("RsA3HardwareInterface"),
-                "CAN 已禁用：跳过 CAN 初始化，将仅执行控制计算与调试发布");
+  if (backend_mode_ == BackendMode::MUJOCO) {
+    RCLCPP_INFO(
+      rclcpp::get_logger("RsA3HardwareInterface"),
+      "配置 MuJoCo 后端：state topic=%s, command topic=%s",
+      external_feedback_topic_.c_str(),
+      mujoco_command_topic_.c_str());
     return hardware_interface::CallbackReturn::SUCCESS;
   }
 
-  // 创建并初始化 CAN 驱动
-  can_driver_ = std::make_unique<RobstrideCanDriver>(can_interface_, host_can_id_);
-  
-  if (!can_driver_->init()) {
+  std::vector<dmbot_serial::MotorConfig> motor_configs;
+  motor_configs.reserve(joint_configs_.size());
+  for (const auto & config : joint_configs_) {
+    dmbot_serial::MotorConfig motor_config{};
+    motor_config.motor_id = config.motor_id;
+    motor_config.master_id = static_cast<uint16_t>(0x100 + config.motor_id);
+    motor_config.motor_type =
+      config.motor_type == MotorType::EL05 ? dmbot_serial::MotorType::DM4340 : dmbot_serial::MotorType::DM4310;
+    motor_configs.push_back(motor_config);
+  }
+
+  dm_driver_ = std::make_unique<dmbot_serial::DmMotorDriver>(
+    dm_serial_number_, dm_nominal_baud_, dm_data_baud_, motor_configs);
+
+  if (!dm_driver_->connect()) {
     RCLCPP_ERROR(rclcpp::get_logger("RsA3HardwareInterface"),
-                 "CAN 驱动初始化失败：%s", can_interface_.c_str());
+                 "dmbot_serial 后端初始化失败");
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // 为每个关节设置电机型号（添加延时避免 CAN 缓冲区溢出）
-  for (const auto& config : joint_configs_) {
-    can_driver_->setMotorType(config.motor_id, config.motor_type);
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Add delay
-  }
-
-  // 启动接收线程
-  can_driver_->startReceiveThread();
-
-  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"), "硬件已配置完成：%s", can_interface_.c_str());
+  RCLCPP_INFO(
+    rclcpp::get_logger("RsA3HardwareInterface"),
+    "实机后端已配置：dmbot_serial(sn=%s, nom=%u, data=%u, control_mode=%d)",
+    dm_serial_number_.c_str(),
+    dm_nominal_baud_,
+    dm_data_baud_,
+    dm_control_mode_);
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 hardware_interface::CallbackReturn RsA3HardwareInterface::on_cleanup(
   const rclcpp_lifecycle::State& /*previous_state*/)
 {
-  if (can_driver_) {
-    can_driver_->stopReceiveThread();
-    can_driver_->close();
-    can_driver_.reset();
+  if (dm_driver_) {
+    dm_driver_->disconnect();
+    dm_driver_.reset();
   }
 
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"), "硬件资源已清理");
@@ -676,182 +732,43 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_activate(
     return hardware_interface::CallbackReturn::SUCCESS;
   }
 
-  if (!can_enabled_) {
-    for (size_t i = 0; i < joint_configs_.size(); ++i) {
-      const auto& config = joint_configs_[i];
-      const double initial_position = hw_positions_[i];
-
-      hw_commands_positions_[i] = initial_position;
-      smoothed_positions_[i] = initial_position;
-      smoothed_velocities_[i] = 0.0;
-      smoothed_accelerations_[i] = 0.0;
-
-      const double low_joint_kp = std::clamp(
-        (config.low_stiffness_kp > 0.0) ? config.low_stiffness_kp : low_stiffness_kp_, 0.0, 500.0);
-      const double low_joint_kd = std::clamp(
-        (config.low_stiffness_kd > 0.0) ? config.low_stiffness_kd : low_stiffness_kd_, 0.0, 5.0);
-
-      final_cmd_positions_[i] = initial_position;
-      final_cmd_velocities_[i] = 0.0;
-      final_cmd_efforts_[i] = low_stiffness_mode_ ? low_stiffness_torque_bias_ : 0.0;
-      final_cmd_kps_[i] = low_stiffness_mode_ ? low_joint_kp : position_kp_;
-      final_cmd_kds_[i] = low_stiffness_mode_ ? low_joint_kd : position_kd_;
-
-      if (s_curve_enabled_ && i < s_curve_generators_.size() && s_curve_generators_[i]) {
-        s_curve_generators_[i]->initialize(initial_position, 0.0, 0.0);
-      }
-
-      RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-                  "关节 %s CAN 关闭仿真初始位置：%.4f rad",
-                  config.name.c_str(), initial_position);
-    }
-
-    first_command_ = false;
-    if (scalar_path_planner_) {
-      scalar_path_planner_->resetToPosition(hw_positions_);
-    }
-    RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-                "CAN 关闭仿真模式已激活：将持续发布最终控制包，不下发电机");
-    return hardware_interface::CallbackReturn::SUCCESS;
+  if (backend_mode_ == BackendMode::REAL && (!dm_driver_ || !dm_driver_->isConnected())) {
+    RCLCPP_ERROR(rclcpp::get_logger("RsA3HardwareInterface"), "实机后端未连接");
+    return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // ============ 步骤 0：清除所有电机故障 ============
-  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "正在清除电机故障...");
-  for (const auto& config : joint_configs_) {
-    can_driver_->disableMotor(config.motor_id, true);  // clear_fault=true
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-  }
-  std::this_thread::sleep_for(std::chrono::milliseconds(200));
-  
-  // ============ 步骤 1：使能所有电机（Kp=0，无位置控制） ============
-  // 电机在失能状态不会回传反馈，因此必须先使能
-  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "正在以软模式使能电机（Kp=0）...");
-  
   for (size_t i = 0; i < joint_configs_.size(); ++i) {
-    const auto& config = joint_configs_[i];
-    
-    // 1) 先停止电机（不清故障，前面已清过）
-    can_driver_->disableMotor(config.motor_id, false);
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
-    
-    // 2) 设置为运控模式（run_mode = 0）
-    if (!can_driver_->setRunMode(config.motor_id, RunMode::MOTION_CONTROL)) {
-      RCLCPP_ERROR(rclcpp::get_logger("RsA3HardwareInterface"),
-                   "电机 %d 设置运控模式失败", config.motor_id);
-      return hardware_interface::CallbackReturn::ERROR;
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
-    
-    // 3) 使能电机
-    if (!can_driver_->enableMotor(config.motor_id)) {
-      RCLCPP_ERROR(rclcpp::get_logger("RsA3HardwareInterface"),
-                   "电机 %d 使能失败", config.motor_id);
-      return hardware_interface::CallbackReturn::ERROR;
-    }
-    
-    // 4) [关键] 发送 Kp=0 的指令，使电机进入“软”状态，不跟踪任何位置
-    //    这样即使发送任意位置指令，电机也不会运动
-    can_driver_->sendMotionControl(
-        config.motor_id,
-        config.motor_type,
-        0.0,          // 位置无关紧要，因为 Kp=0
-        0.0,          // velocity = 0
-        0.0,          // Kp = 0（不跟踪位置！）
-        4.0,          // Kd = 4.0（提高阻尼，防止抖动）
-        0.0           // torque = 0
-    );
-    
-    RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-                "电机 %d 已以软模式使能（Kp=0，Kd=4）", config.motor_id);
-    
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-  }
-
-  // ============ 步骤 2：开环控制 - 使用默认位置 (0)，跳过反馈等待 ============
-  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "开环模式：所有关节使用默认位置 0.0，跳过反馈等待");
-  
-  std::vector<double> initial_positions(joint_configs_.size(), 0.0);
-  
-  for (size_t i = 0; i < joint_configs_.size(); ++i) {
-    const auto& config = joint_configs_[i];
-    RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-                "电机 %d 初始位置：0.0 rad（开环）", config.motor_id);
-  }
-
-  // ============ 步骤 3：发送保持指令（切换到正常控制） ============
-  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "正在切换到位置保持模式...");
-  
-  for (size_t i = 0; i < joint_configs_.size(); ++i) {
-    const auto& config = joint_configs_[i];
-    
-    // 初始化状态变量
-    hw_positions_[i] = initial_positions[i];
-    hw_commands_positions_[i] = initial_positions[i];
-    smoothed_positions_[i] = initial_positions[i];
+    const double initial_position = hw_positions_[i];
+    hw_commands_positions_[i] = initial_position;
+    hw_commands_velocities_[i] = 0.0;
+    hw_commands_efforts_[i] = 0.0;
+    smoothed_positions_[i] = initial_position;
     smoothed_velocities_[i] = 0.0;
     smoothed_accelerations_[i] = 0.0;
-    
-    // 初始化 S 曲线生成器状态
     if (s_curve_enabled_ && i < s_curve_generators_.size()) {
-      s_curve_generators_[i]->initialize(initial_positions[i], 0.0, 0.0);
+      s_curve_generators_[i]->initialize(initial_position, 0.0, 0.0);
     }
-    
-    // 计算电机坐标系下的位置
-    double motor_pos = initial_positions[i] * config.direction + config.position_offset;
-    
-    // 发送“保持当前位置”指令（按当前模式选择 Kp/Kd/torque）
-    const double low_joint_kp = std::clamp(
-      (config.low_stiffness_kp > 0.0) ? config.low_stiffness_kp : low_stiffness_kp_, 0.0, 500.0);
-    const double low_joint_kd = std::clamp(
-      (config.low_stiffness_kd > 0.0) ? config.low_stiffness_kd : low_stiffness_kd_, 0.0, 5.0);
-
-    double hold_kp = low_stiffness_mode_ ? low_joint_kp : position_kp_;
-    double hold_kd = low_stiffness_mode_ ? low_joint_kd : position_kd_;
-    double hold_torque = low_stiffness_mode_ ? low_stiffness_torque_bias_ : 0.0;
-
-    can_driver_->sendMotionControl(
-        config.motor_id,
-        config.motor_type,
-        motor_pos,        // 使用当前位置
-        0.0,              // velocity = 0
-        hold_kp,
-        hold_kd,
-        hold_torque
-    );
-
-    RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-                "电机 %d 保持在 %.4f rad（Kp=%.1f，Kd=%.1f，torque=%.3f）",
-                config.motor_id, initial_positions[i], hold_kp, hold_kd, hold_torque);
-    
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
   }
-  
-  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "全部 %zu 个电机初始化成功", joint_configs_.size());
-  
+
   first_command_ = false;
   if (scalar_path_planner_) {
     scalar_path_planner_->resetToPosition(hw_positions_);
   }
 
-  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"), 
-              "硬件已激活（CSP 位置模式）");
+  if (backend_mode_ == BackendMode::REAL) {
+    dm_driver_->enable();
+    RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"), "实机后端已激活");
+  } else {
+    RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"), "MuJoCo 后端已激活");
+  }
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 hardware_interface::CallbackReturn RsA3HardwareInterface::on_deactivate(
   const rclcpp_lifecycle::State& /*previous_state*/)
 {
-  if (!use_mock_hardware_ && can_enabled_ && can_driver_) {
-    // 失能所有电机
-    for (const auto& config : joint_configs_) {
-      can_driver_->disableMotor(config.motor_id);
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
+  if (!use_mock_hardware_ && backend_mode_ == BackendMode::REAL && dm_driver_) {
+    dm_driver_->disable();
   }
 
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"), "硬件已停用");
@@ -871,11 +788,8 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_shutdown(
 hardware_interface::CallbackReturn RsA3HardwareInterface::on_error(
   const rclcpp_lifecycle::State& /*previous_state*/)
 {
-  if (!use_mock_hardware_ && can_enabled_ && can_driver_) {
-    // 急停：失能所有电机并清故障
-    for (const auto& config : joint_configs_) {
-      can_driver_->disableMotor(config.motor_id, true);
-    }
+  if (!use_mock_hardware_ && backend_mode_ == BackendMode::REAL && dm_driver_) {
+    dm_driver_->disable();
   }
 
   RCLCPP_ERROR(rclcpp::get_logger("RsA3HardwareInterface"), "硬件发生错误");
@@ -890,9 +804,6 @@ std::vector<hardware_interface::StateInterface> RsA3HardwareInterface::export_st
     state_interfaces.emplace_back(
       hardware_interface::StateInterface(
         joint_configs_[i].name, hardware_interface::HW_IF_POSITION, &hw_positions_[i]));
-    state_interfaces.emplace_back(
-      hardware_interface::StateInterface(
-        joint_configs_[i].name, hardware_interface::HW_IF_VELOCITY, &hw_velocities_[i]));
     state_interfaces.emplace_back(
       hardware_interface::StateInterface(
         joint_configs_[i].name, hardware_interface::HW_IF_EFFORT, &hw_efforts_[i]));
@@ -963,21 +874,18 @@ void RsA3HardwareInterface::externalFeedbackCallback(
 hardware_interface::return_type RsA3HardwareInterface::read(
   const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/)
 {
-  // ============ Read all states from actual motors ============
-  if (!use_mock_hardware_ && can_enabled_ && can_driver_) {
-    for (size_t i = 0; i < joint_configs_.size(); ++i) {
-      const auto& config = joint_configs_[i];
-      auto feedback = can_driver_->getMotorFeedback(config.motor_id);
-      
-      if (feedback.is_valid) {
-        // Convert from motor coordinate frame to joint coordinate frame
-        // motor_pos = joint_pos * direction + offset
-        // joint_pos = (motor_pos - offset) / direction = (motor_pos - offset) * direction
-        hw_positions_[i] = (feedback.position - config.position_offset) * config.direction;
-        hw_velocities_[i] = feedback.velocity * config.direction;
-        hw_efforts_[i] = feedback.torque * config.direction;
-        hw_temperatures_[i] = feedback.temperature;  // 电机温度 (°C)
+  if (!use_mock_hardware_ && backend_mode_ == BackendMode::REAL && dm_driver_) {
+    const auto motor_states = dm_driver_->readStates();
+    for (size_t i = 0; i < joint_configs_.size() && i < motor_states.size(); ++i) {
+      const auto & config = joint_configs_[i];
+      const auto & state = motor_states[i];
+      if (!state.valid) {
+        continue;
       }
+      hw_positions_[i] = (state.position - config.position_offset) * config.direction;
+      hw_velocities_[i] = state.velocity * config.direction;
+      hw_efforts_[i] = state.effort * config.direction;
+      hw_temperatures_[i] = 25.0;
     }
   } else {
     bool used_external_feedback = false;
@@ -1036,14 +944,15 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     return hardware_interface::return_type::OK;
   }
 
-  const bool can_ready = can_enabled_ && can_driver_ && can_driver_->isConnected();
-  if (can_enabled_ && !can_ready) {
+  const bool real_backend_ready =
+    backend_mode_ == BackendMode::REAL && dm_driver_ && dm_driver_->isConnected();
+  if (backend_mode_ == BackendMode::REAL && !real_backend_ready) {
     return hardware_interface::return_type::ERROR;
   }
 
   double dt = period.seconds();
   if (dt <= 0.0 || dt > 0.1) {
-    dt = control_period_;
+    dt = fallback_control_period_;
   }
 
   const bool using_scalar_path = scalar_path_time_enabled_ && static_cast<bool>(scalar_path_planner_);
@@ -1209,6 +1118,10 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       new_acceleration = (new_velocity - prev_velocity) / dt;
     }
 
+    if (std::isfinite(hw_commands_velocities_[i]) && std::abs(hw_commands_velocities_[i]) > 1e-6) {
+      new_velocity = std::clamp(hw_commands_velocities_[i], -config.velocity_limit, config.velocity_limit);
+    }
+
     if (std::abs(new_velocity) > config.velocity_limit * 1.05) {
       RCLCPP_WARN_THROTTLE(
         rclcpp::get_logger("RsA3HardwareInterface"),
@@ -1363,6 +1276,8 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       cmd_torque = model_feedforward_torque;
     }
 
+    cmd_torque += hw_commands_efforts_[i];
+
     cmd_torque = std::clamp(cmd_torque, params.t_min, params.t_max);
 
     const double tau_jump = std::abs(cmd_torque - last_tau_for_spike_check[i]);
@@ -1385,25 +1300,31 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     final_cmd_kps_[i] = motor_kp;
     final_cmd_kds_[i] = motor_kd;
     final_cmd_torque_ff_[i] = cmd_torque;
+  }
 
-    if (can_ready && !can_driver_->sendMotionControl(
-          config.motor_id,
-          config.motor_type,
-          final_cmd_position,
-          final_cmd_velocity,
-          motor_kp,
-          motor_kd,
-          cmd_torque)) {
+  if (backend_mode_ == BackendMode::REAL && real_backend_ready) {
+    if (!dm_driver_->writeCommands(
+          final_cmd_positions_,
+          final_cmd_velocities_,
+          final_cmd_kps_,
+          final_cmd_kds_,
+          final_cmd_efforts_)) {
       static int warn_counter = 0;
       if (warn_counter++ % 1000 == 0) {
         RCLCPP_WARN(rclcpp::get_logger("RsA3HardwareInterface"),
-                    "向电机 %d 发送运控指令失败", config.motor_id);
+                    "向 dmbot_serial 后端发送控制包失败");
       }
     }
-
-    if (can_ready) {
-      usleep(50);
+  } else if (backend_mode_ == BackendMode::MUJOCO && mujoco_command_pub_ && debug_node_) {
+    sensor_msgs::msg::JointState mujoco_cmd_msg;
+    mujoco_cmd_msg.header.stamp = debug_node_->get_clock()->now();
+    for (const auto & config : joint_configs_) {
+      mujoco_cmd_msg.name.push_back(config.name);
     }
+    mujoco_cmd_msg.position = final_cmd_positions_;
+    mujoco_cmd_msg.velocity = final_cmd_velocities_;
+    mujoco_cmd_msg.effort = final_cmd_efforts_;
+    mujoco_command_pub_->publish(mujoco_cmd_msg);
   }
 
   if (write_counter % 10 == 0 && debug_node_ && hw_cmd_pub_ && smoothed_cmd_pub_) {
@@ -2023,4 +1944,3 @@ void RsA3HardwareInterface::applyCalibratedInertiaToModel()
 PLUGINLIB_EXPORT_CLASS(
   rc_arm_hardware::RsA3HardwareInterface,
   hardware_interface::SystemInterface)
-

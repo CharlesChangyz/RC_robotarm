@@ -26,153 +26,28 @@ def load_yaml(package_name, file_path):
 
 
 def generate_launch_description():
+    default_hardware_config = PathJoinSubstitution(
+        [FindPackageShare("rc_arm_description"), "config", "rc_arm_2", "rc_arm_2_hardware.real.yaml"]
+    )
+    default_controllers_file = PathJoinSubstitution(
+        [FindPackageShare("rc_arm_description"), "config", "rc_arm_2", "rc_arm_2_controllers.yaml"]
+    )
+
     declared_arguments = [
-        DeclareLaunchArgument(
-            "can_interface",
-            default_value="can0",
-            description="CAN interface name",
-        ),
-        DeclareLaunchArgument(
-            "host_can_id",
-            default_value="253",
-            description="Host CAN ID",
-        ),
-        DeclareLaunchArgument(
-            "can_enabled",
-            default_value="true",
-            description="Enable CAN communication in hardware interface",
-        ),
-        DeclareLaunchArgument(
-            "external_feedback_enabled",
-            default_value="false",
-            description="Enable external JointState feedback (e.g. MuJoCo) when CAN is disabled",
-        ),
-        DeclareLaunchArgument(
-            "external_feedback_topic",
-            default_value="/rc_arm_2/mujoco_joint_states",
-            description="External JointState feedback topic",
-        ),
-        DeclareLaunchArgument(
-            "external_feedback_timeout",
-            default_value="0.2",
-            description="External feedback timeout in seconds",
-        ),
         DeclareLaunchArgument(
             "use_mock_hardware",
             default_value="false",
             description="Use mock hardware and disable CAN communication",
         ),
         DeclareLaunchArgument(
-            "s_curve_enabled",
-            default_value="true",
-            description="Enable S-curve trajectory smoothing in hardware interface",
+            "hardware_config_file",
+            default_value=default_hardware_config,
+            description="Hardware plugin configuration YAML",
         ),
         DeclareLaunchArgument(
-            "scalar_path_time_enabled",
-            default_value="true",
-            description="Enable common scalar path-time parameterization (q(s)+s(t))",
-        ),
-        DeclareLaunchArgument(
-            "smoothing_alpha",
-            default_value="0.2",
-            description="Smoothing alpha used by hardware interface",
-        ),
-        DeclareLaunchArgument(
-            "max_velocity",
-            default_value="2.0",
-            description="S-curve max velocity (rad/s)",
-        ),
-        DeclareLaunchArgument(
-            "max_acceleration",
-            default_value="8.0",
-            description="S-curve max acceleration (rad/s^2)",
-        ),
-        DeclareLaunchArgument(
-            "max_jerk",
-            default_value="50.0",
-            description="S-curve max jerk (rad/s^3)",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_mode",
-            default_value="false",
-            description="Enable low-stiffness position + model feedforward mode",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_kp",
-            default_value="20.0",
-            description="Low-stiffness mode Kp",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_kd",
-            default_value="2.0",
-            description="Low-stiffness mode Kd",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_kp_j1",
-            default_value="0.0",
-            description="Joint j1 low-stiffness Kp override (0 means using global low_stiffness_kp)",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_kd_j1",
-            default_value="0.0",
-            description="Joint j1 low-stiffness Kd override (0 means using global low_stiffness_kd)",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_kp_j2",
-            default_value="0.0",
-            description="Joint j2 low-stiffness Kp override (0 means using global low_stiffness_kp)",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_kd_j2",
-            default_value="0.0",
-            description="Joint j2 low-stiffness Kd override (0 means using global low_stiffness_kd)",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_kp_j3",
-            default_value="0.0",
-            description="Joint j3 low-stiffness Kp override (0 means using global low_stiffness_kp)",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_kd_j3",
-            default_value="0.0",
-            description="Joint j3 low-stiffness Kd override (0 means using global low_stiffness_kd)",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_kp_j4",
-            default_value="0.0",
-            description="Joint j4 low-stiffness Kp override (0 means using global low_stiffness_kp)",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_kd_j4",
-            default_value="0.0",
-            description="Joint j4 low-stiffness Kd override (0 means using global low_stiffness_kd)",
-        ),
-        DeclareLaunchArgument(
-            "low_stiffness_torque_bias",
-            default_value="0.0",
-            description="Low-stiffness mode torque bias (Nm)",
-        ),
-        DeclareLaunchArgument(
-            "use_pinocchio_gravity",
-            default_value="true",
-            description="Enable Pinocchio gravity torque",
-        ),
-        DeclareLaunchArgument(
-            "gravity_feedforward_ratio",
-            default_value="1.0",
-            description="Gravity feedforward ratio (0-1)",
-        ),
-        DeclareLaunchArgument(
-            "use_pinocchio_inverse_dynamics",
-            default_value="true",
-            description="Enable Pinocchio full inverse dynamics feedforward",
-        ),
-        DeclareLaunchArgument(
-            "urdf_path",
-            default_value=PathJoinSubstitution(
-                [FindPackageShare("rc_arm_description"), "urdf", "rc_arm_2", "rc_arm_2.pinocchio.urdf"]
-            ),
-            description="URDF path used by Pinocchio model loader",
+            "controllers_file",
+            default_value=default_controllers_file,
+            description="ros2_control controllers YAML",
         ),
         DeclareLaunchArgument(
             "use_rviz",
@@ -181,35 +56,9 @@ def generate_launch_description():
         ),
     ]
 
-    can_interface = LaunchConfiguration("can_interface")
-    host_can_id = LaunchConfiguration("host_can_id")
-    can_enabled = LaunchConfiguration("can_enabled")
-    external_feedback_enabled = LaunchConfiguration("external_feedback_enabled")
-    external_feedback_topic = LaunchConfiguration("external_feedback_topic")
-    external_feedback_timeout = LaunchConfiguration("external_feedback_timeout")
     use_mock_hardware = LaunchConfiguration("use_mock_hardware")
-    s_curve_enabled = LaunchConfiguration("s_curve_enabled")
-    scalar_path_time_enabled = LaunchConfiguration("scalar_path_time_enabled")
-    smoothing_alpha = LaunchConfiguration("smoothing_alpha")
-    max_velocity = LaunchConfiguration("max_velocity")
-    max_acceleration = LaunchConfiguration("max_acceleration")
-    max_jerk = LaunchConfiguration("max_jerk")
-    low_stiffness_mode = LaunchConfiguration("low_stiffness_mode")
-    low_stiffness_kp = LaunchConfiguration("low_stiffness_kp")
-    low_stiffness_kd = LaunchConfiguration("low_stiffness_kd")
-    low_stiffness_kp_j1 = LaunchConfiguration("low_stiffness_kp_j1")
-    low_stiffness_kd_j1 = LaunchConfiguration("low_stiffness_kd_j1")
-    low_stiffness_kp_j2 = LaunchConfiguration("low_stiffness_kp_j2")
-    low_stiffness_kd_j2 = LaunchConfiguration("low_stiffness_kd_j2")
-    low_stiffness_kp_j3 = LaunchConfiguration("low_stiffness_kp_j3")
-    low_stiffness_kd_j3 = LaunchConfiguration("low_stiffness_kd_j3")
-    low_stiffness_kp_j4 = LaunchConfiguration("low_stiffness_kp_j4")
-    low_stiffness_kd_j4 = LaunchConfiguration("low_stiffness_kd_j4")
-    low_stiffness_torque_bias = LaunchConfiguration("low_stiffness_torque_bias")
-    use_pinocchio_gravity = LaunchConfiguration("use_pinocchio_gravity")
-    gravity_feedforward_ratio = LaunchConfiguration("gravity_feedforward_ratio")
-    use_pinocchio_inverse_dynamics = LaunchConfiguration("use_pinocchio_inverse_dynamics")
-    urdf_path = LaunchConfiguration("urdf_path")
+    hardware_config_file = LaunchConfiguration("hardware_config_file")
+    controllers_file = LaunchConfiguration("controllers_file")
     use_rviz = LaunchConfiguration("use_rviz")
 
     robot_description_content = Command(
@@ -221,62 +70,8 @@ def generate_launch_description():
             ),
             " use_mock_hardware:=",
             use_mock_hardware,
-            " can_interface:=",
-            can_interface,
-            " host_can_id:=",
-            host_can_id,
-            " can_enabled:=",
-            can_enabled,
-            " external_feedback_enabled:=",
-            external_feedback_enabled,
-            " external_feedback_topic:=",
-            external_feedback_topic,
-            " external_feedback_timeout:=",
-            external_feedback_timeout,
-            " s_curve_enabled:=",
-            s_curve_enabled,
-            " scalar_path_time_enabled:=",
-            scalar_path_time_enabled,
-            " smoothing_alpha:=",
-            smoothing_alpha,
-            " max_velocity:=",
-            max_velocity,
-            " max_acceleration:=",
-            max_acceleration,
-            " max_jerk:=",
-            max_jerk,
-            " low_stiffness_mode:=",
-            low_stiffness_mode,
-            " low_stiffness_kp:=",
-            low_stiffness_kp,
-            " low_stiffness_kd:=",
-            low_stiffness_kd,
-            " low_stiffness_kp_j1:=",
-            low_stiffness_kp_j1,
-            " low_stiffness_kd_j1:=",
-            low_stiffness_kd_j1,
-            " low_stiffness_kp_j2:=",
-            low_stiffness_kp_j2,
-            " low_stiffness_kd_j2:=",
-            low_stiffness_kd_j2,
-            " low_stiffness_kp_j3:=",
-            low_stiffness_kp_j3,
-            " low_stiffness_kd_j3:=",
-            low_stiffness_kd_j3,
-            " low_stiffness_kp_j4:=",
-            low_stiffness_kp_j4,
-            " low_stiffness_kd_j4:=",
-            low_stiffness_kd_j4,
-            " low_stiffness_torque_bias:=",
-            low_stiffness_torque_bias,
-            " use_pinocchio_gravity:=",
-            use_pinocchio_gravity,
-            " gravity_feedforward_ratio:=",
-            gravity_feedforward_ratio,
-            " use_pinocchio_inverse_dynamics:=",
-            use_pinocchio_inverse_dynamics,
-            " urdf_path:=",
-            urdf_path,
+            " hardware_config_file:=",
+            hardware_config_file,
         ]
     )
     robot_description = {"robot_description": ParameterValue(robot_description_content, value_type=str)}
@@ -316,10 +111,6 @@ def generate_launch_description():
         "publish_transforms_updates": True,
     }
 
-    ros2_controllers_yaml = PathJoinSubstitution(
-        [FindPackageShare("rc_arm_description"), "config", "rc_arm_2", "rc_arm_2_controllers.yaml"]
-    )
-
     rviz_config_file = PathJoinSubstitution(
         [FindPackageShare("rc_arm_moveit_config"), "config", "moveit.rviz"]
     )
@@ -327,7 +118,7 @@ def generate_launch_description():
     ros2_control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[robot_description, ros2_controllers_yaml],
+        parameters=[robot_description, controllers_file],
         output="both",
     )
 

@@ -24,6 +24,7 @@
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_srvs/srv/set_bool.hpp"
 
+#include "dmbot_serial/dm_motor_driver.hpp"
 #include "rc_arm_hardware/robstride_can_driver.hpp"
 #include "rc_arm_hardware/s_curve_generator.hpp"
 #include "rc_arm_hardware/scalar_path_time_planner.hpp"
@@ -105,12 +106,29 @@ private:
    * @brief 从硬件信息中解析关节配置
    */
   bool parseJointConfig(const hardware_interface::HardwareInfo& info);
+
+  enum class BackendMode
+  {
+    REAL,
+    MUJOCO
+  };
   
-  // CAN 驱动
-  std::unique_ptr<RobstrideCanDriver> can_driver_;
+  // 后端模式
+  BackendMode backend_mode_;
   std::string can_interface_;
   uint8_t host_can_id_;
   bool can_enabled_;
+  std::string backend_name_;
+
+  // dmbot_serial 实机后端
+  std::unique_ptr<dmbot_serial::DmMotorDriver> dm_driver_;
+  std::string dm_serial_number_;
+  uint32_t dm_nominal_baud_;
+  uint32_t dm_data_baud_;
+  int dm_control_mode_;
+
+  // MuJoCo topic 后端
+  std::string mujoco_command_topic_;
   
   // 关节配置
   std::vector<JointConfig> joint_configs_;
@@ -153,7 +171,7 @@ private:
   double max_velocity_;                             // 最大速度限制 (rad/s)
   double max_acceleration_;                         // 最大加速度限制 (rad/s²)
   bool first_command_;                              // 首条指令标志
-  double control_period_;                           // 控制周期 (s)
+  double fallback_control_period_;                  // 异常周期回退值 (s)
   
   // Control mode
   enum class ControlMode
@@ -301,6 +319,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr final_pd_pub_;      // 最终下发 PD 参数(kp/kd)
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr final_torque_ff_pub_; // 最终前馈力矩(joint frame)
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr scalar_path_debug_pub_; // 公共标量路径调试（q/v/a）
+  rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr mujoco_command_pub_; // MuJoCo 命令输出
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr external_feedback_sub_;
 
   // 外部反馈回调
@@ -335,4 +354,3 @@ private:
 }  // namespace rc_arm_hardware
 
 #endif  // RC_ARM_HARDWARE__RC_ARM_HARDWARE_HPP_
-

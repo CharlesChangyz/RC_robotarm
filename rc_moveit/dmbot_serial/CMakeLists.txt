@@ -28,12 +28,24 @@ include_directories(
 add_library(motor 
   src/protocol/damiao.cpp
 )
+set_target_properties(motor PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+add_library(dmbot_serial_driver SHARED
+  src/dm_motor_driver.cpp
+)
 
 ## motor 库链接其他依赖库
 target_link_libraries(motor
   ${CMAKE_CURRENT_SOURCE_DIR}/lib/libu2canfd.a
   ${LIBUSB_LIBRARIES}
   Threads::Threads
+)
+
+target_link_libraries(dmbot_serial_driver
+  motor
+)
+ament_target_dependencies(dmbot_serial_driver
+  rclcpp
 )
 
 
@@ -81,7 +93,7 @@ install(
 )
 
 install(
-  TARGETS motor test_motor dev_sn usb2canfd_dm_node_cpp debugger_node_cpp
+  TARGETS motor dmbot_serial_driver test_motor dev_sn usb2canfd_dm_node_cpp debugger_node_cpp
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -94,6 +106,6 @@ install(
 )
 
 ament_export_include_directories(include)
-ament_export_libraries(motor)
+ament_export_libraries(motor dmbot_serial_driver)
 
 ament_package()

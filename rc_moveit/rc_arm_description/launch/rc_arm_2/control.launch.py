@@ -14,6 +14,13 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    default_hardware_config = PathJoinSubstitution(
+        [FindPackageShare("rc_arm_description"), "config", "rc_arm_2", "rc_arm_2_hardware.real.yaml"]
+    )
+    default_controllers_file = PathJoinSubstitution(
+        [FindPackageShare("rc_arm_description"), "config", "rc_arm_2", "rc_arm_2_controllers.yaml"]
+    )
+
     declared_arguments = [
         DeclareLaunchArgument(
             "use_mock_hardware",
@@ -21,39 +28,14 @@ def generate_launch_description():
             description="Use mock hardware",
         ),
         DeclareLaunchArgument(
-            "can_interface",
-            default_value="can0",
-            description="CAN interface name",
+            "hardware_config_file",
+            default_value=default_hardware_config,
+            description="Hardware plugin configuration YAML",
         ),
         DeclareLaunchArgument(
-            "host_can_id",
-            default_value="253",
-            description="Host CAN ID",
-        ),
-        DeclareLaunchArgument(
-            "s_curve_enabled",
-            default_value="true",
-            description="Enable S-curve trajectory smoothing in hardware interface",
-        ),
-        DeclareLaunchArgument(
-            "smoothing_alpha",
-            default_value="0.2",
-            description="Smoothing alpha used by hardware interface",
-        ),
-        DeclareLaunchArgument(
-            "max_velocity",
-            default_value="2.0",
-            description="S-curve max velocity (rad/s)",
-        ),
-        DeclareLaunchArgument(
-            "max_acceleration",
-            default_value="8.0",
-            description="S-curve max acceleration (rad/s^2)",
-        ),
-        DeclareLaunchArgument(
-            "max_jerk",
-            default_value="50.0",
-            description="S-curve max jerk (rad/s^3)",
+            "controllers_file",
+            default_value=default_controllers_file,
+            description="ros2_control controllers YAML",
         ),
         DeclareLaunchArgument(
             "use_rviz",
@@ -63,13 +45,8 @@ def generate_launch_description():
     ]
 
     use_mock_hardware = LaunchConfiguration("use_mock_hardware")
-    can_interface = LaunchConfiguration("can_interface")
-    host_can_id = LaunchConfiguration("host_can_id")
-    s_curve_enabled = LaunchConfiguration("s_curve_enabled")
-    smoothing_alpha = LaunchConfiguration("smoothing_alpha")
-    max_velocity = LaunchConfiguration("max_velocity")
-    max_acceleration = LaunchConfiguration("max_acceleration")
-    max_jerk = LaunchConfiguration("max_jerk")
+    hardware_config_file = LaunchConfiguration("hardware_config_file")
+    controllers_file = LaunchConfiguration("controllers_file")
     use_rviz = LaunchConfiguration("use_rviz")
 
     robot_description_content = Command(
@@ -81,32 +58,16 @@ def generate_launch_description():
             ),
             " use_mock_hardware:=",
             use_mock_hardware,
-            " can_interface:=",
-            can_interface,
-            " host_can_id:=",
-            host_can_id,
-            " s_curve_enabled:=",
-            s_curve_enabled,
-            " smoothing_alpha:=",
-            smoothing_alpha,
-            " max_velocity:=",
-            max_velocity,
-            " max_acceleration:=",
-            max_acceleration,
-            " max_jerk:=",
-            max_jerk,
+            " hardware_config_file:=",
+            hardware_config_file,
         ]
     )
     robot_description = {"robot_description": robot_description_content}
 
-    robot_controllers = PathJoinSubstitution(
-        [FindPackageShare("rc_arm_description"), "config", "rc_arm_2", "rc_arm_2_controllers.yaml"]
-    )
-
     control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[robot_description, robot_controllers],
+        parameters=[robot_description, controllers_file],
         output="both",
         remappings=[
             ("~/robot_description", "/robot_description"),

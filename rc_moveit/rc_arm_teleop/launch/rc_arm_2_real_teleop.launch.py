@@ -7,13 +7,24 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     declared_arguments = [
-        DeclareLaunchArgument('can_interface', default_value='can0', description='CAN interface name'),
-        DeclareLaunchArgument('host_can_id', default_value='253', description='Host CAN ID (0xFD = 253)'),
-        DeclareLaunchArgument('s_curve_enabled', default_value='true', description='Enable S-curve smoothing'),
-        DeclareLaunchArgument('smoothing_alpha', default_value='0.2', description='Smoothing alpha'),
-        DeclareLaunchArgument('max_velocity', default_value='2.0', description='S-curve max velocity (rad/s)'),
-        DeclareLaunchArgument('max_acceleration', default_value='8.0', description='S-curve max acceleration (rad/s^2)'),
-        DeclareLaunchArgument('max_jerk', default_value='50.0', description='S-curve max jerk (rad/s^3)'),
+        DeclareLaunchArgument(
+            'hardware_config_file',
+            default_value=PathJoinSubstitution([
+                FindPackageShare('rc_arm_description'),
+                'config',
+                'rc_arm_2',
+                'rc_arm_2_hardware.real.yaml'
+            ]),
+            description='Hardware plugin configuration YAML'),
+        DeclareLaunchArgument(
+            'controllers_file',
+            default_value=PathJoinSubstitution([
+                FindPackageShare('rc_arm_description'),
+                'config',
+                'rc_arm_2',
+                'rc_arm_2_controllers.yaml'
+            ]),
+            description='ros2_control controllers YAML'),
         DeclareLaunchArgument('device', default_value='/dev/input/js0', description='Joystick device path'),
         DeclareLaunchArgument('use_rviz', default_value='true', description='Start RViz2'),
     ]
@@ -28,13 +39,8 @@ def generate_launch_description():
             ])
         ),
         launch_arguments={
-            'can_interface': LaunchConfiguration('can_interface'),
-            'host_can_id': LaunchConfiguration('host_can_id'),
-            's_curve_enabled': LaunchConfiguration('s_curve_enabled'),
-            'smoothing_alpha': LaunchConfiguration('smoothing_alpha'),
-            'max_velocity': LaunchConfiguration('max_velocity'),
-            'max_acceleration': LaunchConfiguration('max_acceleration'),
-            'max_jerk': LaunchConfiguration('max_jerk'),
+            'hardware_config_file': LaunchConfiguration('hardware_config_file'),
+            'controllers_file': LaunchConfiguration('controllers_file'),
             'device': LaunchConfiguration('device'),
             'use_rviz': LaunchConfiguration('use_rviz'),
         }.items()
