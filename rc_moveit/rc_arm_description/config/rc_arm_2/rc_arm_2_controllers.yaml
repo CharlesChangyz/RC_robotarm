@@ -34,10 +34,10 @@ arm_controller:
       stopped_velocity_tolerance: 0.1
       goal_time: 0.0
       j1_joint:
-        goal: 0.1
+        goal: 0.03
       j2_joint:
-        goal: 0.1
+        goal: 0.03
       j3_joint:
-        goal: 0.1
+        goal: 0.03
       j4_joint:
-        goal: 0.1
+        goal: 0.03
