@@ -1,7 +1,10 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="rc_arm_2_ros2_control" params="use_mock_hardware can_interface host_can_id can_enabled external_feedback_enabled external_feedback_topic external_feedback_timeout s_curve_enabled scalar_path_time_enabled smoothing_alpha max_velocity max_acceleration max_jerk low_stiffness_mode low_stiffness_kp low_stiffness_kd low_stiffness_kp_j1 low_stiffness_kd_j1 low_stiffness_kp_j2 low_stiffness_kd_j2 low_stiffness_kp_j3 low_stiffness_kd_j3 low_stiffness_kp_j4 low_stiffness_kd_j4 low_stiffness_torque_bias use_pinocchio_gravity gravity_feedforward_ratio use_pinocchio_inverse_dynamics urdf_path">
+  <xacro:macro name="rc_arm_2_ros2_control" params="use_mock_hardware hardware_config_file">
+    <xacro:property name="hardware_config_path" value="${hardware_config_file}"/>
+    <xacro:property name="hardware_config" value="${xacro.load_yaml(hardware_config_path)}"/>
+    <xacro:property name="description_package_share" value="${hardware_config_path.rsplit('/config/', 1)[0]}"/>
 
 
     <ros2_control name="RcArm2System" type="system">
@@ -13,29 +16,37 @@
 
         <xacro:unless value="${use_mock_hardware}">
           <plugin>rc_arm_hardware/RsA3HardwareInterface</plugin>
-          <param name="can_interface">${can_interface}</param>
-          <param name="host_can_id">${host_can_id}</param>
-          <param name="can_enabled">${can_enabled}</param>
-          <param name="external_feedback_enabled">${external_feedback_enabled}</param>
-          <param name="external_feedback_topic">${external_feedback_topic}</param>
-          <param name="external_feedback_timeout">${external_feedback_timeout}</param>
-          <param name="position_kp">60.0</param>
-          <param name="position_kd">3.0</param>
-          <param name="velocity_limit">8.0</param>
-          <param name="s_curve_enabled">${s_curve_enabled}</param>
-          <param name="scalar_path_time_enabled">${scalar_path_time_enabled}</param>
-          <param name="smoothing_alpha">${smoothing_alpha}</param>
-          <param name="max_velocity">${max_velocity}</param>
-          <param name="max_acceleration">${max_acceleration}</param>
-          <param name="max_jerk">${max_jerk}</param>
-          <param name="low_stiffness_mode">${low_stiffness_mode}</param>
-          <param name="low_stiffness_kp">${low_stiffness_kp}</param>
-          <param name="low_stiffness_kd">${low_stiffness_kd}</param>
-          <param name="low_stiffness_torque_bias">${low_stiffness_torque_bias}</param>
-          <param name="use_pinocchio_gravity">${use_pinocchio_gravity}</param>
-          <param name="gravity_feedforward_ratio">${gravity_feedforward_ratio}</param>
-          <param name="use_pinocchio_inverse_dynamics">${use_pinocchio_inverse_dynamics}</param>
-          <param name="urdf_path">${urdf_path}</param>
+          <param name="backend">${hardware_config.backend}</param>
+          <param name="can_interface">${hardware_config.can_interface}</param>
+          <param name="host_can_id">${hardware_config.host_can_id}</param>
+          <param name="external_feedback_topic">${hardware_config.external_feedback_topic}</param>
+          <param name="external_feedback_timeout">${hardware_config.external_feedback_timeout}</param>
+          <param name="mujoco_command_topic">${hardware_config.mujoco_command_topic}</param>
+          <param name="dm_sn">${hardware_config.dm_sn}</param>
+          <param name="dm_nom_baud">${hardware_config.dm_nom_baud}</param>
+          <param name="dm_dat_baud">${hardware_config.dm_dat_baud}</param>
+          <param name="dm_control_mode">${hardware_config.dm_control_mode}</param>
+          <param name="position_kp">${hardware_config.position_kp}</param>
+          <param name="position_kd">${hardware_config.position_kd}</param>
+          <param name="velocity_limit">${hardware_config.velocity_limit}</param>
+          <param name="s_curve_enabled">${hardware_config.s_curve_enabled}</param>
+          <param name="scalar_path_time_enabled">${hardware_config.scalar_path_time_enabled}</param>
+          <param name="smoothing_alpha">${hardware_config.smoothing_alpha}</param>
+          <param name="max_velocity">${hardware_config.max_velocity}</param>
+          <param name="max_acceleration">${hardware_config.max_acceleration}</param>
+          <param name="max_jerk">${hardware_config.max_jerk}</param>
+          <param name="low_stiffness_mode">${hardware_config.low_stiffness_mode}</param>
+          <param name="low_stiffness_kp">${hardware_config.low_stiffness_kp}</param>
+          <param name="low_stiffness_kd">${hardware_config.low_stiffness_kd}</param>
+          <param name="low_stiffness_torque_bias">${hardware_config.low_stiffness_torque_bias}</param>
+          <param name="use_pinocchio_gravity">${hardware_config.use_pinocchio_gravity}</param>
+          <param name="gravity_feedforward_ratio">${hardware_config.gravity_feedforward_ratio}</param>
+          <param name="use_pinocchio_inverse_dynamics">${hardware_config.use_pinocchio_inverse_dynamics}</param>
+          <param name="urdf_path">${description_package_share}/${hardware_config.urdf_path}</param>
+          <param name="limit_margin">${hardware_config.limit_margin}</param>
+          <param name="limit_stop_margin">${hardware_config.limit_stop_margin}</param>
+          <param name="limit_decel_factor">${hardware_config.limit_decel_factor}</param>
+          <param name="fallback_control_period">${hardware_config.fallback_control_period}</param>
         </xacro:unless>
       </hardware>
 
@@ -44,8 +55,8 @@
         <param name="motor_type">RS00</param>
         <param name="position_offset">0.0</param>
         <param name="direction">-1.0</param>
-        <param name="low_stiffness_kp">${low_stiffness_kp_j1}</param>
-        <param name="low_stiffness_kd">${low_stiffness_kd_j1}</param>
+        <param name="low_stiffness_kp">${hardware_config.low_stiffness_kp_j1}</param>
+        <param name="low_stiffness_kd">${hardware_config.low_stiffness_kd_j1}</param>
         <command_interface name="position">
           <!--
           <param name="min">-1.865</param>
@@ -63,7 +74,6 @@
           <param name="max">14.0</param>
         </command_interface>
         <state_interface name="position"/>
-        <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
@@ -72,8 +82,8 @@
         <param name="motor_type">RS00</param>
         <param name="position_offset">0.0</param>
         <param name="direction">1.0</param>
-        <param name="low_stiffness_kp">${low_stiffness_kp_j2}</param>
-        <param name="low_stiffness_kd">${low_stiffness_kd_j2}</param>
+        <param name="low_stiffness_kp">${hardware_config.low_stiffness_kp_j2}</param>
+        <param name="low_stiffness_kd">${hardware_config.low_stiffness_kd_j2}</param>
         <command_interface name="position">
           <!--
           <param name="min">0.0</param>
@@ -91,7 +101,6 @@
           <param name="max">14.0</param>
         </command_interface>
         <state_interface name="position"/>
-        <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
@@ -100,8 +109,8 @@
         <param name="motor_type">RS00</param>
         <param name="position_offset">0.0</param>
         <param name="direction">-1.0</param>
-        <param name="low_stiffness_kp">${low_stiffness_kp_j3}</param>
-        <param name="low_stiffness_kd">${low_stiffness_kd_j3}</param>
+        <param name="low_stiffness_kp">${hardware_config.low_stiffness_kp_j3}</param>
+        <param name="low_stiffness_kd">${hardware_config.low_stiffness_kd_j3}</param>
         <command_interface name="position">
           <!--
           <param name="min">0.0</param>
@@ -119,7 +128,6 @@
           <param name="max">14.0</param>
         </command_interface>
         <state_interface name="position"/>
-        <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
@@ -128,8 +136,8 @@
         <param name="motor_type">EL05</param>
         <param name="position_offset">0.0</param>
         <param name="direction">-1.0</param>
-        <param name="low_stiffness_kp">${low_stiffness_kp_j4}</param>
-        <param name="low_stiffness_kd">${low_stiffness_kd_j4}</param>
+        <param name="low_stiffness_kp">${hardware_config.low_stiffness_kp_j4}</param>
+        <param name="low_stiffness_kd">${hardware_config.low_stiffness_kd_j4}</param>
         <command_interface name="position">
           <!--
           <param name="min">-0.5313</param>
@@ -147,7 +155,6 @@
           <param name="max">6.0</param>
         </command_interface>
         <state_interface name="position"/>
-        <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 

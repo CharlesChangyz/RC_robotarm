@@ -5,8 +5,9 @@ import sys
 import threading
 import time
 
-import gymnasium
+from dm_control import mjcf
 import mujoco
+import mujoco.viewer
 import numpy as np
 
 # 将项目根路径加入 sys.path，便于在未通过 pip 安装包时直接以源码方式导入
@@ -14,13 +15,8 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-import rc_robotarm_mujoco
-from rc_robotarm_mujoco.utils.transform_utils import (
-    axisangle2quat,
-    quat_multiply,
-    quat2mat,
-    mat2euler,
-)
+from rc_robotarm_mujoco.arenas import StandardArena
+from rc_robotarm_mujoco.robots import RCArm_2
 
 try:
     import rclpy
@@ -36,45 +32,14 @@ except Exception as exc:  # pragma: no cover
 ROS_JOINT_ORDER = ["j1_joint", "j2_joint", "j3_joint", "j4_joint"]
 SHORT_JOINT_ORDER = ["j1", "j2", "j3", "j4"]
 HARD_TORQUE_LIMITS = np.array([14.0, 14.0, 14.0, 6.0], dtype=np.float64)
-
-
-# 以 human 模式创建并渲染环境
-# 4 自由度机械臂适合跟踪 4 维任务：这里配置为 XYZ + 末端局部 Z 轴旋转（对应 j4）。
-# orientation_axis 使用末端工具坐标系下的轴，不是世界坐标系。
-orientation_axis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
-env = gymnasium.make(
-    "rc_robotarm_mujoco/RC_ARM_2Env-v0",
-    render_mode="human",
-    orientation_axis=orientation_axis,
-)
-
-# 使用指定种子重置环境以便结果可复现
-observation, info = env.reset(seed=42)
-joint_binding = env.unwrapped._physics.bind(env.unwrapped._arm.joints)
-joint_dof_ids = joint_binding.dofadr
-
-# 以当前末端姿态作为“工具零位姿”
-eef_pose = env.unwrapped._arm.get_eef_pose(env.unwrapped._physics)
-tool_zero_quat = eef_pose[3:].copy()
-
-# 目标位置（XYZ）和 j4 角度（弧度）
-# 默认初始化为当前末端位置，避免在未提供目标时自动漂移/抬升。
-target_xyz = eef_pose[:3].copy()
-target_j4 = 0.0  # radians
-
-
-def _goal_quat_from_j4(tool_zero_quat: np.ndarray, j4_angle: float) -> np.ndarray:
-    axis_world = quat2mat(tool_zero_quat) @ np.array([0.0, 0.0, 1.0], dtype=np.float64)
-    axis_world = axis_world / (np.linalg.norm(axis_world) + 1e-8)
-    q_axis = axisangle2quat(axis_world * j4_angle)
-    goal_quat = quat_multiply(q_axis, tool_zero_quat)
-    return goal_quat / (np.linalg.norm(goal_quat) + 1e-8)
+ARM_BASE_POS = [0.0, 1.8, 0.61]
+ARM_BASE_QUAT = [0.7071068, 0.0, 0.0, -0.7071068]
+HOME_QPOS = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float64)
 
 
 class SimBridgeNode(Node):
     def __init__(
         self,
-        target_pose_topic: str,
         joint_command_topic: str,
         pd_gains_topic: str,
         torque_ff_topic: str,
@@ -88,7 +53,6 @@ class SimBridgeNode(Node):
         super().__init__("rc_arm_2_sim_bridge")
 
         self._lock = threading.Lock()
-        self._latest_pose = None
 
         self._q_cmd = np.zeros(4, dtype=np.float64)
         self._qd_cmd = np.zeros(4, dtype=np.float64)
@@ -101,9 +65,6 @@ class SimBridgeNode(Node):
         self._have_pd = False
         self._have_torque_ff = False
         self._have_torque_input = False
-
-        if target_pose_topic:
-            self.create_subscription(PoseStamped, target_pose_topic, self._on_pose, 20)
 
         if joint_command_topic:
             self.create_subscription(JointState, joint_command_topic, self._on_joint_command, 20)
@@ -131,9 +92,6 @@ class SimBridgeNode(Node):
 
         self._joint_position_msg = JointState()
         self._joint_position_msg.name = ROS_JOINT_ORDER
-
-    def _on_pose(self, msg: PoseStamped) -> None:
-        self._latest_pose = msg.pose
 
     @staticmethod
     def _index_map(names):
@@ -193,9 +151,6 @@ class SimBridgeNode(Node):
             self._tau_input = tau
             self._have_torque_input = True
 
-    def get_latest_pose(self):
-        return self._latest_pose
-
     def get_mit_inputs(self):
         with self._lock:
             return (
@@ -247,18 +202,24 @@ class SimBridgeNode(Node):
         self._eef_pose_pub.publish(pose_msg)
 
 
-def _pose_to_arrays(pose):
-    pos = np.array([pose.position.x, pose.position.y, pose.position.z], dtype=np.float64)
-    quat = np.array(
-        [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w],
-        dtype=np.float64,
-    )
-    norm = np.linalg.norm(quat)
-    if norm < 1e-6:
-        quat = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
-    else:
-        quat /= norm
-    return pos, quat
+def _create_sim():
+    arena = StandardArena()
+    arm = RCArm_2()
+    arena.attach(arm.mjcf_model, pos=ARM_BASE_POS, quat=ARM_BASE_QUAT)
+    physics = mjcf.Physics.from_mjcf_model(arena.mjcf_model)
+
+    with physics.reset_context():
+        physics.bind(arm.joints).qpos = HOME_QPOS
+
+    physics.forward()
+    return arena, arm, physics
+
+
+def _render_frame(viewer, physics):
+    if viewer is None:
+        viewer = mujoco.viewer.launch_passive(physics.model.ptr, physics.data.ptr)
+    viewer.sync()
+    return viewer
 
 
 def _find_geom_id_by_suffix(model, suffix: str) -> int:
@@ -304,14 +265,7 @@ def _attachment_hits_kfs(physics):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="RC Arm MuJoCo bridge demo")
-    parser.add_argument(
-        "--mode",
-        choices=["auto", "target_pose", "mit"],
-        default="mit",
-        help="控制模式：mit=默认；auto=有 MIT 指令走 MIT，无 MIT 但收到 target_pose 时走 target_pose",
-    )
-    parser.add_argument("--target-pose-topic", default="/rc_arm_2/target_pose")
+    parser = argparse.ArgumentParser(description="RC Arm MuJoCo MIT bridge demo")
     parser.add_argument("--joint-command-topic", default="/debug/final_joint_command_joint_frame")
     parser.add_argument("--pd-gains-topic", default="/debug/final_pd_gains")
     parser.add_argument("--torque-ff-topic", default="/debug/final_joint_torque_ff")
@@ -330,10 +284,13 @@ def parse_args():
 
 def main():
     args = parse_args()
+    _, arm, physics = _create_sim()
+    joint_binding = physics.bind(arm.joints)
+    viewer = None
+    render_disabled = False
 
     rclpy.init()
     node = SimBridgeNode(
-        target_pose_topic=args.target_pose_topic,
         joint_command_topic=args.joint_command_topic,
         pd_gains_topic=args.pd_gains_topic,
         torque_ff_topic=args.torque_ff_topic,
@@ -345,11 +302,7 @@ def main():
         eef_frame_id=args.eef_frame_id,
     )
 
-    sim_timestep = float(env.unwrapped._physics.timestep())
     last_step_time = time.time()
-
-    logged_target_pose_mode = False
-    logged_mit_mode = False
     step_counter = 0
     logged_non_finite = False
 
@@ -358,10 +311,8 @@ def main():
         effective_limit = np.minimum(effective_limit, float(args.torque_limit))
 
     node.get_logger().info(
-        f"Torque safety clamp active: global={args.torque_limit:.3f} Nm, per-joint={effective_limit.tolist()}"
+        f"MIT simulation bridge started. Torque clamp: global={args.torque_limit:.3f} Nm, per-joint={effective_limit.tolist()}"
     )
-
-    global target_xyz, target_j4
 
     try:
         while rclpy.ok():
@@ -380,98 +331,51 @@ def main():
                 tau_input,
             ) = node.get_mit_inputs()
 
-            if args.mode == "mit":
-                use_mit_mode = True
-            elif args.mode == "target_pose":
-                use_mit_mode = False
+            q = joint_binding.qpos.copy()
+            qd = joint_binding.qvel.copy()
+
+            if have_command:
+                tau = tau_ff.copy() if have_torque_ff else np.zeros(4, dtype=np.float64)
+                if have_pd:
+                    tau = kp * (q_cmd - q) + kd * (qd_cmd - qd) + tau
             else:
-                # auto: 优先 MIT；仅在未收到 MIT 指令且已收到 target_pose 时才进入 target_pose 分支
-                use_mit_mode = have_command or (node.get_latest_pose() is None)
+                tau = np.zeros(4, dtype=np.float64)
 
-            if use_mit_mode:
-                if not logged_mit_mode:
-                    node.get_logger().info(
-                        "切换到 MIT 命令模式：tau = kp*(q_cmd-q) + kd*(qd_cmd-qd) + tau_ff"
-                    )
-                    logged_mit_mode = True
+            if have_torque_input:
+                tau += args.torque_input_scale * tau_input
 
-                q = joint_binding.qpos.copy()
-                qd = joint_binding.qvel.copy()
-
-                if have_command:
-                    tau = tau_ff.copy() if have_torque_ff else np.zeros(4, dtype=np.float64)
-                    if have_pd:
-                        tau = kp * (q_cmd - q) + kd * (qd_cmd - qd) + tau
-                else:
-                    tau = np.zeros(4, dtype=np.float64)
-
-                if have_torque_input:
-                    tau += args.torque_input_scale * tau_input
-
-                if not np.all(np.isfinite(tau)):
-                    if not logged_non_finite:
-                        node.get_logger().warn("Non-finite torque detected. Forcing zero torque output.")
-                        logged_non_finite = True
-                    tau = np.zeros_like(tau)
-                else:
-                    logged_non_finite = False
-
-                tau = np.clip(tau, -effective_limit, effective_limit)
-
-                joint_binding.qfrc_applied = tau
-                env.unwrapped._physics.step()
-
-                if env.unwrapped._render_mode == "human":
-                    env.unwrapped._render_frame()
-
-                node.publish_torque(tau)
-                q_after = joint_binding.qpos.copy()
-                qd_after = joint_binding.qvel.copy()
-                eef_pose_after = env.unwrapped._arm.get_eef_pose(env.unwrapped._physics)
-                node.publish_sim_state(q_after, qd_after, tau, eef_pose_after)
-                current_dt = 1.0 / max(args.rate, 1.0)
+            if not np.all(np.isfinite(tau)):
+                if not logged_non_finite:
+                    node.get_logger().warn("Non-finite torque detected. Forcing zero torque output.")
+                    logged_non_finite = True
+                tau = np.zeros_like(tau)
             else:
-                if not logged_target_pose_mode:
-                    node.get_logger().info("使用 target_pose + OSC 模式")
-                    logged_target_pose_mode = True
+                logged_non_finite = False
 
-                pose = node.get_latest_pose()
-                if pose is not None:
-                    target_xyz, quat = _pose_to_arrays(pose)
-                    # 只使用 roll 作为 j4 角度
-                    target_j4 = float(mat2euler(quat2mat(quat))[0])
+            tau = np.clip(tau, -effective_limit, effective_limit)
 
-                # 固定动作：不移动
-                action = np.zeros(env.action_space.shape, dtype=np.float64)
+            joint_binding.qfrc_applied = tau
+            physics.step()
 
-                # 用用户给定的 XYZ + j4 角度更新目标
-                goal_quat = _goal_quat_from_j4(tool_zero_quat, target_j4)
-                env.unwrapped._target.set_mocap_pose(
-                    env.unwrapped._physics,
-                    position=target_xyz,
-                    quaternion=goal_quat,
-                )
+            if not render_disabled:
+                try:
+                    viewer = _render_frame(viewer, physics)
+                except Exception:
+                    render_disabled = True
 
-                observation, reward, terminated, truncated, info = env.step(action)
-
-                torques = env.unwrapped._physics.data.qfrc_applied[joint_dof_ids].copy()
-                node.publish_torque(torques)
-                q_after = joint_binding.qpos.copy()
-                qd_after = joint_binding.qvel.copy()
-                eef_pose_after = env.unwrapped._arm.get_eef_pose(env.unwrapped._physics)
-                node.publish_sim_state(q_after, qd_after, torques, eef_pose_after)
-                current_dt = sim_timestep
-
-                if terminated or truncated:
-                    observation, info = env.reset()
+            node.publish_torque(tau)
+            q_after = joint_binding.qpos.copy()
+            qd_after = joint_binding.qvel.copy()
+            eef_pose_after = arm.get_eef_pose(physics)
+            node.publish_sim_state(q_after, qd_after, tau, eef_pose_after)
 
             step_counter += 1
             if args.collision_print_interval > 0 and step_counter % args.collision_print_interval == 0:
-                touching, bodies = _attachment_hits_kfs(env.unwrapped._physics)
+                touching, bodies = _attachment_hits_kfs(physics)
                 if touching:
                     print("attachment_site 触碰到 kfs:", bodies)
 
-            # 限速到现实时间
+            current_dt = 1.0 / max(args.rate, 1.0)
             now = time.time()
             elapsed = now - last_step_time
             if elapsed < current_dt:
@@ -480,7 +384,8 @@ def main():
             else:
                 last_step_time = now
     finally:
-        env.close()
+        if viewer is not None:
+            viewer.close()
         node.destroy_node()
         rclpy.shutdown()
 

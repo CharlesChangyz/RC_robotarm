@@ -12,46 +12,26 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    can_interface_arg = DeclareLaunchArgument(
-        'can_interface',
-        default_value='can0',
-        description='CAN interface name'
+    hardware_config_file_arg = DeclareLaunchArgument(
+        'hardware_config_file',
+        default_value=PathJoinSubstitution([
+            FindPackageShare('rc_arm_description'),
+            'config',
+            'rc_arm_2',
+            'rc_arm_2_hardware.real.yaml'
+        ]),
+        description='Hardware plugin configuration YAML'
     )
 
-    host_can_id_arg = DeclareLaunchArgument(
-        'host_can_id',
-        default_value='253',
-        description='Host CAN ID (0xFD = 253)'
-    )
-
-    s_curve_enabled_arg = DeclareLaunchArgument(
-        's_curve_enabled',
-        default_value='true',
-        description='Enable S-curve smoothing in hardware interface'
-    )
-
-    smoothing_alpha_arg = DeclareLaunchArgument(
-        'smoothing_alpha',
-        default_value='0.2',
-        description='Smoothing alpha used by hardware interface'
-    )
-
-    max_velocity_arg = DeclareLaunchArgument(
-        'max_velocity',
-        default_value='2.0',
-        description='S-curve max velocity (rad/s)'
-    )
-
-    max_acceleration_arg = DeclareLaunchArgument(
-        'max_acceleration',
-        default_value='8.0',
-        description='S-curve max acceleration (rad/s^2)'
-    )
-
-    max_jerk_arg = DeclareLaunchArgument(
-        'max_jerk',
-        default_value='50.0',
-        description='S-curve max jerk (rad/s^3)'
+    controllers_file_arg = DeclareLaunchArgument(
+        'controllers_file',
+        default_value=PathJoinSubstitution([
+            FindPackageShare('rc_arm_description'),
+            'config',
+            'rc_arm_2',
+            'rc_arm_2_controllers.yaml'
+        ]),
+        description='ros2_control controllers YAML'
     )
 
     device_arg = DeclareLaunchArgument(
@@ -76,13 +56,8 @@ def generate_launch_description():
             ])
         ]),
         launch_arguments={
-            'can_interface': LaunchConfiguration('can_interface'),
-            'host_can_id': LaunchConfiguration('host_can_id'),
-            's_curve_enabled': LaunchConfiguration('s_curve_enabled'),
-            'smoothing_alpha': LaunchConfiguration('smoothing_alpha'),
-            'max_velocity': LaunchConfiguration('max_velocity'),
-            'max_acceleration': LaunchConfiguration('max_acceleration'),
-            'max_jerk': LaunchConfiguration('max_jerk'),
+            'hardware_config_file': LaunchConfiguration('hardware_config_file'),
+            'controllers_file': LaunchConfiguration('controllers_file'),
             'use_rviz': LaunchConfiguration('use_rviz'),
         }.items()
     )
@@ -115,13 +90,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        can_interface_arg,
-        host_can_id_arg,
-        s_curve_enabled_arg,
-        smoothing_alpha_arg,
-        max_velocity_arg,
-        max_acceleration_arg,
-        max_jerk_arg,
+        hardware_config_file_arg,
+        controllers_file_arg,
         device_arg,
         use_rviz_arg,
         moveit_launch,

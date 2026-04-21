@@ -15,9 +15,9 @@
   <exec_depend>rviz2</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>rc_arm_hardware</exec_depend>
+  <exec_depend>rc_arm_controller</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
   </export>
 </package>
-

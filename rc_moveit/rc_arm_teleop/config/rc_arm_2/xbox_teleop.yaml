@@ -26,3 +26,4 @@ xbox_teleop_node_rc_arm_2:
 
     # rc_arm_2 先关闭主从模式（四轴单臂）
     master_slave_enabled: false
+    direct_can_enabled: false
