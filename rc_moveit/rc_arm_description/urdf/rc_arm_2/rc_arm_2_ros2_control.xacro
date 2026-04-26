@@ -51,7 +51,7 @@
       </hardware>
 
       <joint name="j1_joint">
-        <param name="motor_id">1</param>
+        <param name="motor_id">${hardware_config.motor_id_j1}</param>
         <param name="motor_type">RS00</param>
         <param name="position_offset">0.0</param>
         <param name="direction">-1.0</param>
@@ -78,10 +78,10 @@
       </joint>
 
       <joint name="j2_joint">
-        <param name="motor_id">2</param>
+        <param name="motor_id">${hardware_config.motor_id_j2}</param>
         <param name="motor_type">RS00</param>
         <param name="position_offset">0.0</param>
-        <param name="direction">1.0</param>
+        <param name="direction">-1.0</param>
         <param name="low_stiffness_kp">${hardware_config.low_stiffness_kp_j2}</param>
         <param name="low_stiffness_kd">${hardware_config.low_stiffness_kd_j2}</param>
         <command_interface name="position">
@@ -105,10 +105,10 @@
       </joint>
 
       <joint name="j3_joint">
-        <param name="motor_id">3</param>
+        <param name="motor_id">${hardware_config.motor_id_j3}</param>
         <param name="motor_type">RS00</param>
         <param name="position_offset">0.0</param>
-        <param name="direction">-1.0</param>
+        <param name="direction">1.0</param>
         <param name="low_stiffness_kp">${hardware_config.low_stiffness_kp_j3}</param>
         <param name="low_stiffness_kd">${hardware_config.low_stiffness_kd_j3}</param>
         <command_interface name="position">
@@ -132,7 +132,7 @@
       </joint>
 
       <joint name="j4_joint">
-        <param name="motor_id">4</param>
+        <param name="motor_id">${hardware_config.motor_id_j4}</param>
         <param name="motor_type">EL05</param>
         <param name="position_offset">0.0</param>
         <param name="direction">-1.0</param>

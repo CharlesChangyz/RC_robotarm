@@ -1257,7 +1257,9 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       motor_kp = 0.0;
       motor_kd = std::clamp(zero_torque_kd_, 0.0, 5.0);
 
-      if (use_pinocchio_gravity_ && pinocchio_initialized_ && i < pinocchio_gravity_torques.size()) {
+      if ((use_pinocchio_gravity_ || use_pinocchio_inverse_dynamics_) &&
+          pinocchio_initialized_ &&
+          i < pinocchio_gravity_torques.size()) {
         cmd_torque = pinocchio_gravity_torques[i];
       } else {
         cmd_torque = computeGravityTorque(i, hw_positions_[i]);

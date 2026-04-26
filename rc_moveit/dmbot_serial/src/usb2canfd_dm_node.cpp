@@ -13,9 +13,9 @@ Usb2canfdDMNode::Usb2canfdDMNode()
   this->declare_parameter<int64_t>("nom_baud", 1000000);
   this->declare_parameter<int64_t>("dat_baud", 2000000);
   this->declare_parameter<std::vector<int64_t>>(
-    "motor_ids", std::vector<int64_t>{0x01, 0x02, 0x03, 0x04});
+    "motor_ids", std::vector<int64_t>{0x00, 0x01, 0x02, 0x03});
   this->declare_parameter<std::vector<int64_t>>(
-    "master_ids", std::vector<int64_t>{0x101, 0x102, 0x103, 0x104});
+    "master_ids", std::vector<int64_t>{0x100, 0x101, 0x102, 0x103});
   this->declare_parameter<std::vector<int64_t>>(
     "motor_types", std::vector<int64_t>{1, 1, 1, 1});
   this->declare_parameter<int64_t>("control_mode", 0);
@@ -213,11 +213,16 @@ void Usb2canfdDMNode::publish_joint_state()
     joint_state_msg.velocity.reserve(motor_count_);
     joint_state_msg.effort.reserve(motor_count_);
 
+    constexpr std::size_t kFeedbackArraySize = 6;
     for (std::size_t i = 0; i < motor_count_; ++i) {
-      joint_state_msg.name.push_back("joint_" + std::to_string(i));
-      joint_state_msg.position.push_back(motor_control_->current_motor_pos[i]);
-      joint_state_msg.velocity.push_back(motor_control_->current_motor_vel[i]);
-      joint_state_msg.effort.push_back(motor_control_->current_motor_tor[i]);
+      const auto motor_id = motor_ids_[i];
+      const std::size_t feedback_index =
+        motor_id < kFeedbackArraySize ? static_cast<std::size_t>(motor_id) : i;
+
+      joint_state_msg.name.push_back("joint_" + std::to_string(motor_id));
+      joint_state_msg.position.push_back(motor_control_->current_motor_pos[feedback_index]);
+      joint_state_msg.velocity.push_back(motor_control_->current_motor_vel[feedback_index]);
+      joint_state_msg.effort.push_back(motor_control_->current_motor_tor[feedback_index]);
     }
 
     joint_state_publisher_->publish(joint_state_msg);

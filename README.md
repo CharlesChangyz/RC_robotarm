@@ -1,0 +1,511 @@
+# RC Robot Arm MuJoCo + MoveIt
+
+中文 | [English](#english)
+
+## 项目简介
+
+本项目面向 `rc_arm_2` 四轴机械臂，集成了 MuJoCo 仿真、ROS 2 Control、MoveIt 2 规划执行、实机 CAN 电机后端、TF 目标位姿跟随、碰撞物体管理和 Xbox 手柄遥操作。
+
+主要能力：
+
+- 在 MuJoCo 中加载机械臂和赛场环境，并通过 ROS 2 话题与控制链路联动。
+- 使用 MoveIt 2 对 `arm` 规划组进行 IK、路径规划和轨迹执行。
+- 通过 `ros2_control` 在 MuJoCo 后端和实机后端之间切换。
+- 从 TF 目标帧生成 `PoseStamped`，自动触发 MoveIt 规划执行。
+- 向 MoveIt Planning Scene 注入世界障碍物和末端附着物体。
+- 支持 Xbox 手柄控制仿真或实机机械臂。
+
+## 目录结构
+
+```text
+.
+├── rc_robotarm_mujoco/           # MuJoCo 机器人、场地、资产和工具代码
+├── demo/                         # MuJoCo 仿真桥接和 TF 目标发布脚本
+├── scripts/                      # 一键启动 MoveIt 仿真/实机链路脚本
+├── rc_moveit/
+│   ├── rc_arm_description/       # URDF/Xacro、网格、ros2_control 配置
+│   ├── rc_arm_moveit_config/     # MoveIt 2 配置、launch、目标位姿执行器
+│   ├── rc_arm_hardware/          # 实机/MuJoCo ros2_control 硬件接口
+│   ├── rc_arm_controller/        # 自定义轨迹控制器
+│   ├── rc_arm_teleop/            # Xbox 手柄遥操作
+│   ├── dmbot_serial/             # 达妙 USB2CANFD 驱动相关代码
+│   └── arm_msgs/                 # 自定义消息
+└── requirements.txt              # Python/MuJoCo 侧依赖
+```
+
+## 环境要求
+
+- Ubuntu + ROS 2 Humble
+- MoveIt 2、ros2_control、controller_manager、RViz2、xacro
+- Python 3.8+
+- MuJoCo、dm-control、NumPy、SciPy、OMPL、TOPP-RA
+- 实机模式需要 CAN/USB2CANFD 设备和正确的电机 ID 配置
+
+安装 Python 依赖：
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 -m pip install -e .
+```
+
+## 构建 ROS 2 工作空间
+
+```bash
+source /opt/ros/humble/setup.bash
+cd rc_moveit
+colcon build --symlink-install
+source install/setup.bash
+```
+
+如果后续修改了 `rc_moveit` 下的包，请重新执行 `colcon build --symlink-install` 并重新 source。
+
+## MuJoCo 仿真运行
+
+终端 1：启动 MuJoCo 仿真桥接。它会发布 `/rc_arm_2/mujoco_joint_states`、`/rc_arm_2/mujoco_joint_positions`、`/rc_arm_2/joint_torque` 等话题，并接收控制链路输出的关节命令。
+
+```bash
+source /opt/ros/humble/setup.bash
+source rc_moveit/install/setup.bash
+python3 demo/rc_robotarm_demo.py
+```
+
+终端 2：启动 MoveIt、ros2_control、RViz 和目标位姿执行链路。
+
+```bash
+./scripts/run_rc_arm_mujoco.sh
+```
+
+常用参数可以通过环境变量或 launch 参数覆盖：
+
+```bash
+USE_RVIZ=false ./scripts/run_rc_arm_mujoco.sh
+
+./scripts/run_rc_arm_mujoco.sh \
+  use_tf_target_bridge:=true \
+  use_target_pose_moveit_executor:=true
+```
+
+MuJoCo 后端配置位于：
+
+```text
+rc_moveit/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.mujoco.yaml
+```
+
+## 实机运行
+
+先检查实机硬件配置：
+
+```text
+rc_moveit/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.real.yaml
+```
+
+重点确认：
+
+- `can_interface`：例如 `can0`
+- `dm_sn`：USB2CANFD 设备序列号
+- `motor_id_j1` 到 `motor_id_j4`：各关节电机 CAN ID
+- `position_kp`、`position_kd`、速度/加速度/加加速度限制
+- 重力补偿和逆动力学前馈开关
+
+启动实机链路：
+
+```bash
+./scripts/run_rc_arm_real.sh
+```
+
+实机调试建议先降低速度缩放、关闭自动目标执行或关闭 RViz：
+
+```bash
+USE_TARGET_POSE_MOVEIT_EXECUTOR=false ./scripts/run_rc_arm_real.sh
+USE_RVIZ=false ./scripts/run_rc_arm_real.sh
+```
+
+## TF 目标位姿控制
+
+`rc_arm_2_robot.launch.py` 默认会启动两段链路：
+
+1. `tf_target_pose_bridge.py`：从 `/tf` 中读取 `world -> rc_arm_2_target`。
+2. `target_pose_moveit_executor.py`：订阅 `/rc_arm_2/target_pose`，调用 MoveIt 进行 IK、规划和执行。
+
+可以使用交互式脚本发布目标 TF：
+
+```bash
+source /opt/ros/humble/setup.bash
+source rc_moveit/install/setup.bash
+python3 demo/tf_target_cli_publisher.py
+```
+
+输入格式：
+
+```text
+x y z j4      # 更新位置和 j4，j4 默认单位为度
+x y z         # 只更新位置
+j4 value      # 只更新 j4
+show          # 查看当前目标
+q             # 退出
+```
+
+目标位姿执行器常用参数：
+
+```bash
+./scripts/run_rc_arm_mujoco.sh \
+  target_pose_executor_vel_scale:=0.3 \
+  target_pose_executor_acc_scale:=0.3 \
+  target_pose_executor_planning_time:=2.0 \
+  target_pose_executor_avoid_collisions_enabled:=true
+```
+
+## MoveIt 碰撞物体
+
+### 世界障碍物
+
+启动时可向 MoveIt Planning Scene 注入固定 box：
+
+```bash
+ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py \
+  use_rviz:=true \
+  target_pose_executor_world_boxes_json:='[{"id":"keep_out","frame_id":"world","size":[0.2,0.2,0.2],"position":[0.3,0.0,0.3]}]'
+```
+
+单个 box 支持字段：
+
+```json
+{
+  "id": "keep_out",
+  "frame_id": "world",
+  "size": [0.2, 0.2, 0.2],
+  "position": [0.3, 0.0, 0.3],
+  "orientation": [0.0, 0.0, 0.0, 1.0]
+}
+```
+
+### 末端附着物体
+
+发布 JSON 到 `/rc_arm_2/attached_box_command`，让 box 跟随 `end_effector`：
+
+```bash
+ros2 topic pub --once /rc_arm_2/attached_box_command std_msgs/msg/String \
+  "{data: '{\"action\":\"attach\",\"id\":\"carried_block\",\"link_name\":\"end_effector\",\"size\":[0.05,0.05,0.05],\"position\":[0.0,0.0,0.04],\"touch_links\":[\"end_effector\",\"l4\"]}'}"
+```
+
+分离并移除：
+
+```bash
+ros2 topic pub --once /rc_arm_2/attached_box_command std_msgs/msg/String \
+  "{data: '{\"action\":\"detach\",\"id\":\"carried_block\"}'}"
+```
+
+分离并放回世界坐标系：
+
+```bash
+ros2 topic pub --once /rc_arm_2/attached_box_command std_msgs/msg/String \
+  "{data: '{\"action\":\"detach\",\"id\":\"carried_block\",\"world_box\":{\"frame_id\":\"world\",\"size\":[0.05,0.05,0.05],\"position\":[0.3,0.0,0.2]}}'}"
+```
+
+## Xbox 手柄遥操作
+
+仿真遥操作：
+
+```bash
+source /opt/ros/humble/setup.bash
+source rc_moveit/install/setup.bash
+ros2 launch rc_arm_teleop rc_arm_2_sim_teleop.launch.py device:=/dev/input/js0
+```
+
+实机遥操作：
+
+```bash
+source /opt/ros/humble/setup.bash
+source rc_moveit/install/setup.bash
+ros2 launch rc_arm_teleop rc_arm_2_real_teleop.launch.py device:=/dev/input/js0
+```
+
+手柄参数位于：
+
+```text
+rc_moveit/rc_arm_teleop/config/rc_arm_2/xbox_teleop.yaml
+```
+
+## 常用调试命令
+
+```bash
+ros2 topic list
+ros2 control list_controllers
+ros2 control list_hardware_interfaces
+ros2 topic echo /joint_states
+ros2 topic echo /rc_arm_2/mujoco_joint_states
+ros2 topic echo /rc_arm_2/joint_torque
+```
+
+查看目标位姿执行器状态时，可以开启位置或力矩打印：
+
+```bash
+./scripts/run_rc_arm_mujoco.sh \
+  use_position_printer:=true \
+  use_torque_printer:=true
+```
+
+## 注意事项
+
+- `rc_moveit/install/setup.bash` 不存在时，请先构建 `rc_moveit` 工作空间。
+- MuJoCo 模式需要先运行仿真桥接，否则硬件插件会收不到外部反馈并回退到内部状态。
+- 实机模式请在上电前确认 CAN 接口、电机 ID、关节限位、低刚度/重力补偿参数。
+- 默认规划组为 `arm`，关节顺序为 `j1_joint,j2_joint,j3_joint,j4_joint`。
+- `world` 到 `base_link` 的静态 TF 由 launch 文件发布。
+
+---
+
+## English
+
+[中文](#rc-robot-arm-mujoco--moveit) | English
+
+## Overview
+
+This repository targets the `rc_arm_2` four-axis robot arm. It combines MuJoCo simulation, ROS 2 Control, MoveIt 2 planning/execution, a real CAN motor backend, TF target following, MoveIt collision-object management, and Xbox controller teleoperation.
+
+Key features:
+
+- Load the robot arm and field assets in MuJoCo and bridge them to ROS 2 topics.
+- Plan and execute motion for the MoveIt `arm` planning group.
+- Switch between MuJoCo and real hardware through `ros2_control` hardware configuration files.
+- Convert a TF target frame into `PoseStamped` goals and execute them through MoveIt.
+- Add world collision boxes and end-effector attached boxes to the MoveIt Planning Scene.
+- Teleoperate the simulated or real robot arm with an Xbox controller.
+
+## Repository Layout
+
+```text
+.
+├── rc_robotarm_mujoco/           # MuJoCo robot, arena, assets, and utilities
+├── demo/                         # MuJoCo bridge and TF target publisher scripts
+├── scripts/                      # Convenience launch scripts for sim/real stacks
+├── rc_moveit/
+│   ├── rc_arm_description/       # URDF/Xacro, meshes, ros2_control configs
+│   ├── rc_arm_moveit_config/     # MoveIt 2 configs, launch files, target executor
+│   ├── rc_arm_hardware/          # Real/MuJoCo ros2_control hardware interface
+│   ├── rc_arm_controller/        # Custom trajectory controller
+│   ├── rc_arm_teleop/            # Xbox teleoperation
+│   ├── dmbot_serial/             # Damiao USB2CANFD driver code
+│   └── arm_msgs/                 # Custom messages
+└── requirements.txt              # Python/MuJoCo dependencies
+```
+
+## Requirements
+
+- Ubuntu with ROS 2 Humble
+- MoveIt 2, ros2_control, controller_manager, RViz2, xacro
+- Python 3.8+
+- MuJoCo, dm-control, NumPy, SciPy, OMPL, TOPP-RA
+- Real-hardware mode requires a CAN/USB2CANFD device and correct motor ID configuration
+
+Install Python dependencies:
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 -m pip install -e .
+```
+
+## Build the ROS 2 Workspace
+
+```bash
+source /opt/ros/humble/setup.bash
+cd rc_moveit
+colcon build --symlink-install
+source install/setup.bash
+```
+
+Rebuild and source again after changing packages under `rc_moveit`.
+
+## Run MuJoCo Simulation
+
+Terminal 1: start the MuJoCo bridge. It publishes `/rc_arm_2/mujoco_joint_states`, `/rc_arm_2/mujoco_joint_positions`, `/rc_arm_2/joint_torque`, and consumes joint commands from the control stack.
+
+```bash
+source /opt/ros/humble/setup.bash
+source rc_moveit/install/setup.bash
+python3 demo/rc_robotarm_demo.py
+```
+
+Terminal 2: start MoveIt, ros2_control, RViz, and the target-pose execution chain.
+
+```bash
+./scripts/run_rc_arm_mujoco.sh
+```
+
+Common options can be overridden with environment variables or launch arguments:
+
+```bash
+USE_RVIZ=false ./scripts/run_rc_arm_mujoco.sh
+
+./scripts/run_rc_arm_mujoco.sh \
+  use_tf_target_bridge:=true \
+  use_target_pose_moveit_executor:=true
+```
+
+MuJoCo backend configuration:
+
+```text
+rc_moveit/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.mujoco.yaml
+```
+
+## Run Real Hardware
+
+Review the real-hardware configuration first:
+
+```text
+rc_moveit/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.real.yaml
+```
+
+Important fields:
+
+- `can_interface`: for example `can0`
+- `dm_sn`: USB2CANFD device serial number
+- `motor_id_j1` to `motor_id_j4`: motor CAN IDs
+- `position_kp`, `position_kd`, velocity/acceleration/jerk limits
+- gravity compensation and inverse-dynamics feedforward switches
+
+Start the real-hardware stack:
+
+```bash
+./scripts/run_rc_arm_real.sh
+```
+
+For early real-hardware debugging, consider reducing scaling, disabling automatic target execution, or disabling RViz:
+
+```bash
+USE_TARGET_POSE_MOVEIT_EXECUTOR=false ./scripts/run_rc_arm_real.sh
+USE_RVIZ=false ./scripts/run_rc_arm_real.sh
+```
+
+## TF Target Pose Control
+
+`rc_arm_2_robot.launch.py` starts two target-pose components by default:
+
+1. `tf_target_pose_bridge.py`: reads `world -> rc_arm_2_target` from `/tf`.
+2. `target_pose_moveit_executor.py`: subscribes to `/rc_arm_2/target_pose`, then runs IK, planning, and execution through MoveIt.
+
+Use the interactive TF publisher to command a target:
+
+```bash
+source /opt/ros/humble/setup.bash
+source rc_moveit/install/setup.bash
+python3 demo/tf_target_cli_publisher.py
+```
+
+Input format:
+
+```text
+x y z j4      # update position and j4; j4 is in degrees by default
+x y z         # update position only
+j4 value      # update j4 only
+show          # print current target
+q             # quit
+```
+
+Common target executor options:
+
+```bash
+./scripts/run_rc_arm_mujoco.sh \
+  target_pose_executor_vel_scale:=0.3 \
+  target_pose_executor_acc_scale:=0.3 \
+  target_pose_executor_planning_time:=2.0 \
+  target_pose_executor_avoid_collisions_enabled:=true
+```
+
+## MoveIt Collision Objects
+
+### World Boxes
+
+Inject fixed boxes into the MoveIt Planning Scene at startup:
+
+```bash
+ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py \
+  use_rviz:=true \
+  target_pose_executor_world_boxes_json:='[{"id":"keep_out","frame_id":"world","size":[0.2,0.2,0.2],"position":[0.3,0.0,0.3]}]'
+```
+
+Each box supports:
+
+```json
+{
+  "id": "keep_out",
+  "frame_id": "world",
+  "size": [0.2, 0.2, 0.2],
+  "position": [0.3, 0.0, 0.3],
+  "orientation": [0.0, 0.0, 0.0, 1.0]
+}
+```
+
+### Attached Box
+
+Publish JSON to `/rc_arm_2/attached_box_command` to make a box follow `end_effector`:
+
+```bash
+ros2 topic pub --once /rc_arm_2/attached_box_command std_msgs/msg/String \
+  "{data: '{\"action\":\"attach\",\"id\":\"carried_block\",\"link_name\":\"end_effector\",\"size\":[0.05,0.05,0.05],\"position\":[0.0,0.0,0.04],\"touch_links\":[\"end_effector\",\"l4\"]}'}"
+```
+
+Detach and remove it:
+
+```bash
+ros2 topic pub --once /rc_arm_2/attached_box_command std_msgs/msg/String \
+  "{data: '{\"action\":\"detach\",\"id\":\"carried_block\"}'}"
+```
+
+Detach and place it back into the world:
+
+```bash
+ros2 topic pub --once /rc_arm_2/attached_box_command std_msgs/msg/String \
+  "{data: '{\"action\":\"detach\",\"id\":\"carried_block\",\"world_box\":{\"frame_id\":\"world\",\"size\":[0.05,0.05,0.05],\"position\":[0.3,0.0,0.2]}}'}"
+```
+
+## Xbox Teleoperation
+
+Simulation teleop:
+
+```bash
+source /opt/ros/humble/setup.bash
+source rc_moveit/install/setup.bash
+ros2 launch rc_arm_teleop rc_arm_2_sim_teleop.launch.py device:=/dev/input/js0
+```
+
+Real-hardware teleop:
+
+```bash
+source /opt/ros/humble/setup.bash
+source rc_moveit/install/setup.bash
+ros2 launch rc_arm_teleop rc_arm_2_real_teleop.launch.py device:=/dev/input/js0
+```
+
+Gamepad parameters:
+
+```text
+rc_moveit/rc_arm_teleop/config/rc_arm_2/xbox_teleop.yaml
+```
+
+## Useful Debug Commands
+
+```bash
+ros2 topic list
+ros2 control list_controllers
+ros2 control list_hardware_interfaces
+ros2 topic echo /joint_states
+ros2 topic echo /rc_arm_2/mujoco_joint_states
+ros2 topic echo /rc_arm_2/joint_torque
+```
+
+Enable joint-position or torque printing from the main launch script:
+
+```bash
+./scripts/run_rc_arm_mujoco.sh \
+  use_position_printer:=true \
+  use_torque_printer:=true
+```
+
+## Notes
+
+- If `rc_moveit/install/setup.bash` does not exist, build the `rc_moveit` workspace first.
+- In MuJoCo mode, run the simulation bridge first so the hardware plugin receives external joint feedback.
+- In real-hardware mode, verify the CAN interface, motor IDs, joint limits, stiffness settings, and gravity compensation before powering the arm.
+- The default MoveIt planning group is `arm`, with joint order `j1_joint,j2_joint,j3_joint,j4_joint`.
+- The launch files publish a static TF from `world` to `base_link`.

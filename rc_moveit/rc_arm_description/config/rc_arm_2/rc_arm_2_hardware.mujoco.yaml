@@ -37,6 +37,12 @@ dm_dat_baud: 2000000
 # MuJoCo 模式通常不用，但保留统一字段
 dm_control_mode: 0
 
+# 关节到电机 CAN ID 的映射
+motor_id_j1: 0
+motor_id_j2: 1
+motor_id_j3: 2
+motor_id_j4: 3
+
 # 位置环比例增益 Kp
 position_kp: 60.0
 
@@ -80,27 +86,31 @@ low_stiffness_torque_bias: 0.0
 # 0 表示回退到 low_stiffness_kp
 low_stiffness_kp_j1: 1.5
 
+# j1 低刚度 Kp 覆盖值；
+# 0 表示回退到 low_stiffness_kp
+low_stiffness_kp_j1: 0.0
+
 # j1 低刚度 Kd 覆盖值；
 # 0 表示回退到 low_stiffness_kd
-low_stiffness_kd_j1: 1.0
+low_stiffness_kd_j1: 0.0
 
 # j2 低刚度 Kp 覆盖值
-low_stiffness_kp_j2: 20.0
+low_stiffness_kp_j2: 0.0
 
 # j2 低刚度 Kd 覆盖值
-low_stiffness_kd_j2: 4.0
+low_stiffness_kd_j2: 0.0
 
 # j3 低刚度 Kp 覆盖值
-low_stiffness_kp_j3: 10.0
+low_stiffness_kp_j3: 0.0
 
 # j3 低刚度 Kd 覆盖值
-low_stiffness_kd_j3: 2.0
+low_stiffness_kd_j3: 0.0
 
 # j4 低刚度 Kp 覆盖值
-low_stiffness_kp_j4: 0.035
+low_stiffness_kp_j4: 0.0
 
 # j4 低刚度 Kd 覆盖值
-low_stiffness_kd_j4: 0.01
+low_stiffness_kd_j4: 0.0
 
 # 是否启用 Pinocchio 重力补偿项
 use_pinocchio_gravity: false
