@@ -55,8 +55,6 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , external_feedback_timeout_sec_(0.2)
   , external_feedback_received_(false)
   , external_feedback_last_time_(std::chrono::steady_clock::now())
-  , s_curve_enabled_(true)       // 默认启用 S 曲线规划
-  , scalar_path_time_enabled_(true)
   , zero_torque_mode_(false)
   , zero_torque_kd_(1.0)
   , low_stiffness_mode_(false)
@@ -74,7 +72,6 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , limit_margin_(0.15)          // 约在 ~15° 处开始减速（≈8.6°）
   , limit_stop_margin_(0.02)     // 约在 ~1° 处硬停止（≈1.1°）
   , limit_decel_factor_(0.3)     // 减速到 30%
-  , max_jerk_(50.0)              // 默认最大加加速度 50 rad/s³（S 曲线规划）
 {
 }
 
@@ -208,34 +205,23 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   external_feedback_velocities_.resize(num_joints, 0.0);
   external_feedback_efforts_.resize(num_joints, 0.0);
   
-  // 初始化位置指令平滑滤波（含速度/加速度/加加速度限制 - S 曲线规划）
+  // 初始化参考轨迹缓存
   smoothed_positions_.resize(num_joints, 0.0);
   smoothed_velocities_.resize(num_joints, 0.0);
-  smoothed_accelerations_.resize(num_joints, 0.0);  // 用于 S 曲线规划
+  smoothed_accelerations_.resize(num_joints, 0.0);
   
   // 初始化速度前馈相关变量
   last_cmd_positions_.resize(num_joints, 0.0);         // 上一周期指令位置
-  last_hw_commands_positions_.resize(num_joints, 0.0); // 上一帧 hw_commands（用于检测指令更新）
   cmd_velocities_.resize(num_joints, 0.0);             // 计算得到的指令速度
   filtered_cmd_velocities_.resize(num_joints, 0.0);    // 一阶滤波后的指令速度
   velocity_ff_stage2_.resize(num_joints, 0.0);         // 二阶滤波中间量
-  velocity_filter_alpha_ = 0.3;                        // 速度滤波系数
   
   // 默认参数
-  smoothing_alpha_ = 0.08;      // 平滑系数（越小越平滑）
   max_velocity_ = 2.0;          // 最大速度 2 rad/s
   max_acceleration_ = 8.0;      // 最大加速度 8 rad/s²
-  max_jerk_ = 50.0;             // 最大加加速度 50 rad/s³（S 曲线规划）
   fallback_control_period_ = 0.005;  // 默认 200Hz -> 5ms
   first_command_ = true;
   gravity_feedforward_ratio_ = 0.5;  // 默认 50% 重力补偿前馈
-  s_curve_enabled_ = true;      // 默认启用 S 曲线
-  
-  // 从参数读取平滑系数
-  if (info_.hardware_parameters.count("smoothing_alpha")) {
-    smoothing_alpha_ = std::stod(info_.hardware_parameters.at("smoothing_alpha"));
-    smoothing_alpha_ = std::clamp(smoothing_alpha_, 0.01, 1.0);
-  }
   
   // 从参数读取速度上限
   if (info_.hardware_parameters.count("max_velocity")) {
@@ -246,33 +232,11 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   if (info_.hardware_parameters.count("max_acceleration")) {
     max_acceleration_ = std::stod(info_.hardware_parameters.at("max_acceleration"));
   }
-  
-  // 从参数读取加加速度上限（S 曲线规划）
-  if (info_.hardware_parameters.count("max_jerk")) {
-    max_jerk_ = std::stod(info_.hardware_parameters.at("max_jerk"));
-  }
 
   if (info_.hardware_parameters.count("fallback_control_period")) {
     fallback_control_period_ = std::stod(info_.hardware_parameters.at("fallback_control_period"));
   }
   fallback_control_period_ = std::max(1e-4, fallback_control_period_);
-  
-  // 从参数读取 S 曲线开关
-  if (info_.hardware_parameters.count("s_curve_enabled")) {
-    s_curve_enabled_ = parseBoolParam(info_.hardware_parameters.at("s_curve_enabled"));
-  }
-
-  // 公共标量路径参数化开关（方案 A）
-  if (info_.hardware_parameters.count("scalar_path_time_enabled")) {
-    scalar_path_time_enabled_ = parseBoolParam(info_.hardware_parameters.at("scalar_path_time_enabled"));
-  }
-  
-  // 初始化 S 曲线生成器（每个关节一个）
-  s_curve_generators_.clear();
-  for (size_t i = 0; i < num_joints; ++i) {
-    s_curve_generators_.push_back(
-      std::make_unique<SCurveGenerator>(max_velocity_, max_acceleration_, max_jerk_));
-  }
   
   // 从参数读取重力补偿前馈比例
   if (info_.hardware_parameters.count("gravity_feedforward_ratio")) {
@@ -296,55 +260,15 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   joint_at_limit_.resize(num_joints, false);
   limit_warn_counter_.resize(num_joints, 0);
 
-  // 初始化“几何路径 q(s) + 公共标量 s(t)”参数化器
-  if (scalar_path_time_enabled_) {
-    ScalarPathPlannerConfig planner_cfg;
-    planner_cfg.enabled = true;
-    planner_cfg.dof = num_joints;
-    planner_cfg.waypoint_merge_distance = 1e-3;
-    planner_cfg.command_append_distance = 2e-3;
-    planner_cfg.max_waypoint_jump = M_PI;
-    planner_cfg.max_raw_waypoints = 160;
-    planner_cfg.min_waypoints = 2;
-    planner_cfg.constraint_samples = 200;
-
-    planner_cfg.joint_names.reserve(num_joints);
-    planner_cfg.velocity_limits.reserve(num_joints);
-    planner_cfg.acceleration_limits.reserve(num_joints);
-    planner_cfg.jerk_limits.reserve(num_joints);
-    planner_cfg.lower_limits.reserve(num_joints);
-    planner_cfg.upper_limits.reserve(num_joints);
-    planner_cfg.is_continuous.reserve(num_joints);
-
-    for (const auto& cfg : joint_configs_) {
-      planner_cfg.joint_names.push_back(cfg.name);
-      planner_cfg.velocity_limits.push_back(std::max(1e-3, cfg.velocity_limit));
-      planner_cfg.acceleration_limits.push_back(std::max(1e-3, max_acceleration_));
-      planner_cfg.jerk_limits.push_back(std::max(1e-3, max_jerk_));
-      planner_cfg.lower_limits.push_back(cfg.lower_limit);
-      planner_cfg.upper_limits.push_back(cfg.upper_limit);
-      planner_cfg.is_continuous.push_back(cfg.is_continuous);
-    }
-
-    scalar_path_planner_ = std::make_unique<ScalarPathTimePlanner>(planner_cfg);
-    scalar_path_planner_->resetToPosition(hw_positions_);
-  } else {
-    scalar_path_planner_.reset();
-  }
-
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "已初始化：%zu 个关节，backend=%s",
               num_joints, backend_name_.c_str());
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "  S 曲线：%s，max_vel=%.1f rad/s，max_acc=%.1f rad/s²，max_jerk=%.1f rad/s³",
-              s_curve_enabled_ ? "启用" : "禁用",
-              max_velocity_, max_acceleration_, max_jerk_);
+              "  轨迹参考：直接执行上层 position/velocity，max_vel=%.1f rad/s，max_acc=%.1f rad/s²",
+              max_velocity_, max_acceleration_);
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "  回退控制周期：%.4f s",
               fallback_control_period_);
-  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "  公共标量路径参数化：%s",
-              scalar_path_time_enabled_ ? "启用" : "禁用");
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "  PID：Kp=%.1f，Kd=%.1f，重力补偿前馈比例=%.0f%%",
               position_kp_, position_kd_, gravity_feedforward_ratio_ * 100.0);
@@ -379,7 +303,6 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   final_cmd_joint_frame_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/final_joint_command_joint_frame", 10);
   final_pd_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/final_pd_gains", 10);
   final_torque_ff_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/final_joint_torque_ff", 10);
-  scalar_path_debug_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/scalar_path_state", 10);
   mujoco_command_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>(mujoco_command_topic_, 10);
 
   if (external_feedback_enabled_) {
@@ -745,15 +668,9 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_activate(
     smoothed_positions_[i] = initial_position;
     smoothed_velocities_[i] = 0.0;
     smoothed_accelerations_[i] = 0.0;
-    if (s_curve_enabled_ && i < s_curve_generators_.size()) {
-      s_curve_generators_[i]->initialize(initial_position, 0.0, 0.0);
-    }
   }
 
   first_command_ = false;
-  if (scalar_path_planner_) {
-    scalar_path_planner_->resetToPosition(hw_positions_);
-  }
 
   if (backend_mode_ == BackendMode::REAL) {
     dm_driver_->enable();
@@ -937,8 +854,6 @@ hardware_interface::return_type RsA3HardwareInterface::write(
 {
   static int write_counter = 0;
   static std::vector<double> last_tau_for_spike_check;
-  static double last_scalar_s = 0.0;
-  static bool scalar_s_initialized = false;
 
   if (use_mock_hardware_) {
     return hardware_interface::return_type::OK;
@@ -955,8 +870,6 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     dt = fallback_control_period_;
   }
 
-  const bool using_scalar_path = scalar_path_time_enabled_ && static_cast<bool>(scalar_path_planner_);
-
   if (first_command_) {
     for (size_t i = 0; i < joint_configs_.size(); ++i) {
       smoothed_positions_[i] = hw_commands_positions_[i];
@@ -966,50 +879,11 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       last_cmd_positions_[i] = hw_commands_positions_[i];
       filtered_cmd_velocities_[i] = 0.0;
       velocity_ff_stage2_[i] = 0.0;
-
-      if (s_curve_enabled_ && i < s_curve_generators_.size() && s_curve_generators_[i]) {
-        s_curve_generators_[i]->initialize(hw_commands_positions_[i], 0.0, 0.0);
-      }
-    }
-
-    if (using_scalar_path) {
-      scalar_path_planner_->resetToPosition(smoothed_positions_);
-      scalar_s_initialized = false;
     }
 
     first_command_ = false;
     RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-                "收到首条指令，初始化轨迹（公共标量路径：%s，逐关节 S 曲线：%s）",
-                using_scalar_path ? "启用" : "禁用",
-                s_curve_enabled_ ? "启用" : "禁用");
-  }
-
-  const double command_change_eps = 1e-6;
-  bool command_changed = false;
-  for (size_t i = 0; i < joint_configs_.size(); ++i) {
-    if (std::abs(hw_commands_positions_[i] - last_hw_commands_positions_[i]) > command_change_eps) {
-      command_changed = true;
-      break;
-    }
-  }
-
-  bool command_updated = command_changed;
-
-  if (!command_updated) {
-    if (using_scalar_path && scalar_path_planner_->hasActiveProfile()) {
-      command_updated = true;
-    } else if (!using_scalar_path && s_curve_enabled_) {
-      for (size_t i = 0; i < joint_configs_.size() && i < s_curve_generators_.size(); ++i) {
-        if (s_curve_generators_[i] && s_curve_generators_[i]->isMoving()) {
-          command_updated = true;
-          break;
-        }
-      }
-    }
-  }
-
-  for (size_t i = 0; i < joint_configs_.size(); ++i) {
-    last_hw_commands_positions_[i] = hw_commands_positions_[i];
+                "收到首条指令，初始化执行参考（直接跟随上层 position/velocity）");
   }
 
   std::vector<double> cmd_positions_motor(joint_configs_.size(), 0.0);
@@ -1018,77 +892,6 @@ hardware_interface::return_type RsA3HardwareInterface::write(
   std::vector<double> id_ref_positions = smoothed_positions_;
   std::vector<double> id_ref_velocities = smoothed_velocities_;
   std::vector<double> id_ref_accelerations = smoothed_accelerations_;
-
-  bool scalar_sample_valid = false;
-  ScalarPathSample scalar_sample;
-  if (using_scalar_path) {
-    if (command_changed) {
-      std::string planner_message;
-      const bool profile_rebuilt = scalar_path_planner_->ingestWaypoint(
-        hw_commands_positions_, false, planner_message);
-
-      if (profile_rebuilt) {
-        const auto& diag = scalar_path_planner_->diagnostics();
-        const std::string vel_joint = (diag.vel_bottleneck_joint < joint_configs_.size())
-                                      ? joint_configs_[diag.vel_bottleneck_joint].name
-                                      : std::string("unknown");
-        const std::string acc_joint = (diag.acc_bottleneck_joint < joint_configs_.size())
-                                      ? joint_configs_[diag.acc_bottleneck_joint].name
-                                      : std::string("unknown");
-        RCLCPP_INFO(
-          rclcpp::get_logger("RsA3HardwareInterface"),
-          "公共标量路径已重建：raw=%zu cleaned=%zu L=%.6f dt=%.4f T=%.6f Vs=%.6f As=%.6f Js=%.6f bottleneck[v=%s,a=%s]",
-          diag.raw_waypoints,
-          diag.cleaned_waypoints,
-          diag.path_length,
-          dt,
-          diag.total_time,
-          diag.v_s_limit,
-          diag.a_s_limit,
-          diag.j_s_limit,
-          vel_joint.c_str(),
-          acc_joint.c_str());
-        scalar_s_initialized = false;
-      } else if (planner_message != "insufficient waypoints" && planner_message != "planner disabled") {
-        RCLCPP_WARN_THROTTLE(
-          rclcpp::get_logger("RsA3HardwareInterface"),
-          *debug_node_->get_clock(),
-          2000,
-          "公共标量路径构建失败：%s",
-          planner_message.c_str());
-      }
-    }
-
-    scalar_sample_valid = scalar_path_planner_->sample(dt, scalar_sample);
-
-    if (scalar_sample_valid) {
-      if (!scalar_s_initialized || command_changed) {
-        last_scalar_s = scalar_sample.s;
-        scalar_s_initialized = true;
-      } else {
-        if (scalar_sample.s + 1e-6 < last_scalar_s) {
-          RCLCPP_WARN_THROTTLE(
-            rclcpp::get_logger("RsA3HardwareInterface"),
-            *debug_node_->get_clock(),
-            2000,
-            "公共标量路径推进非单调：last_s=%.6f, s=%.6f",
-            last_scalar_s,
-            scalar_sample.s);
-        }
-        last_scalar_s = scalar_sample.s;
-      }
-
-      if (write_counter % 100 == 0) {
-        RCLCPP_DEBUG(
-          rclcpp::get_logger("RsA3HardwareInterface"),
-          "[ScalarPath] t=%.4f s=%.6f sd=%.6f sdd=%.6f",
-          scalar_sample.t,
-          scalar_sample.s,
-          scalar_sample.sd,
-          scalar_sample.sdd);
-      }
-    }
-  }
 
   for (size_t i = 0; i < joint_configs_.size(); ++i) {
     const auto& config = joint_configs_[i];
@@ -1101,26 +904,12 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     double new_velocity = 0.0;
     double new_acceleration = 0.0;
 
-    if (scalar_sample_valid &&
-        i < scalar_sample.q.size() &&
-        i < scalar_sample.v.size() &&
-        i < scalar_sample.a.size()) {
-      new_position = scalar_sample.q[i];
-      new_velocity = scalar_sample.v[i];
-      new_acceleration = scalar_sample.a[i];
-    } else if (!using_scalar_path && s_curve_enabled_ && i < s_curve_generators_.size() && s_curve_generators_[i]) {
-      s_curve_generators_[i]->setTarget(target_position);
-      new_position = s_curve_generators_[i]->update(dt);
-      new_velocity = s_curve_generators_[i]->getVelocity();
-      new_acceleration = s_curve_generators_[i]->getAcceleration();
-    } else {
-      new_velocity = (new_position - prev_position) / dt;
-      new_acceleration = (new_velocity - prev_velocity) / dt;
-    }
+    new_velocity = (new_position - prev_position) / dt;
 
     if (std::isfinite(hw_commands_velocities_[i]) && std::abs(hw_commands_velocities_[i]) > 1e-6) {
       new_velocity = std::clamp(hw_commands_velocities_[i], -config.velocity_limit, config.velocity_limit);
     }
+    new_acceleration = (new_velocity - prev_velocity) / dt;
 
     if (std::abs(new_velocity) > config.velocity_limit * 1.05) {
       RCLCPP_WARN_THROTTLE(
@@ -1162,28 +951,23 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     cmd_position = std::clamp(cmd_position, params.p_min, params.p_max);
 
     double filtered_velocity = 0.0;
-    if (command_updated) {
-      const double velocity_threshold = 0.001;
-      double cmd_velocity = (std::abs(raw_cmd_velocity) < velocity_threshold) ? 0.0 : raw_cmd_velocity;
-      const double joint_velocity_limit = std::max(0.1, config.velocity_limit);
-      cmd_velocity = std::clamp(cmd_velocity, -joint_velocity_limit, joint_velocity_limit);
+    const double velocity_threshold = 0.001;
+    double cmd_velocity = (std::abs(raw_cmd_velocity) < velocity_threshold) ? 0.0 : raw_cmd_velocity;
+    const double joint_velocity_limit = std::max(0.1, config.velocity_limit);
+    cmd_velocity = std::clamp(cmd_velocity, -joint_velocity_limit, joint_velocity_limit);
 
-      const double alpha1 = 0.1;
-      const double first_stage = alpha1 * cmd_velocity + (1.0 - alpha1) * filtered_cmd_velocities_[i];
-      filtered_cmd_velocities_[i] = first_stage;
+    const double alpha1 = 0.1;
+    const double first_stage = alpha1 * cmd_velocity + (1.0 - alpha1) * filtered_cmd_velocities_[i];
+    filtered_cmd_velocities_[i] = first_stage;
 
-      const double alpha2 = 0.15;
-      filtered_velocity = alpha2 * first_stage + (1.0 - alpha2) * velocity_ff_stage2_[i];
+    const double alpha2 = 0.15;
+    filtered_velocity = alpha2 * first_stage + (1.0 - alpha2) * velocity_ff_stage2_[i];
 
-      const double max_velocity_change = max_acceleration_ * dt;
-      const double velocity_change = filtered_velocity - velocity_ff_stage2_[i];
-      if (std::abs(velocity_change) > max_velocity_change) {
-        filtered_velocity = velocity_ff_stage2_[i] +
-                            max_velocity_change * (velocity_change > 0 ? 1.0 : -1.0);
-      }
-    } else {
-      filtered_velocity = velocity_ff_stage2_[i] * 0.95;
-      filtered_cmd_velocities_[i] *= 0.95;
+    const double max_velocity_change = max_acceleration_ * dt;
+    const double velocity_change = filtered_velocity - velocity_ff_stage2_[i];
+    if (std::abs(velocity_change) > max_velocity_change) {
+      filtered_velocity = velocity_ff_stage2_[i] +
+                          max_velocity_change * (velocity_change > 0 ? 1.0 : -1.0);
     }
 
     if (std::abs(filtered_velocity) < 0.005) {
@@ -1193,18 +977,6 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     velocity_ff_stage2_[i] = filtered_velocity;
     cmd_positions_motor[i] = cmd_position;
     cmd_velocities_motor[i] = velocity_ff_stage2_[i] * config.direction;
-  }
-
-  if (scalar_sample_valid && scalar_path_debug_pub_ && debug_node_) {
-    sensor_msgs::msg::JointState scalar_msg;
-    scalar_msg.header.stamp = debug_node_->get_clock()->now();
-    for (const auto& cfg : joint_configs_) {
-      scalar_msg.name.push_back(cfg.name);
-    }
-    scalar_msg.position = id_ref_positions;
-    scalar_msg.velocity = id_ref_velocities;
-    scalar_msg.effort = id_ref_accelerations;
-    scalar_path_debug_pub_->publish(scalar_msg);
   }
 
   std::vector<double> pinocchio_gravity_torques;
@@ -1338,6 +1110,8 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       hw_cmd_msg.name.push_back(config.name);
     }
     hw_cmd_msg.position = hw_commands_positions_;
+    hw_cmd_msg.velocity = hw_commands_velocities_;
+    hw_cmd_msg.effort = hw_commands_efforts_;
     hw_cmd_pub_->publish(hw_cmd_msg);
 
     sensor_msgs::msg::JointState smoothed_msg;

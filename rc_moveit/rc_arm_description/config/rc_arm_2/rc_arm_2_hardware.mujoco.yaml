@@ -52,23 +52,11 @@ position_kd: 3.0
 # 硬件层统一速度限制，单位 rad/s
 velocity_limit: 8.0
 
-# 是否启用逐关节 S 曲线平滑
-s_curve_enabled: true
-
-# 是否启用“几何路径 q(s) + 公共标量 s(t)”参数化
-scalar_path_time_enabled: true
-
-# 平滑滤波系数 alpha，越小越平滑
-smoothing_alpha: 0.2
-
-# S 曲线最大速度，单位 rad/s
+# 参考轨迹速度上限，供硬件层监测/限幅使用，单位 rad/s
 max_velocity: 40.0
 
-# S 曲线最大加速度，单位 rad/s^2
+# 参考轨迹加速度上限，供硬件层监测使用，单位 rad/s^2
 max_acceleration: 20.0
-
-# S 曲线最大加加速度，单位 rad/s^3
-max_jerk: 120.0
 
 # 是否启用低刚度模式
 low_stiffness_mode: true
@@ -84,7 +72,7 @@ low_stiffness_torque_bias: 0.0
 
 # j1 低刚度 Kp 覆盖值；
 # 0 表示回退到 low_stiffness_kp
-low_stiffness_kp_j1: 1.5
+low_stiffness_kp_j1: 0.0
 
 # j1 低刚度 Kp 覆盖值；
 # 0 表示回退到 low_stiffness_kp

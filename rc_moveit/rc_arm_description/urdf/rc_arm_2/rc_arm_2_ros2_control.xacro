@@ -29,12 +29,8 @@
           <param name="position_kp">${hardware_config.position_kp}</param>
           <param name="position_kd">${hardware_config.position_kd}</param>
           <param name="velocity_limit">${hardware_config.velocity_limit}</param>
-          <param name="s_curve_enabled">${hardware_config.s_curve_enabled}</param>
-          <param name="scalar_path_time_enabled">${hardware_config.scalar_path_time_enabled}</param>
-          <param name="smoothing_alpha">${hardware_config.smoothing_alpha}</param>
           <param name="max_velocity">${hardware_config.max_velocity}</param>
           <param name="max_acceleration">${hardware_config.max_acceleration}</param>
-          <param name="max_jerk">${hardware_config.max_jerk}</param>
           <param name="low_stiffness_mode">${hardware_config.low_stiffness_mode}</param>
           <param name="low_stiffness_kp">${hardware_config.low_stiffness_kp}</param>
           <param name="low_stiffness_kd">${hardware_config.low_stiffness_kd}</param>

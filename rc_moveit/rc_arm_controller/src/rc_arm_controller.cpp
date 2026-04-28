@@ -34,7 +34,6 @@ controller_interface::InterfaceConfiguration RcArmController::command_interface_
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
   for (const auto & joint_name : joint_names_) {
     config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_POSITION);
-    config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_VELOCITY);
     config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_EFFORT);
   }
   return config;
@@ -46,6 +45,7 @@ controller_interface::InterfaceConfiguration RcArmController::state_interface_co
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
   for (const auto & joint_name : joint_names_) {
     config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_POSITION);
+    config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_VELOCITY);
     config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_EFFORT);
   }
   return config;

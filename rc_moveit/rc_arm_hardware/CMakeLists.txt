@@ -26,8 +26,6 @@ include_directories(include)
 add_library(${PROJECT_NAME} SHARED
   src/rc_arm_hardware.cpp
   src/robstride_can_driver.cpp
-  src/s_curve_generator.cpp
-  src/scalar_path_time_planner.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC

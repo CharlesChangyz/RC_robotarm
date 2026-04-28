@@ -26,8 +26,6 @@
 
 #include "dmbot_serial/dm_motor_driver.hpp"
 #include "rc_arm_hardware/robstride_can_driver.hpp"
-#include "rc_arm_hardware/s_curve_generator.hpp"
-#include "rc_arm_hardware/scalar_path_time_planner.hpp"
 
 // Pinocchio：用于动力学计算
 #include <pinocchio/parsers/urdf.hpp>
@@ -155,19 +153,16 @@ private:
   double position_kd_;
   double velocity_limit_;
   
-  // 位置指令平滑滤波（含速度/加速度/加加速度限制 - S 曲线规划）
-  std::vector<double> smoothed_positions_;     // 平滑后位置指令
-  std::vector<double> smoothed_velocities_;    // 平滑后速度（用于加速度限制）
-  std::vector<double> smoothed_accelerations_; // 平滑后加速度（用于 S 曲线规划）
+  // 参考轨迹缓存
+  std::vector<double> smoothed_positions_;     // 当前执行参考位置
+  std::vector<double> smoothed_velocities_;    // 当前执行参考速度
+  std::vector<double> smoothed_accelerations_; // 当前执行参考加速度
   
   // 速度前馈计算
-  std::vector<double> last_cmd_positions_;          // 上一周期指令位置（用于计算速度前馈）
-  std::vector<double> last_hw_commands_positions_;  // 上一帧 hw_commands（用于判断指令是否更新）
+  std::vector<double> last_cmd_positions_;          // 上一周期指令位置（用于调试/兼容）
   std::vector<double> cmd_velocities_;              // 计算得到的指令速度
   std::vector<double> filtered_cmd_velocities_;     // 一阶滤波后的指令速度
   std::vector<double> velocity_ff_stage2_;          // 二阶滤波中间量（最终发送的速度前馈）
-  double velocity_filter_alpha_;                    // 速度滤波系数 (0-1)
-  double smoothing_alpha_;                          // 平滑系数 (0-1，越小越平滑)
   double max_velocity_;                             // 最大速度限制 (rad/s)
   double max_acceleration_;                         // 最大加速度限制 (rad/s²)
   bool first_command_;                              // 首条指令标志
@@ -195,14 +190,6 @@ private:
   std::vector<double> external_feedback_efforts_;
   std::mutex external_feedback_mutex_;
 
-  // S 曲线轨迹生成器（每个关节一个）
-  std::vector<std::unique_ptr<SCurveGenerator>> s_curve_generators_;
-  bool s_curve_enabled_;                      // 是否启用 S 曲线规划
-
-  // 公共标量路径参数化（方案 A：q(s) + s(t)）
-  std::unique_ptr<ScalarPathTimePlanner> scalar_path_planner_;
-  bool scalar_path_time_enabled_;
-  
   // ============ 零力矩模式与重力补偿 ============
   // 零力矩模式
   bool zero_torque_mode_;           // 是否启用零力矩模式
@@ -318,7 +305,6 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr final_cmd_joint_frame_pub_;  // MuJoCo 使用的关节坐标系控制包
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr final_pd_pub_;      // 最终下发 PD 参数(kp/kd)
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr final_torque_ff_pub_; // 最终前馈力矩(joint frame)
-  rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr scalar_path_debug_pub_; // 公共标量路径调试（q/v/a）
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr mujoco_command_pub_; // MuJoCo 命令输出
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr external_feedback_sub_;
 
@@ -329,7 +315,6 @@ private:
   double limit_margin_;              // 开始减速的余量 (rad)
   double limit_stop_margin_;         // 硬停止余量 (rad)
   double limit_decel_factor_;        // 接近限位时的减速系数 (0-1)
-  double max_jerk_;                  // 最大加加速度限制 (rad/s³) - S 曲线规划
   std::vector<bool> joint_at_limit_; // 每个关节是否处于限位区
   std::vector<int> limit_warn_counter_;  // 限位告警计数（避免刷屏）
   
