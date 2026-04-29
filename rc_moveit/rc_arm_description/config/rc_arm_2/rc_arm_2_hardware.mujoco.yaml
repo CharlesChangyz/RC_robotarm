@@ -72,33 +72,29 @@ low_stiffness_torque_bias: 0.0
 
 # j1 低刚度 Kp 覆盖值；
 # 0 表示回退到 low_stiffness_kp
-low_stiffness_kp_j1: 0.0
-
-# j1 低刚度 Kp 覆盖值；
-# 0 表示回退到 low_stiffness_kp
-low_stiffness_kp_j1: 0.0
+low_stiffness_kp_j1: 1.5
 
 # j1 低刚度 Kd 覆盖值；
 # 0 表示回退到 low_stiffness_kd
-low_stiffness_kd_j1: 0.0
+low_stiffness_kd_j1: 1.0
 
 # j2 低刚度 Kp 覆盖值
-low_stiffness_kp_j2: 0.0
+low_stiffness_kp_j2: 20.0
 
 # j2 低刚度 Kd 覆盖值
-low_stiffness_kd_j2: 0.0
+low_stiffness_kd_j2: 4.0
 
 # j3 低刚度 Kp 覆盖值
-low_stiffness_kp_j3: 0.0
+low_stiffness_kp_j3: 10.0
 
 # j3 低刚度 Kd 覆盖值
-low_stiffness_kd_j3: 0.0
+low_stiffness_kd_j3: 2.0
 
 # j4 低刚度 Kp 覆盖值
-low_stiffness_kp_j4: 0.0
+low_stiffness_kp_j4: 5.0
 
 # j4 低刚度 Kd 覆盖值
-low_stiffness_kd_j4: 0.0
+low_stiffness_kd_j4: 1.0
 
 # 是否启用 Pinocchio 重力补偿项
 use_pinocchio_gravity: false

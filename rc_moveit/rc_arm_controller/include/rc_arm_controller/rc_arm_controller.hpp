@@ -41,6 +41,7 @@ private:
     double time_from_start{0.0};
     std::vector<double> position;
     std::vector<double> velocity;
+    std::vector<double> acceleration;
     std::vector<double> effort;
   };
 

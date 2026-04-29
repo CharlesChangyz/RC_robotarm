@@ -34,6 +34,8 @@ controller_interface::InterfaceConfiguration RcArmController::command_interface_
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
   for (const auto & joint_name : joint_names_) {
     config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_POSITION);
+    config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_VELOCITY);
+    config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_ACCELERATION);
     config.names.push_back(joint_name + "/" + hardware_interface::HW_IF_EFFORT);
   }
   return config;
@@ -85,20 +87,20 @@ controller_interface::CallbackReturn RcArmController::on_configure(
 controller_interface::CallbackReturn RcArmController::on_activate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  if (command_interfaces_.size() != joint_names_.size() * 3U) {
+  if (command_interfaces_.size() != joint_names_.size() * 4U) {
     RCLCPP_ERROR(
       get_node()->get_logger(),
       "expected %zu command interfaces, got %zu",
-      joint_names_.size() * 3U,
+      joint_names_.size() * 4U,
       command_interfaces_.size());
     return controller_interface::CallbackReturn::ERROR;
   }
 
-  if (state_interfaces_.size() != joint_names_.size() * 2U) {
+  if (state_interfaces_.size() != joint_names_.size() * 3U) {
     RCLCPP_ERROR(
       get_node()->get_logger(),
       "expected %zu state interfaces, got %zu",
-      joint_names_.size() * 2U,
+      joint_names_.size() * 3U,
       state_interfaces_.size());
     return controller_interface::CallbackReturn::ERROR;
   }
@@ -297,6 +299,10 @@ bool RcArmController::normalize_trajectory(
       error = "velocities size does not match joint count";
       return false;
     }
+    if (!point.accelerations.empty() && point.accelerations.size() != msg.joint_names.size()) {
+      error = "accelerations size does not match joint count";
+      return false;
+    }
     if (!point.effort.empty() && point.effort.size() != msg.joint_names.size()) {
       error = "effort size does not match joint count";
       return false;
@@ -314,7 +320,8 @@ bool RcArmController::normalize_trajectory(
     TrajectoryPoint normalized;
     normalized.time_from_start = point_time;
     normalized.position.resize(joint_names_.size(), 0.0);
-    normalized.velocity.resize(joint_names_.size(), 0.0);
+    normalized.velocity.resize(joint_names_.size(), std::numeric_limits<double>::quiet_NaN());
+    normalized.acceleration.resize(joint_names_.size(), std::numeric_limits<double>::quiet_NaN());
     normalized.effort.resize(joint_names_.size(), 0.0);
 
     for (size_t controller_index = 0; controller_index < permutation.size(); ++controller_index) {
@@ -322,6 +329,9 @@ bool RcArmController::normalize_trajectory(
       normalized.position[controller_index] = point.positions[source_index];
       if (!point.velocities.empty()) {
         normalized.velocity[controller_index] = point.velocities[source_index];
+      }
+      if (!point.accelerations.empty()) {
+        normalized.acceleration[controller_index] = point.accelerations[source_index];
       }
       if (!point.effort.empty()) {
         normalized.effort[controller_index] = point.effort[source_index];
@@ -367,14 +377,22 @@ RcArmController::TrajectoryPoint RcArmController::sample_trajectory(
     TrajectoryPoint sampled;
     sampled.time_from_start = elapsed_sec;
     sampled.position.resize(joint_names_.size(), 0.0);
-    sampled.velocity.resize(joint_names_.size(), 0.0);
+    sampled.velocity.resize(joint_names_.size(), std::numeric_limits<double>::quiet_NaN());
+    sampled.acceleration.resize(joint_names_.size(), std::numeric_limits<double>::quiet_NaN());
     sampled.effort.resize(joint_names_.size(), 0.0);
 
     for (size_t joint_index = 0; joint_index < joint_names_.size(); ++joint_index) {
       sampled.position[joint_index] =
         start.position[joint_index] + alpha * (stop.position[joint_index] - start.position[joint_index]);
-      sampled.velocity[joint_index] =
-        start.velocity[joint_index] + alpha * (stop.velocity[joint_index] - start.velocity[joint_index]);
+      if (std::isfinite(start.velocity[joint_index]) && std::isfinite(stop.velocity[joint_index])) {
+        sampled.velocity[joint_index] =
+          start.velocity[joint_index] + alpha * (stop.velocity[joint_index] - start.velocity[joint_index]);
+      }
+      if (std::isfinite(start.acceleration[joint_index]) && std::isfinite(stop.acceleration[joint_index])) {
+        sampled.acceleration[joint_index] =
+          start.acceleration[joint_index] +
+          alpha * (stop.acceleration[joint_index] - start.acceleration[joint_index]);
+      }
       sampled.effort[joint_index] =
         start.effort[joint_index] + alpha * (stop.effort[joint_index] - start.effort[joint_index]);
     }
@@ -413,19 +431,21 @@ std::vector<size_t> RcArmController::build_joint_permutation(
 void RcArmController::set_hold_command_from_current_state()
 {
   for (size_t i = 0; i < joint_names_.size(); ++i) {
-    const double position = state_interfaces_[2 * i].get_value();
-    command_interfaces_[3 * i].set_value(position);
-    command_interfaces_[3 * i + 1].set_value(0.0);
-    command_interfaces_[3 * i + 2].set_value(0.0);
+    const double position = state_interfaces_[3 * i].get_value();
+    command_interfaces_[4 * i].set_value(position);
+    command_interfaces_[4 * i + 1].set_value(0.0);
+    command_interfaces_[4 * i + 2].set_value(0.0);
+    command_interfaces_[4 * i + 3].set_value(0.0);
   }
 }
 
 void RcArmController::set_command_from_point(const TrajectoryPoint & point)
 {
   for (size_t i = 0; i < joint_names_.size(); ++i) {
-    command_interfaces_[3 * i].set_value(point.position[i]);
-    command_interfaces_[3 * i + 1].set_value(point.velocity[i]);
-    command_interfaces_[3 * i + 2].set_value(point.effort[i]);
+    command_interfaces_[4 * i].set_value(point.position[i]);
+    command_interfaces_[4 * i + 1].set_value(point.velocity[i]);
+    command_interfaces_[4 * i + 2].set_value(point.acceleration[i]);
+    command_interfaces_[4 * i + 3].set_value(point.effort[i]);
   }
 }
 
@@ -443,20 +463,27 @@ void RcArmController::publish_feedback(
   feedback->joint_names = joint_names_;
   feedback->desired.positions = desired.position;
   feedback->desired.velocities = desired.velocity;
+  feedback->desired.accelerations = desired.acceleration;
   feedback->desired.effort = desired.effort;
   feedback->actual.positions.resize(joint_names_.size(), 0.0);
-  feedback->actual.effort.resize(joint_names_.size(), 0.0);
   feedback->actual.velocities.resize(joint_names_.size(), 0.0);
+  feedback->actual.accelerations.resize(joint_names_.size(), 0.0);
+  feedback->actual.effort.resize(joint_names_.size(), 0.0);
   feedback->error.positions.resize(joint_names_.size(), 0.0);
-  feedback->error.effort.resize(joint_names_.size(), 0.0);
   feedback->error.velocities.resize(joint_names_.size(), 0.0);
+  feedback->error.accelerations.resize(joint_names_.size(), 0.0);
+  feedback->error.effort.resize(joint_names_.size(), 0.0);
 
   for (size_t i = 0; i < joint_names_.size(); ++i) {
-    const double actual_position = state_interfaces_[2 * i].get_value();
-    const double actual_effort = state_interfaces_[2 * i + 1].get_value();
+    const double actual_position = state_interfaces_[3 * i].get_value();
+    const double actual_velocity = state_interfaces_[3 * i + 1].get_value();
+    const double actual_effort = state_interfaces_[3 * i + 2].get_value();
     feedback->actual.positions[i] = actual_position;
+    feedback->actual.velocities[i] = actual_velocity;
     feedback->actual.effort[i] = actual_effort;
     feedback->error.positions[i] = desired.position[i] - actual_position;
+    feedback->error.velocities[i] = desired.velocity[i] - actual_velocity;
+    feedback->error.accelerations[i] = desired.acceleration[i];
     feedback->error.effort[i] = desired.effort[i] - actual_effort;
   }
 

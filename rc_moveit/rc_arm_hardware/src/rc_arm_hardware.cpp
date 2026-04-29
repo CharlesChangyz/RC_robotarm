@@ -194,6 +194,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   hw_temperatures_.resize(num_joints, 0.0);
   hw_commands_positions_.resize(num_joints, 0.0);
   hw_commands_velocities_.resize(num_joints, 0.0);
+  hw_commands_accelerations_.resize(num_joints, 0.0);
   hw_commands_efforts_.resize(num_joints, 0.0);
   final_cmd_positions_.resize(num_joints, 0.0);
   final_cmd_velocities_.resize(num_joints, 0.0);
@@ -303,6 +304,8 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   final_cmd_joint_frame_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/final_joint_command_joint_frame", 10);
   final_pd_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/final_pd_gains", 10);
   final_torque_ff_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/final_joint_torque_ff", 10);
+  j2_qd_ref_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>("/debug/j2_qd_ref", 10);
+  j2_qd_actual_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>("/debug/j2_qd_actual", 10);
   mujoco_command_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>(mujoco_command_topic_, 10);
 
   if (external_feedback_enabled_) {
@@ -313,7 +316,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   }
   
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "调试发布器已创建：/debug/hw_command, /debug/smoothed_command, /debug/gravity_torque, /debug/velocity_feedforward, /debug/motor_temperature, /debug/final_joint_command, /debug/final_joint_command_joint_frame, /debug/final_pd_gains, /debug/final_joint_torque_ff");
+              "调试发布器已创建：/debug/hw_command, /debug/smoothed_command, /debug/gravity_torque, /debug/velocity_feedforward, /debug/motor_temperature, /debug/final_joint_command, /debug/final_joint_command_joint_frame, /debug/final_pd_gains, /debug/final_joint_torque_ff, /debug/j2_qd_ref, /debug/j2_qd_actual");
 
   // ============ 初始化重力补偿参数 ============
   gravity_params_.resize(num_joints);
@@ -664,6 +667,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_activate(
     const double initial_position = hw_positions_[i];
     hw_commands_positions_[i] = initial_position;
     hw_commands_velocities_[i] = 0.0;
+    hw_commands_accelerations_[i] = 0.0;
     hw_commands_efforts_[i] = 0.0;
     smoothed_positions_[i] = initial_position;
     smoothed_velocities_[i] = 0.0;
@@ -723,6 +727,9 @@ std::vector<hardware_interface::StateInterface> RsA3HardwareInterface::export_st
         joint_configs_[i].name, hardware_interface::HW_IF_POSITION, &hw_positions_[i]));
     state_interfaces.emplace_back(
       hardware_interface::StateInterface(
+        joint_configs_[i].name, hardware_interface::HW_IF_VELOCITY, &hw_velocities_[i]));
+    state_interfaces.emplace_back(
+      hardware_interface::StateInterface(
         joint_configs_[i].name, hardware_interface::HW_IF_EFFORT, &hw_efforts_[i]));
     // Add temperature state interface
     state_interfaces.emplace_back(
@@ -746,6 +753,9 @@ std::vector<hardware_interface::CommandInterface> RsA3HardwareInterface::export_
         joint_configs_[i].name, hardware_interface::HW_IF_VELOCITY, &hw_commands_velocities_[i]));
     command_interfaces.emplace_back(
       hardware_interface::CommandInterface(
+        joint_configs_[i].name, hardware_interface::HW_IF_ACCELERATION, &hw_commands_accelerations_[i]));
+    command_interfaces.emplace_back(
+      hardware_interface::CommandInterface(
         joint_configs_[i].name, hardware_interface::HW_IF_EFFORT, &hw_commands_efforts_[i]));
   }
   
@@ -764,20 +774,29 @@ void RsA3HardwareInterface::externalFeedbackCallback(
     std::lock_guard<std::mutex> lock(external_feedback_mutex_);
 
     const size_t joint_count = joint_configs_.size();
-    const size_t position_count = std::min(joint_count, msg->position.size());
-    const size_t velocity_count = std::min(joint_count, msg->velocity.size());
-    const size_t effort_count = std::min(joint_count, msg->effort.size());
+    const bool has_name_mapping = !msg->name.empty();
 
-    // 不再按 name 匹配，直接按数组顺序映射：第 i 个消息元素 -> 第 i 个关节
-    for (size_t i = 0; i < position_count; ++i) {
-      external_feedback_positions_[i] = msg->position[i];
-      got_any_position = true;
-    }
-    for (size_t i = 0; i < velocity_count; ++i) {
-      external_feedback_velocities_[i] = msg->velocity[i];
-    }
-    for (size_t i = 0; i < effort_count; ++i) {
-      external_feedback_efforts_[i] = msg->effort[i];
+    for (size_t joint_idx = 0; joint_idx < joint_count; ++joint_idx) {
+      size_t msg_idx = joint_idx;
+
+      if (has_name_mapping) {
+        const auto it = std::find(msg->name.begin(), msg->name.end(), joint_configs_[joint_idx].name);
+        if (it == msg->name.end()) {
+          continue;
+        }
+        msg_idx = static_cast<size_t>(std::distance(msg->name.begin(), it));
+      }
+
+      if (msg_idx < msg->position.size()) {
+        external_feedback_positions_[joint_idx] = msg->position[msg_idx];
+        got_any_position = true;
+      }
+      if (msg_idx < msg->velocity.size()) {
+        external_feedback_velocities_[joint_idx] = msg->velocity[msg_idx];
+      }
+      if (msg_idx < msg->effort.size()) {
+        external_feedback_efforts_[joint_idx] = msg->effort[msg_idx];
+      }
     }
 
     if (got_any_position || !msg->velocity.empty() || !msg->effort.empty()) {
@@ -883,7 +902,7 @@ hardware_interface::return_type RsA3HardwareInterface::write(
 
     first_command_ = false;
     RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-                "收到首条指令，初始化执行参考（直接跟随上层 position/velocity）");
+                "收到首条指令，初始化执行参考（直接跟随上层 position/velocity/acceleration）");
   }
 
   std::vector<double> cmd_positions_motor(joint_configs_.size(), 0.0);
@@ -901,15 +920,17 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     const double prev_velocity = smoothed_velocities_[i];
 
     double new_position = target_position;
-    double new_velocity = 0.0;
+    double new_velocity = (new_position - prev_position) / dt;
     double new_acceleration = 0.0;
 
-    new_velocity = (new_position - prev_position) / dt;
-
-    if (std::isfinite(hw_commands_velocities_[i]) && std::abs(hw_commands_velocities_[i]) > 1e-6) {
+    if (std::isfinite(hw_commands_velocities_[i])) {
       new_velocity = std::clamp(hw_commands_velocities_[i], -config.velocity_limit, config.velocity_limit);
     }
-    new_acceleration = (new_velocity - prev_velocity) / dt;
+    if (std::isfinite(hw_commands_accelerations_[i])) {
+      new_acceleration = hw_commands_accelerations_[i];
+    } else {
+      new_acceleration = (new_velocity - prev_velocity) / dt;
+    }
 
     if (std::abs(new_velocity) > config.velocity_limit * 1.05) {
       RCLCPP_WARN_THROTTLE(
@@ -979,15 +1000,27 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     cmd_velocities_motor[i] = velocity_ff_stage2_[i] * config.direction;
   }
 
-  std::vector<double> pinocchio_gravity_torques;
+  std::vector<double> pinocchio_gravity_torques_actual;
   if (pinocchio_initialized_ && (use_pinocchio_gravity_ || use_pinocchio_inverse_dynamics_)) {
-    pinocchio_gravity_torques = computePinocchioGravity(hw_positions_);
+    pinocchio_gravity_torques_actual = computePinocchioGravity(hw_positions_);
   }
 
   std::vector<double> pinocchio_id_torques;
   if (use_pinocchio_inverse_dynamics_ && pinocchio_initialized_) {
     pinocchio_id_torques = computePinocchioInverseDynamics(
       id_ref_positions, id_ref_velocities, id_ref_accelerations);
+  }
+  std::vector<double> pinocchio_gravity_torques_ref;
+  if (use_pinocchio_inverse_dynamics_ && pinocchio_initialized_) {
+    pinocchio_gravity_torques_ref = computePinocchioGravity(id_ref_positions);
+  }
+  std::vector<double> pinocchio_dynamic_only_torques(joint_configs_.size(), 0.0);
+  if (pinocchio_initialized_) {
+    for (size_t i = 0; i < joint_configs_.size(); ++i) {
+      if (i < pinocchio_id_torques.size() && i < pinocchio_gravity_torques_ref.size()) {
+        pinocchio_dynamic_only_torques[i] = pinocchio_id_torques[i] - pinocchio_gravity_torques_ref[i];
+      }
+    }
   }
 
   if (last_tau_for_spike_check.size() != joint_configs_.size()) {
@@ -1000,8 +1033,8 @@ hardware_interface::return_type RsA3HardwareInterface::write(
 
     double gravity_torque = 0.0;
     if (gravity_comp_enabled_ || (use_pinocchio_gravity_ && pinocchio_initialized_)) {
-      if (use_pinocchio_gravity_ && pinocchio_initialized_ && i < pinocchio_gravity_torques.size()) {
-        gravity_torque = pinocchio_gravity_torques[i] * gravity_feedforward_ratio_;
+      if (use_pinocchio_gravity_ && pinocchio_initialized_ && i < pinocchio_gravity_torques_actual.size()) {
+        gravity_torque = pinocchio_gravity_torques_actual[i] * gravity_feedforward_ratio_;
       } else {
         gravity_torque = computeGravityTorque(i, hw_positions_[i]) * gravity_feedforward_ratio_;
       }
@@ -1010,8 +1043,8 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     double model_feedforward_torque = gravity_torque;
     if (use_pinocchio_inverse_dynamics_ && pinocchio_initialized_ && i < pinocchio_id_torques.size()) {
       model_feedforward_torque = pinocchio_id_torques[i];
-      if (i < pinocchio_gravity_torques.size()) {
-        model_feedforward_torque -= (1.0 - gravity_feedforward_ratio_) * pinocchio_gravity_torques[i];
+      if (i < pinocchio_gravity_torques_ref.size()) {
+        model_feedforward_torque -= (1.0 - gravity_feedforward_ratio_) * pinocchio_gravity_torques_ref[i];
       }
     }
 
@@ -1031,8 +1064,8 @@ hardware_interface::return_type RsA3HardwareInterface::write(
 
       if ((use_pinocchio_gravity_ || use_pinocchio_inverse_dynamics_) &&
           pinocchio_initialized_ &&
-          i < pinocchio_gravity_torques.size()) {
-        cmd_torque = pinocchio_gravity_torques[i];
+          i < pinocchio_gravity_torques_actual.size()) {
+        cmd_torque = pinocchio_gravity_torques_actual[i];
       } else {
         cmd_torque = computeGravityTorque(i, hw_positions_[i]);
       }
@@ -1142,9 +1175,27 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     }
     velocity_ff_msg.velocity = velocity_ff_stage2_;
     velocity_ff_pub_->publish(velocity_ff_msg);
+
+    if (j2_qd_ref_pub_ && j2_qd_actual_pub_) {
+      std_msgs::msg::Float64 qd_ref_msg;
+      std_msgs::msg::Float64 qd_actual_msg;
+      if (smoothed_velocities_.size() > 1) {
+        qd_ref_msg.data = smoothed_velocities_[1];
+      } else {
+        qd_ref_msg.data = 0.0;
+      }
+      if (hw_velocities_.size() > 1) {
+        qd_actual_msg.data = hw_velocities_[1];
+      } else {
+        qd_actual_msg.data = 0.0;
+      }
+      j2_qd_ref_pub_->publish(qd_ref_msg);
+      j2_qd_actual_pub_->publish(qd_actual_msg);
+    }
   }
 
-  if (debug_node_ && final_cmd_pub_ && final_cmd_joint_frame_pub_ && final_pd_pub_ && final_torque_ff_pub_) {
+  if (debug_node_ && final_cmd_pub_ && final_cmd_joint_frame_pub_ && final_pd_pub_ &&
+      final_torque_ff_pub_) {
     auto now = debug_node_->get_clock()->now();
 
     sensor_msgs::msg::JointState final_cmd_msg;

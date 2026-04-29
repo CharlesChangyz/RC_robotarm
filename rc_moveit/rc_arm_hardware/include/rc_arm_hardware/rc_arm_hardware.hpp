@@ -22,6 +22,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+#include "std_msgs/msg/float64.hpp"
 #include "std_srvs/srv/set_bool.hpp"
 
 #include "dmbot_serial/dm_motor_driver.hpp"
@@ -140,6 +141,7 @@ private:
   // 指令接口数据
   std::vector<double> hw_commands_positions_;
   std::vector<double> hw_commands_velocities_;
+  std::vector<double> hw_commands_accelerations_;
   std::vector<double> hw_commands_efforts_;
   std::vector<double> final_cmd_positions_;   // 实际发送控制中的关节目标位置
   std::vector<double> final_cmd_velocities_;  // 实际发送控制中的关节目标速度
@@ -305,6 +307,8 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr final_cmd_joint_frame_pub_;  // MuJoCo 使用的关节坐标系控制包
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr final_pd_pub_;      // 最终下发 PD 参数(kp/kd)
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr final_torque_ff_pub_; // 最终前馈力矩(joint frame)
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j2_qd_ref_pub_;           // j2 当前参考速度
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j2_qd_actual_pub_;        // j2 当前实际反馈速度
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr mujoco_command_pub_; // MuJoCo 命令输出
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr external_feedback_sub_;
 

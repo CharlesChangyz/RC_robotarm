@@ -743,7 +743,7 @@ namespace damiao
             float receive_dq = uint_to_float(dq_uint, V_MIN_4340, V_MAX_4340, 12);
             float receive_tau = uint_to_float(tau_uint, T_MIN_4340, T_MAX_4340, 12);
             
-            //std::cout << "[Rx Motor ID: " << int(motor_id) << "] Pos: " << receive_q << " Vel: " << receive_dq << " Tau: " << receive_tau << std::endl;
+            std::cout << "[Rx Motor ID: " << int(motor_id) << "] Pos: " << receive_q << " Vel: " << receive_dq << " Tau: " << receive_tau << std::endl;
            
             //std::cout<< "a" <<std::endl;
             current_motor_pos[motor_id] = receive_q;

@@ -65,11 +65,13 @@
           <param name="min">-12.0</param>
           <param name="max">12.0</param>
         </command_interface>
+        <command_interface name="acceleration"/>
         <command_interface name="effort">
           <param name="min">-14.0</param>
           <param name="max">14.0</param>
         </command_interface>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
@@ -92,11 +94,13 @@
           <param name="min">-12.0</param>
           <param name="max">12.0</param>
         </command_interface>
+        <command_interface name="acceleration"/>
         <command_interface name="effort">
           <param name="min">-14.0</param>
           <param name="max">14.0</param>
         </command_interface>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
@@ -119,11 +123,13 @@
           <param name="min">-12.0</param>
           <param name="max">12.0</param>
         </command_interface>
+        <command_interface name="acceleration"/>
         <command_interface name="effort">
           <param name="min">-14.0</param>
           <param name="max">14.0</param>
         </command_interface>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
@@ -146,11 +152,13 @@
           <param name="min">-20.0</param>
           <param name="max">20.0</param>
         </command_interface>
+        <command_interface name="acceleration"/>
         <command_interface name="effort">
           <param name="min">-6.0</param>
           <param name="max">6.0</param>
         </command_interface>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
