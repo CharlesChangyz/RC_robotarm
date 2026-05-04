@@ -143,12 +143,12 @@ private:
   std::vector<double> hw_commands_velocities_;
   std::vector<double> hw_commands_accelerations_;
   std::vector<double> hw_commands_efforts_;
-  std::vector<double> final_cmd_positions_;   // 实际发送控制中的关节目标位置
-  std::vector<double> final_cmd_velocities_;  // 实际发送控制中的关节目标速度
-  std::vector<double> final_cmd_efforts_;     // 实际发送控制中的关节力矩
+  std::vector<double> final_cmd_positions_;   // 最终控制包（joint frame）中的目标位置
+  std::vector<double> final_cmd_velocities_;  // 最终控制包（joint frame）中的目标速度
+  std::vector<double> final_cmd_efforts_;     // 最终控制包（joint frame）中的目标力矩
   std::vector<double> final_cmd_kps_;         // 实际发送控制中的 Kp
   std::vector<double> final_cmd_kds_;         // 实际发送控制中的 Kd
-  std::vector<double> final_cmd_torque_ff_;   // 最终前馈力矩（与电机同坐标系，供调试/桥接拆分）
+  std::vector<double> final_cmd_torque_ff_;   // 最终前馈力矩（joint frame，供调试/桥接拆分）
   
   // 控制参数
   double position_kp_;

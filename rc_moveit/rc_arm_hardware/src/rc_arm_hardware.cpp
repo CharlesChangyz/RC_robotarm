@@ -907,6 +907,9 @@ hardware_interface::return_type RsA3HardwareInterface::write(
 
   std::vector<double> cmd_positions_motor(joint_configs_.size(), 0.0);
   std::vector<double> cmd_velocities_motor(joint_configs_.size(), 0.0);
+  std::vector<double> final_motor_positions(joint_configs_.size(), 0.0);
+  std::vector<double> final_motor_velocities(joint_configs_.size(), 0.0);
+  std::vector<double> final_motor_efforts(joint_configs_.size(), 0.0);
 
   std::vector<double> id_ref_positions = smoothed_positions_;
   std::vector<double> id_ref_velocities = smoothed_velocities_;
@@ -1055,7 +1058,7 @@ hardware_interface::return_type RsA3HardwareInterface::write(
 
     double motor_kp = 0.0;
     double motor_kd = 0.0;
-    double cmd_torque = 0.0;
+    double joint_cmd_torque = 0.0;
     double final_cmd_position = cmd_positions_motor[i];
 
     if (zero_torque_mode_) {
@@ -1065,29 +1068,29 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       if ((use_pinocchio_gravity_ || use_pinocchio_inverse_dynamics_) &&
           pinocchio_initialized_ &&
           i < pinocchio_gravity_torques_actual.size()) {
-        cmd_torque = pinocchio_gravity_torques_actual[i];
+        joint_cmd_torque = pinocchio_gravity_torques_actual[i];
       } else {
-        cmd_torque = computeGravityTorque(i, hw_positions_[i]);
+        joint_cmd_torque = computeGravityTorque(i, hw_positions_[i]);
       }
 
       final_cmd_position = hw_positions_[i] * config.direction + config.position_offset;
     } else if (low_stiffness_mode_) {
       motor_kp = low_joint_kp;
       motor_kd = low_joint_kd;
-      cmd_torque = model_feedforward_torque + low_stiffness_torque_bias_;
+      joint_cmd_torque = model_feedforward_torque + low_stiffness_torque_bias_;
     } else {
       const double joint_kp = (config.kp > 0.0) ? config.kp : position_kp_;
       const double joint_kd = (config.kd > 0.0) ? config.kd : position_kd_;
       motor_kp = std::clamp(joint_kp, 0.0, 500.0);
       motor_kd = std::clamp(joint_kd, 0.0, 5.0);
-      cmd_torque = model_feedforward_torque;
+      joint_cmd_torque = model_feedforward_torque;
     }
 
-    cmd_torque += hw_commands_efforts_[i];
+    joint_cmd_torque += hw_commands_efforts_[i];
 
-    cmd_torque = std::clamp(cmd_torque, params.t_min, params.t_max);
+    joint_cmd_torque = std::clamp(joint_cmd_torque, params.t_min, params.t_max);
 
-    const double tau_jump = std::abs(cmd_torque - last_tau_for_spike_check[i]);
+    const double tau_jump = std::abs(joint_cmd_torque - last_tau_for_spike_check[i]);
     if (tau_jump > 4.0) {
       RCLCPP_WARN_THROTTLE(
         rclcpp::get_logger("RsA3HardwareInterface"),
@@ -1097,25 +1100,30 @@ hardware_interface::return_type RsA3HardwareInterface::write(
         config.name.c_str(),
         tau_jump);
     }
-    last_tau_for_spike_check[i] = cmd_torque;
+    last_tau_for_spike_check[i] = joint_cmd_torque;
 
     const double final_cmd_velocity = zero_torque_mode_ ? 0.0 : cmd_velocities_motor[i];
+    const double final_motor_torque = joint_cmd_torque * config.direction;
 
     final_cmd_positions_[i] = (final_cmd_position - config.position_offset) * config.direction;
     final_cmd_velocities_[i] = final_cmd_velocity * config.direction;
-    final_cmd_efforts_[i] = cmd_torque;
+    final_cmd_efforts_[i] = joint_cmd_torque;
     final_cmd_kps_[i] = motor_kp;
     final_cmd_kds_[i] = motor_kd;
-    final_cmd_torque_ff_[i] = cmd_torque;
+    final_cmd_torque_ff_[i] = joint_cmd_torque;
+
+    final_motor_positions[i] = final_cmd_position;
+    final_motor_velocities[i] = final_cmd_velocity;
+    final_motor_efforts[i] = final_motor_torque;
   }
 
   if (backend_mode_ == BackendMode::REAL && real_backend_ready) {
     if (!dm_driver_->writeCommands(
-          final_cmd_positions_,
-          final_cmd_velocities_,
+          final_motor_positions,
+          final_motor_velocities,
           final_cmd_kps_,
           final_cmd_kds_,
-          final_cmd_efforts_)) {
+          final_motor_efforts)) {
       static int warn_counter = 0;
       if (warn_counter++ % 1000 == 0) {
         RCLCPP_WARN(rclcpp::get_logger("RsA3HardwareInterface"),
@@ -1211,25 +1219,21 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       final_torque_ff_msg.name.push_back(config.name);
     }
 
-    final_cmd_msg.position = final_cmd_positions_;
-    final_cmd_msg.velocity = final_cmd_velocities_;
-    final_cmd_msg.effort = final_cmd_efforts_;
+    final_cmd_msg.position = final_motor_positions;
+    final_cmd_msg.velocity = final_motor_velocities;
+    final_cmd_msg.effort = final_motor_efforts;
 
     sensor_msgs::msg::JointState final_cmd_joint_frame_msg;
     final_cmd_joint_frame_msg.header.stamp = now;
     final_cmd_joint_frame_msg.name = final_cmd_msg.name;
     final_cmd_joint_frame_msg.position = final_cmd_positions_;
     final_cmd_joint_frame_msg.velocity = final_cmd_velocities_;
-    for (size_t i = 0; i < final_cmd_efforts_.size() && i < joint_configs_.size(); ++i) {
-      final_cmd_joint_frame_msg.effort.push_back(final_cmd_efforts_[i] * joint_configs_[i].direction);
-    }
+    final_cmd_joint_frame_msg.effort = final_cmd_efforts_;
 
     final_pd_msg.position = final_cmd_kps_;
     final_pd_msg.velocity = final_cmd_kds_;
 
-    for (size_t i = 0; i < final_cmd_torque_ff_.size() && i < joint_configs_.size(); ++i) {
-      final_torque_ff_msg.effort.push_back(final_cmd_torque_ff_[i] * joint_configs_[i].direction);
-    }
+    final_torque_ff_msg.effort = final_cmd_torque_ff_;
 
     final_cmd_pub_->publish(final_cmd_msg);
     final_cmd_joint_frame_pub_->publish(final_cmd_joint_frame_msg);
@@ -1528,7 +1532,7 @@ std::vector<double> RsA3HardwareInterface::computePinocchioGravity(
         scale = inertia_scale_params_[i].mass_scale;
       }
 
-      gravity_torques[i] = tau[v_idx] * scale * joint_configs_[i].direction;
+      gravity_torques[i] = tau[v_idx] * scale;
     }
 
   } catch (const std::exception& e) {
@@ -1586,7 +1590,7 @@ std::vector<double> RsA3HardwareInterface::computePinocchioInverseDynamics(
       if (!use_calibrated_inertia_ && i < inertia_scale_params_.size()) {
         scale = inertia_scale_params_[i].mass_scale;
       }
-      id_torques[i] = tau[v_idx] * scale * joint_configs_[i].direction;
+      id_torques[i] = tau[v_idx] * scale;
     }
   } catch (const std::exception& e) {
     RCLCPP_WARN_THROTTLE(rclcpp::get_logger("RsA3HardwareInterface"),

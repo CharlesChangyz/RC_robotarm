@@ -50,7 +50,7 @@
         <param name="motor_id">${hardware_config.motor_id_j1}</param>
         <param name="motor_type">RS00</param>
         <param name="position_offset">0.0</param>
-        <param name="direction">-1.0</param>
+        <param name="direction">1.0</param>
         <param name="low_stiffness_kp">${hardware_config.low_stiffness_kp_j1}</param>
         <param name="low_stiffness_kd">${hardware_config.low_stiffness_kd_j1}</param>
         <command_interface name="position">
@@ -79,7 +79,7 @@
         <param name="motor_id">${hardware_config.motor_id_j2}</param>
         <param name="motor_type">RS00</param>
         <param name="position_offset">0.0</param>
-        <param name="direction">-1.0</param>
+        <param name="direction">1.0</param>
         <param name="low_stiffness_kp">${hardware_config.low_stiffness_kp_j2}</param>
         <param name="low_stiffness_kd">${hardware_config.low_stiffness_kd_j2}</param>
         <command_interface name="position">
