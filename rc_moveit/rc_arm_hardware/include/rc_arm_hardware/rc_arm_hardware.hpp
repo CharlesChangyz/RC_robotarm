@@ -22,6 +22,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float64.hpp"
 #include "std_srvs/srv/set_bool.hpp"
 
@@ -50,12 +51,25 @@ struct JointConfig
   double direction;  // 1.0 or -1.0
   double lower_limit;  // Joint lower limit (rad)
   double upper_limit;  // Joint upper limit (rad)
-  double kp;           // 关节独立 Kp（0 表示使用全局默认值）
-  double kd;           // 关节独立 Kd（0 表示使用全局默认值）
-  double low_stiffness_kp;  // 低刚度模式关节独立 Kp（0 表示使用全局默认值）
-  double low_stiffness_kd;  // 低刚度模式关节独立 Kd（0 表示使用全局默认值）
+  double unloaded_kp;           // 空载关节独立 Kp（0 表示使用全局默认值）
+  double unloaded_kd;           // 空载关节独立 Kd（0 表示使用全局默认值）
+  double unloaded_low_stiffness_kp;  // 空载低刚度模式关节独立 Kp（0 表示使用全局默认值）
+  double unloaded_low_stiffness_kd;  // 空载低刚度模式关节独立 Kd（0 表示使用全局默认值）
+  double payload_kp;            // 带载关节独立 Kp（0 表示使用全局默认值）
+  double payload_kd;            // 带载关节独立 Kd（0 表示使用全局默认值）
+  double payload_low_stiffness_kp;   // 带载低刚度模式关节独立 Kp（0 表示使用全局默认值）
+  double payload_low_stiffness_kd;   // 带载低刚度模式关节独立 Kd（0 表示使用全局默认值）
   double velocity_limit;   // 关节速度上限（rad/s）
   bool is_continuous;      // 是否连续旋转关节（需做 unwrap）
+};
+
+struct ControlGainSet
+{
+  double position_kp{60.0};
+  double position_kd{3.5};
+  double low_stiffness_kp{20.0};
+  double low_stiffness_kd{2.0};
+  double low_stiffness_torque_bias{0.0};
 };
 
 /**
@@ -125,6 +139,9 @@ private:
   uint32_t dm_nominal_baud_;
   uint32_t dm_data_baud_;
   int dm_control_mode_;
+  double dm_startup_delay_sec_;
+  int dm_enable_retry_count_;
+  double dm_enable_retry_interval_sec_;
 
   // MuJoCo topic 后端
   std::string mujoco_command_topic_;
@@ -151,9 +168,20 @@ private:
   std::vector<double> final_cmd_torque_ff_;   // 最终前馈力矩（joint frame，供调试/桥接拆分）
   
   // 控制参数
-  double position_kp_;
-  double position_kd_;
+  ControlGainSet unloaded_gains_;
+  ControlGainSet payload_gains_;
   double velocity_limit_;
+  std::string vacuum_activate_topic_;
+  std::string payload_active_topic_;
+  std::string payload_frame_;
+  double payload_mass_;
+  std::array<double, 3> payload_diaginertia_;
+  std::array<double, 3> payload_com_offset_;
+  std::array<double, 3> payload_box_size_;
+  std::string mujoco_payload_body_name_;
+  std::string mujoco_payload_site_name_;
+  std::array<double, 3> mujoco_payload_initial_pos_;
+  std::atomic<bool> payload_active_;
   
   // 参考轨迹缓存
   std::vector<double> smoothed_positions_;     // 当前执行参考位置
@@ -199,9 +227,6 @@ private:
 
   // 低刚度位置 + 力矩调节模式
   bool low_stiffness_mode_;                  // 是否启用低刚度位置控制
-  double low_stiffness_kp_;                  // 低刚度模式 Kp
-  double low_stiffness_kd_;                  // 低刚度模式 Kd
-  double low_stiffness_torque_bias_;         // 低刚度模式常量力矩偏置 (Nm)
   
   // 重力补偿参数（按关节：τ = sin_coeff * sin(θ) + cos_coeff * cos(θ) + offset）
   struct GravityCompParams {
@@ -220,7 +245,10 @@ private:
   std::string urdf_path_;           // URDF 文件路径
   pinocchio::Model pinocchio_model_;     // Pinocchio 模型
   pinocchio::Data pinocchio_data_;       // Pinocchio 数据
+  pinocchio::Model pinocchio_loaded_model_;  // 带载 Pinocchio 模型
+  pinocchio::Data pinocchio_loaded_data_;    // 带载 Pinocchio 数据
   bool pinocchio_initialized_;           // Pinocchio 是否初始化成功
+  bool pinocchio_loaded_initialized_;    // 带载模型是否初始化成功
   std::vector<int> pinocchio_q_index_map_;  // 硬件关节 -> Pinocchio q 索引
   std::vector<int> pinocchio_v_index_map_;  // 硬件关节 -> Pinocchio v 索引
   bool pinocchio_mapping_ready_;            // 关节名映射是否就绪
@@ -271,6 +299,8 @@ private:
    * @return 每个关节的重力补偿力矩
    */
   std::vector<double> computePinocchioGravity(const std::vector<double>& positions);
+  std::vector<double> computePinocchioGravity(
+    const std::vector<double>& positions, bool use_payload_model);
 
   /**
    * @brief 使用 Pinocchio 计算完整逆动力学力矩（RNEA）
@@ -283,8 +313,16 @@ private:
     const std::vector<double>& positions,
     const std::vector<double>& velocities,
     const std::vector<double>& accelerations);
+  std::vector<double> computePinocchioInverseDynamics(
+    const std::vector<double>& positions,
+    const std::vector<double>& velocities,
+    const std::vector<double>& accelerations,
+    bool use_payload_model);
   // 计算关节重力补偿力矩（简化模型：各关节相互独立）
   double computeGravityTorque(size_t joint_idx, double position);
+  void publishPayloadActiveState();
+  void vacuumActivateCallback(const std_msgs::msg::Bool::SharedPtr msg);
+  void configureLoadedPinocchioModel();
   
   // 零力矩模式服务回调
   void zeroTorqueModeCallback(
@@ -309,8 +347,10 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr final_torque_ff_pub_; // 最终前馈力矩(joint frame)
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j2_qd_ref_pub_;           // j2 当前参考速度
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j2_qd_actual_pub_;        // j2 当前实际反馈速度
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr payload_active_pub_;         // 统一负载状态
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr mujoco_command_pub_; // MuJoCo 命令输出
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr external_feedback_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr vacuum_activate_sub_;
 
   // 外部反馈回调
   void externalFeedbackCallback(const sensor_msgs::msg::JointState::SharedPtr msg);

@@ -93,6 +93,26 @@ bool DmMotorDriver::disable()
   return true;
 }
 
+bool DmMotorDriver::enableVacuum()
+{
+  std::lock_guard<std::mutex> lock(driver_mutex_);
+  if (!motor_control_) {
+    return false;
+  }
+  motor_control_->enable_vacuum_gripper();
+  return true;
+}
+
+bool DmMotorDriver::disableVacuum()
+{
+  std::lock_guard<std::mutex> lock(driver_mutex_);
+  if (!motor_control_) {
+    return false;
+  }
+  motor_control_->disable_vacuum_gripper();
+  return true;
+}
+
 bool DmMotorDriver::writeCommands(
   const std::vector<double> & position,
   const std::vector<double> & velocity,

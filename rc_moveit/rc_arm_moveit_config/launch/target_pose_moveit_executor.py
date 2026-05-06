@@ -10,13 +10,12 @@ from typing import Dict, List, Optional, Tuple
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import AttachedCollisionObject, CollisionObject, Constraints, JointConstraint, PlanningScene
+from moveit_msgs.msg import CollisionObject, Constraints, JointConstraint, PlanningScene
 from moveit_msgs.srv import GetPositionIK
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from shape_msgs.msg import SolidPrimitive
-from std_msgs.msg import String
 import tf2_ros
 
 
@@ -101,7 +100,6 @@ class TargetPoseMoveItExecutor(Node):
         status_base_frame: str,
         status_eef_frame: str,
         world_boxes_json: str,
-        attached_box_command_topic: str,
         planning_scene_topic: str,
         scene_publish_retries: int,
     ) -> None:
@@ -156,7 +154,6 @@ class TargetPoseMoveItExecutor(Node):
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
         self.create_subscription(PoseStamped, target_topic, self._on_target, 20)
-        self.create_subscription(String, attached_box_command_topic, self._on_attached_box_command, 10)
         self._timer = self.create_timer(max(0.02, float(check_period)), self._on_timer)
         self._scene_timer = self.create_timer(1.0, self._publish_static_world_scene)
         if self._status_log_period > 0.0:
@@ -164,13 +161,12 @@ class TargetPoseMoveItExecutor(Node):
 
         self.get_logger().info(
             "TargetPose->MoveIt executor started: topic=%s group=%s avoid_collisions=%d "
-            "world_boxes=%d attached_cmd_topic=%s planning_scene_topic=%s status_tf=%s->%s"
+            "world_boxes=%d planning_scene_topic=%s status_tf=%s->%s"
             % (
                 target_topic,
                 self._planning_group,
                 1 if self._avoid_collisions else 0,
                 len(self._world_box_configs),
-                attached_box_command_topic,
                 self._planning_scene_topic,
                 self._status_base_frame,
                 self._status_eef_frame,
@@ -294,15 +290,11 @@ class TargetPoseMoveItExecutor(Node):
     def _publish_scene_diff(
         self,
         world_objects: Optional[List[CollisionObject]] = None,
-        attached_objects: Optional[List[AttachedCollisionObject]] = None,
     ) -> None:
         scene = PlanningScene()
         scene.is_diff = True
         if world_objects:
             scene.world.collision_objects = world_objects
-        if attached_objects:
-            scene.robot_state.is_diff = True
-            scene.robot_state.attached_collision_objects = attached_objects
         self._planning_scene_pub.publish(scene)
 
     def _publish_static_world_scene(self) -> None:
@@ -332,94 +324,6 @@ class TargetPoseMoveItExecutor(Node):
         obj.id = obj_id
         obj.operation = CollisionObject.REMOVE
         return obj
-
-    def _build_attached_box(self, cmd: dict, obj_id: str) -> Optional[AttachedCollisionObject]:
-        link_name = _normalize_frame_id(str(cmd.get("link_name", ""))) or "end_effector"
-        box_cfg = dict(cmd)
-        box_cfg["id"] = obj_id
-        box_cfg["frame_id"] = link_name
-        obj = self._build_box_collision_object(box_cfg, default_id=obj_id, default_frame=link_name)
-        if obj is None:
-            return None
-
-        touch_links = cmd.get("touch_links")
-        if not isinstance(touch_links, list):
-            touch_links = [link_name, "l4"]
-        clean_touch_links = []
-        for link in touch_links:
-            link_text = _normalize_frame_id(str(link))
-            if link_text and link_text not in clean_touch_links:
-                clean_touch_links.append(link_text)
-
-        attached = AttachedCollisionObject()
-        attached.link_name = link_name
-        attached.object = obj
-        attached.touch_links = clean_touch_links
-        try:
-            attached.weight = float(cmd.get("weight", 0.0))
-        except (TypeError, ValueError):
-            attached.weight = 0.0
-        return attached
-
-    def _detach_attached_box(self, cmd: dict, obj_id: str) -> AttachedCollisionObject:
-        attached = AttachedCollisionObject()
-        attached.link_name = _normalize_frame_id(str(cmd.get("link_name", ""))) or "end_effector"
-        attached.object.id = obj_id
-        attached.object.operation = CollisionObject.REMOVE
-        return attached
-
-    def _on_attached_box_command(self, msg: String) -> None:
-        try:
-            cmd = json.loads(msg.data or "{}")
-        except json.JSONDecodeError as exc:
-            self.get_logger().warn(
-                "attached box command parse failed at char %d: %s preview='%s'"
-                % (exc.pos, exc.msg, _json_preview(msg.data))
-            )
-            return
-
-        if not isinstance(cmd, dict):
-            self.get_logger().warn("attached box command must be a JSON object")
-            return
-
-        action = str(cmd.get("action", "")).strip().lower()
-        obj_id = str(cmd.get("id", "carried_block")).strip() or "carried_block"
-
-        if action == "attach":
-            attached = self._build_attached_box(cmd, obj_id)
-            if attached is None:
-                return
-            self._publish_scene_diff(
-                world_objects=[self._remove_world_object(obj_id)],
-                attached_objects=[attached],
-            )
-            self.get_logger().info(
-                "Attached collision box '%s' to link '%s'" % (obj_id, attached.link_name)
-            )
-            return
-
-        if action in {"detach", "remove"}:
-            attached = self._detach_attached_box(cmd, obj_id)
-            world_objects: List[CollisionObject] = []
-            world_box = cmd.get("world_box")
-            if isinstance(world_box, dict):
-                world_cfg = dict(world_box)
-                world_cfg["id"] = str(world_cfg.get("id", obj_id)).strip() or obj_id
-                obj = self._build_box_collision_object(
-                    world_cfg,
-                    default_id=obj_id,
-                    default_frame=self._default_frame,
-                )
-                if obj is not None:
-                    world_objects.append(obj)
-            self._publish_scene_diff(
-                world_objects=world_objects,
-                attached_objects=[attached],
-            )
-            self.get_logger().info("Detached collision box '%s'" % obj_id)
-            return
-
-        self.get_logger().warn("attached box command skipped: unknown action '%s'" % action)
 
     def _event(self, name: str, target: Optional[PoseStamped] = None, extra: str = "") -> None:
         self._last_event = name
@@ -711,7 +615,6 @@ def parse_args():
         default="[]",
         help='world collision boxes JSON list, e.g. [{"id":"keep_out","frame_id":"world","size":[0.2,0.2,0.2],"position":[0.3,0,0.3]}]',
     )
-    parser.add_argument("--attached-box-command-topic", default="/rc_arm_2/attached_box_command")
     parser.add_argument("--planning-scene-topic", default="/planning_scene")
     parser.add_argument("--scene-publish-retries", type=int, default=5)
     return parser.parse_args()
@@ -747,7 +650,6 @@ def main() -> None:
         status_base_frame=args.status_base_frame,
         status_eef_frame=args.status_eef_frame,
         world_boxes_json=args.world_boxes_json,
-        attached_box_command_topic=args.attached_box_command_topic,
         planning_scene_topic=args.planning_scene_topic,
         scene_publish_retries=args.scene_publish_retries,
     )

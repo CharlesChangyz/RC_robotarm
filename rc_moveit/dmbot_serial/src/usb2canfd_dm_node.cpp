@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <sstream>
 #include <string>
 
 Usb2canfdDMNode::Usb2canfdDMNode()
@@ -19,6 +20,7 @@ Usb2canfdDMNode::Usb2canfdDMNode()
   this->declare_parameter<std::vector<int64_t>>(
     "motor_types", std::vector<int64_t>{1, 1, 1, 1});
   this->declare_parameter<int64_t>("control_mode", 0);
+  this->declare_parameter<std::string>("vacuum_activate_topic", "/rc_arm_2/vacuum_activate");
 
   const auto sn = this->get_parameter("sn").as_string();
   const auto nom_baud = static_cast<uint32_t>(this->get_parameter("nom_baud").as_int());
@@ -27,6 +29,7 @@ Usb2canfdDMNode::Usb2canfdDMNode()
   const auto master_ids_param = this->get_parameter("master_ids").as_integer_array();
   const auto motor_types_param = this->get_parameter("motor_types").as_integer_array();
   const auto control_mode_value = static_cast<int>(this->get_parameter("control_mode").as_int());
+  const auto vacuum_activate_topic = this->get_parameter("vacuum_activate_topic").as_string();
 
   switch (control_mode_value) {
     case 0:
@@ -118,11 +121,19 @@ Usb2canfdDMNode::Usb2canfdDMNode()
     "/debug/final_joint_torque_ff", qos,
     std::bind(&Usb2canfdDMNode::final_torque_ff_callback, this, std::placeholders::_1));
 
+  vacuum_activate_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+    vacuum_activate_topic,
+    10,
+    std::bind(&Usb2canfdDMNode::vacuum_activate_callback, this, std::placeholders::_1));
+
   // Timer for sending commands
   command_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(10), std::bind(&Usb2canfdDMNode::send_commands, this));
 
-  RCLCPP_INFO(this->get_logger(), "DM Motor Driver Node initialized");
+  RCLCPP_INFO(
+    this->get_logger(),
+    "DM Motor Driver Node initialized (vacuum topic=%s)",
+    vacuum_activate_topic.c_str());
 }
 
 Usb2canfdDMNode::~Usb2canfdDMNode()
@@ -268,6 +279,20 @@ void Usb2canfdDMNode::final_torque_ff_callback(const sensor_msgs::msg::JointStat
     for (size_t i = 0; i < motor_count_; ++i) {
       tau_arr_[i] = static_cast<float>(msg->effort[i]);
     }
+  }
+}
+
+void Usb2canfdDMNode::vacuum_activate_callback(const std_msgs::msg::Bool::SharedPtr msg)
+{
+  if (!motor_control_ || !msg) {
+    return;
+  }
+  if (msg->data) {
+    motor_control_->enable_vacuum_gripper();
+    RCLCPP_INFO(this->get_logger(), "Vacuum gripper enabled");
+  } else {
+    motor_control_->disable_vacuum_gripper();
+    RCLCPP_INFO(this->get_logger(), "Vacuum gripper disabled");
   }
 }
 

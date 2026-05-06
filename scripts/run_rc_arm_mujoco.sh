@@ -27,6 +27,7 @@ echo "[run_rc_arm_mujoco] hardware_config_file=${HARDWARE_CONFIG_FILE}"
 echo "[run_rc_arm_mujoco] controllers_file=${CONTROLLERS_FILE}"
 echo "[run_rc_arm_mujoco] use_rviz=${USE_RVIZ}"
 echo "[run_rc_arm_mujoco] make sure your MuJoCo side publishes JointState and consumes commands using the topics configured in ${HARDWARE_CONFIG_FILE}"
+echo "[run_rc_arm_mujoco] payload and unloaded defaults are read directly from ${HARDWARE_CONFIG_FILE}"
 
 exec ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py \
   hardware_config_file:="${HARDWARE_CONFIG_FILE}" \

@@ -11,6 +11,7 @@
 #include "dmbot_serial/protocol/damiao.h"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 
 class Usb2canfdDMNode : public rclcpp::Node
@@ -25,6 +26,7 @@ private:
   void final_joint_command_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
   void final_pd_gain_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
   void final_torque_ff_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
+  void vacuum_activate_callback(const std_msgs::msg::Bool::SharedPtr msg);
   void send_commands();
 
   damiao::Control_Mode control_mode_{damiao::MIT_MODE};
@@ -51,6 +53,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr final_joint_command_sub_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr final_pd_gain_sub_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr final_torque_ff_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr vacuum_activate_sub_;
 };
 
 #endif  // DMBOT_SERIAL_USB2CANFD_DM_NODE_HPP_

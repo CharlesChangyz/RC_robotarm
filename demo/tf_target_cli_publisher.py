@@ -1,15 +1,49 @@
 #!/usr/bin/env python3
-"""Interactive TF target publisher for rc_arm_2."""
+"""PySide6 GUI TF target publisher for rc_arm_2."""
 
 import argparse
 import math
+import sys
 import threading
+import time
 from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional, Tuple
 
 import rclpy
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
+from moveit_msgs.srv import GetPositionIK
+from PySide6.QtCore import QObject, QProcess, Qt, QTimer, Signal, Slot
+from PySide6.QtGui import QColor, QKeySequence, QShortcut
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QPlainTextEdit,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 from rclpy.node import Node
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool
 from tf2_msgs.msg import TFMessage
+import tf2_ros
+
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+SCRIPT_RUN_MUJOCO = ROOT_DIR / "scripts" / "run_rc_arm_mujoco.sh"
+SCRIPT_RUN_MUJOCO_BRIDGE = ROOT_DIR / "scripts" / "run_rc_arm_mujoco_bridge.sh"
+SCRIPT_RUN_REAL = ROOT_DIR / "scripts" / "run_rc_arm_real.sh"
+HOME_CAPTURE_DELAY_SEC = 5.0
 
 
 @dataclass
@@ -18,6 +52,31 @@ class TargetState:
     y: float
     z: float
     j4_rad: float
+
+    def to_display(self) -> str:
+        return "x={:.4f} y={:.4f} z={:.4f} j4={:.2f} deg ({:.4f} rad)".format(
+            self.x, self.y, self.z, math.degrees(self.j4_rad), self.j4_rad
+        )
+
+    def almost_equal(self, other: "TargetState", tol: float = 1.0e-6) -> bool:
+        return (
+            abs(self.x - other.x) <= tol
+            and abs(self.y - other.y) <= tol
+            and abs(self.z - other.z) <= tol
+            and abs(self.j4_rad - other.j4_rad) <= tol
+        )
+
+
+@dataclass
+class ActualPose:
+    x: float
+    y: float
+    z: float
+    qx: float
+    qy: float
+    qz: float
+    qw: float
+    joint_j4_rad: Optional[float]
 
 
 def normalize_frame_id(frame_id: str) -> str:
@@ -35,217 +94,792 @@ def quat_from_axis_angle(axis: str, angle_rad: float):
     return (0.0, 0.0, s, c)
 
 
-class InteractiveTfPublisher(Node):
-    def __init__(
-        self,
-        tf_topic: str,
-        parent_frame: str,
-        child_frame: str,
-        publish_rate: float,
-        print_publish: bool,
-        j4_axis: str,
-        input_in_radians: bool,
-        initial_xyz,
-        initial_j4,
-    ) -> None:
-        super().__init__("rc_arm_tf_target_cli_publisher")
+def normalize_angle_rad(angle: float) -> float:
+    while angle > math.pi:
+        angle -= 2.0 * math.pi
+    while angle < -math.pi:
+        angle += 2.0 * math.pi
+    return angle
 
-        self._tf_topic = tf_topic
-        self._parent_frame = normalize_frame_id(parent_frame)
-        self._child_frame = normalize_frame_id(child_frame)
-        self._print_publish = bool(print_publish)
-        self._j4_axis = j4_axis
-        self._input_in_radians = input_in_radians
 
-        if not self._parent_frame or not self._child_frame:
-            raise ValueError("parent/child frame cannot be empty")
+def extract_axis_angle_rad(axis: str, qx: float, qy: float, qz: float, qw: float) -> float:
+    comp = qx
+    if axis == "y":
+        comp = qy
+    elif axis == "z":
+        comp = qz
+    return normalize_angle_rad(2.0 * math.atan2(comp, qw))
 
-        init_j4_rad = float(initial_j4) if input_in_radians else math.radians(float(initial_j4))
-        self._state = TargetState(
-            x=float(initial_xyz[0]),
-            y=float(initial_xyz[1]),
-            z=float(initial_xyz[2]),
-            j4_rad=init_j4_rad,
-        )
+
+class RosBackend(QObject):
+    actual_pose_updated = Signal(object)
+    reachability_updated = Signal(object)
+    payload_state_updated = Signal(bool)
+    last_sent_updated = Signal(object)
+    last_send_status = Signal(str)
+    last_vacuum_status = Signal(str)
+    backend_error = Signal(str)
+
+    def __init__(self, args) -> None:
+        super().__init__()
+        self._args = args
+        self._node: Optional[Node] = None
+        self._tf_pub = None
+        self._vacuum_pub = None
+        self._payload_sub = None
+        self._joint_state_sub = None
+        self._ik_client = None
+        self._tf_buffer = None
+        self._tf_listener = None
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._last_sent: Optional[TargetState] = None
+        self._pending_send: Optional[Tuple[TargetState, bool]] = None
+        self._pending_vacuum: Optional[bool] = None
+        self._pending_reachability: Optional[TargetState] = None
+        self._last_actual_emit = 0.0
+        self._latest_joint_j4_rad: Optional[float] = None
 
-        self._tf_pub = self.create_publisher(TFMessage, self._tf_topic, 20)
-
-        rate = max(float(publish_rate), 1.0)
-        self._timer = self.create_timer(1.0 / rate, self._publish_target)
-
-        self.get_logger().info(
-            "Interactive TF target publisher started: tf=%s %s->%s rate=%.1fHz, j4_axis=%s, unit=%s"
-            % (
-                self._tf_topic,
-                self._parent_frame,
-                self._child_frame,
-                rate,
-                self._j4_axis,
-                "rad" if self._input_in_radians else "deg",
-            )
+    def start(self) -> None:
+        if not rclpy.ok():
+            rclpy.init(args=None)
+        self._node = Node("rc_arm_tf_target_gui_publisher")
+        self._tf_pub = self._node.create_publisher(TFMessage, self._args.tf_topic, 10)
+        self._vacuum_pub = self._node.create_publisher(Bool, self._args.vacuum_topic, 10)
+        self._payload_sub = self._node.create_subscription(
+            Bool, self._args.payload_active_topic, self._on_payload_state, 10
         )
-        self._print_state(prefix="Initial target")
-        self._print_help()
+        self._joint_state_sub = self._node.create_subscription(
+            JointState, self._args.joint_state_topic, self._on_joint_state, 20
+        )
+        self._ik_client = self._node.create_client(GetPositionIK, self._args.compute_ik_service)
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self._node, spin_thread=False)
+        self._thread = threading.Thread(target=self._spin_loop, daemon=True)
+        self._thread.start()
 
-        self._input_thread = threading.Thread(target=self._input_loop, daemon=True)
-        self._input_thread.start()
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
+        if self._node is not None:
+            self._node.destroy_node()
+            self._node = None
+        if rclpy.ok():
+            rclpy.shutdown()
 
-    @property
-    def shutdown_requested(self) -> bool:
-        return self._stop_event.is_set()
+    @Slot(object, bool)
+    def queue_send_target(self, state: object, changed_only: bool) -> None:
+        with self._lock:
+            self._pending_send = (state, changed_only)
 
-    def _print_help(self) -> None:
-        print("\nInput format:")
-        print("  x y z j4      -> update position and j4")
-        print("  x y z         -> update position only")
-        print("  j4 value      -> update j4 only")
-        print("  show          -> print current target")
-        print("  q             -> quit")
+    @Slot(bool)
+    def queue_vacuum(self, enabled: bool) -> None:
+        with self._lock:
+            self._pending_vacuum = enabled
 
-    def _parse_number_list(self, text: str):
-        normalized = text.replace(",", " ").strip()
-        if not normalized:
-            return []
-        return [float(x) for x in normalized.split()]
+    @Slot(object)
+    def queue_reachability(self, state: object) -> None:
+        with self._lock:
+            self._pending_reachability = state
 
-    def _input_loop(self) -> None:
+    def _on_payload_state(self, msg: Bool) -> None:
+        self.payload_state_updated.emit(bool(msg.data))
+
+    def _on_joint_state(self, msg: JointState) -> None:
+        if not msg.name or not msg.position:
+            return
+        try:
+            idx = msg.name.index(self._args.j4_joint_name)
+        except ValueError:
+            return
+        if idx < len(msg.position):
+            self._latest_joint_j4_rad = float(msg.position[idx])
+
+    def _spin_loop(self) -> None:
         while not self._stop_event.is_set():
             try:
-                line = input("target> ").strip()
-            except EOFError:
-                self._stop_event.set()
-                break
-            except KeyboardInterrupt:
-                self._stop_event.set()
-                break
+                rclpy.spin_once(self._node, timeout_sec=0.05)
+                self._refresh_actual_pose()
+                self._flush_send_request()
+                self._flush_vacuum_request()
+                self._flush_reachability_request()
+            except Exception as exc:  # pragma: no cover
+                self.backend_error.emit(str(exc))
+                time.sleep(0.1)
 
-            if not line:
-                continue
-
-            low = line.lower()
-            if low in {"q", "quit", "exit"}:
-                self._stop_event.set()
-                break
-            if low == "show":
-                self._print_state()
-                continue
-
-            try:
-                self._handle_input(line)
-            except Exception as exc:
-                print(f"Invalid input: {exc}")
-                self._print_help()
-
-    def _handle_input(self, line: str) -> None:
-        tokens = line.replace(",", " ").split()
-        if len(tokens) == 2 and tokens[0].lower() == "j4":
-            j4_raw = float(tokens[1])
-            j4_rad = j4_raw if self._input_in_radians else math.radians(j4_raw)
-            with self._lock:
-                self._state.j4_rad = j4_rad
-            self._print_state()
+    def _refresh_actual_pose(self) -> None:
+        if self._tf_buffer is None or self._node is None:
+            return
+        now = time.time()
+        if now - self._last_actual_emit < 0.2:
+            return
+        self._last_actual_emit = now
+        try:
+            trans = self._tf_buffer.lookup_transform(
+                normalize_frame_id(self._args.current_pose_parent_frame),
+                normalize_frame_id(self._args.current_pose_child_frame),
+                rclpy.time.Time(),
+            )
+        except Exception:
             return
 
-        values = self._parse_number_list(line)
-        if len(values) == 4:
-            j4_raw = values[3]
-            j4_rad = j4_raw if self._input_in_radians else math.radians(j4_raw)
-            with self._lock:
-                self._state.x = values[0]
-                self._state.y = values[1]
-                self._state.z = values[2]
-                self._state.j4_rad = j4_rad
-            self._print_state()
-            return
-
-        if len(values) == 3:
-            with self._lock:
-                self._state.x = values[0]
-                self._state.y = values[1]
-                self._state.z = values[2]
-            self._print_state()
-            return
-
-        raise ValueError("expected: 'x y z j4' or 'x y z' or 'j4 value'")
-
-    def _print_state(self, prefix: str = "Current target") -> None:
-        with self._lock:
-            st = TargetState(self._state.x, self._state.y, self._state.z, self._state.j4_rad)
-        j4_deg = math.degrees(st.j4_rad)
-        print(
-            "%s: x=%.4f y=%.4f z=%.4f j4=%.3f deg (%.4f rad)"
-            % (prefix, st.x, st.y, st.z, j4_deg, st.j4_rad)
+        q = trans.transform.rotation
+        actual = ActualPose(
+            x=float(trans.transform.translation.x),
+            y=float(trans.transform.translation.y),
+            z=float(trans.transform.translation.z),
+            qx=float(q.x),
+            qy=float(q.y),
+            qz=float(q.z),
+            qw=float(q.w),
+            joint_j4_rad=self._latest_joint_j4_rad,
         )
+        self.actual_pose_updated.emit(actual)
 
-    def _publish_target(self) -> None:
+    def _flush_send_request(self) -> None:
         with self._lock:
-            st = TargetState(self._state.x, self._state.y, self._state.z, self._state.j4_rad)
+            pending = self._pending_send
+            self._pending_send = None
+        if pending is None or self._node is None:
+            return
 
-        stamp = self.get_clock().now().to_msg()
-        qx, qy, qz, qw = quat_from_axis_angle(self._j4_axis, st.j4_rad)
+        state, changed_only = pending
+        if changed_only and self._last_sent is not None and state.almost_equal(self._last_sent):
+            self.last_send_status.emit("skipped: unchanged target")
+            return
 
+        qx, qy, qz, qw = quat_from_axis_angle(self._args.j4_axis, state.j4_rad)
         tf_msg = TransformStamped()
-        tf_msg.header.stamp = stamp
-        tf_msg.header.frame_id = self._parent_frame
-        tf_msg.child_frame_id = self._child_frame
-        tf_msg.transform.translation.x = st.x
-        tf_msg.transform.translation.y = st.y
-        tf_msg.transform.translation.z = st.z
+        tf_msg.header.stamp = self._node.get_clock().now().to_msg()
+        tf_msg.header.frame_id = normalize_frame_id(self._args.parent_frame)
+        tf_msg.child_frame_id = normalize_frame_id(self._args.child_frame)
+        tf_msg.transform.translation.x = state.x
+        tf_msg.transform.translation.y = state.y
+        tf_msg.transform.translation.z = state.z
         tf_msg.transform.rotation.x = qx
         tf_msg.transform.rotation.y = qy
         tf_msg.transform.rotation.z = qz
         tf_msg.transform.rotation.w = qw
-
         self._tf_pub.publish(TFMessage(transforms=[tf_msg]))
-        if self._print_publish:
-            self._print_state(prefix="Published target")
+        self._last_sent = TargetState(state.x, state.y, state.z, state.j4_rad)
+        self.last_sent_updated.emit(self._last_sent)
+        self.last_send_status.emit(
+            "published {} -> {} at {:.0f}".format(
+                normalize_frame_id(self._args.parent_frame),
+                normalize_frame_id(self._args.child_frame),
+                time.time(),
+            )
+        )
+
+    def _flush_vacuum_request(self) -> None:
+        with self._lock:
+            pending = self._pending_vacuum
+            self._pending_vacuum = None
+        if pending is None:
+            return
+        msg = Bool()
+        msg.data = bool(pending)
+        self._vacuum_pub.publish(msg)
+        self.last_vacuum_status.emit("ON" if pending else "OFF")
+
+    def _flush_reachability_request(self) -> None:
+        with self._lock:
+            pending = self._pending_reachability
+            self._pending_reachability = None
+        if pending is None:
+            return
+        report = self._compute_reachability(pending)
+        self.reachability_updated.emit(report)
+
+    def _state_to_pose(self, state: TargetState) -> PoseStamped:
+        pose = PoseStamped()
+        pose.header.frame_id = normalize_frame_id(self._args.parent_frame)
+        pose.pose.position.x = state.x
+        pose.pose.position.y = state.y
+        pose.pose.position.z = state.z
+        qx, qy, qz, qw = quat_from_axis_angle(self._args.j4_axis, state.j4_rad)
+        pose.pose.orientation.x = qx
+        pose.pose.orientation.y = qy
+        pose.pose.orientation.z = qz
+        pose.pose.orientation.w = qw
+        return pose
+
+    def _ik_success(self, state: TargetState) -> bool:
+        if self._ik_client is None or self._node is None:
+            return False
+        if not self._ik_client.wait_for_service(timeout_sec=0.05):
+            return False
+
+        request = GetPositionIK.Request()
+        request.ik_request.group_name = self._args.planning_group
+        request.ik_request.avoid_collisions = True
+        request.ik_request.pose_stamped = self._state_to_pose(state)
+        request.ik_request.timeout.sec = 0
+        request.ik_request.timeout.nanosec = int(0.3 * 1e9)
+
+        future = self._ik_client.call_async(request)
+        deadline = time.time() + 0.5
+        while not future.done() and time.time() < deadline and not self._stop_event.is_set():
+            rclpy.spin_once(self._node, timeout_sec=0.02)
+
+        if not future.done():
+            return False
+        response = future.result()
+        return response is not None and response.error_code.val == response.error_code.SUCCESS
+
+    def _estimate_axis_range(
+        self, state: TargetState, axis: str, coarse_step: float, search_limit: float
+    ) -> Tuple[float, float]:
+        def with_axis(value: float) -> TargetState:
+            if axis == "x":
+                return TargetState(value, state.y, state.z, state.j4_rad)
+            if axis == "y":
+                return TargetState(state.x, value, state.z, state.j4_rad)
+            return TargetState(state.x, state.y, value, state.j4_rad)
+
+        center = getattr(state, axis)
+        lo = center
+        hi = center
+
+        probe = center
+        while center - probe <= search_limit:
+            candidate = probe - coarse_step
+            if not self._ik_success(with_axis(candidate)):
+                break
+            probe = candidate
+            lo = candidate
+
+        probe = center
+        while probe - center <= search_limit:
+            candidate = probe + coarse_step
+            if not self._ik_success(with_axis(candidate)):
+                break
+            probe = candidate
+            hi = candidate
+
+        return (lo, hi)
+
+    def _compute_reachability(self, state: TargetState) -> dict:
+        reachable = self._ik_success(state)
+        coarse_step = max(0.02, min(0.10, float(self._args.reachability_step)))
+        ranges = {
+            "x": self._estimate_axis_range(state, "x", coarse_step, 0.5),
+            "y": self._estimate_axis_range(state, "y", coarse_step, 0.5),
+            "z": self._estimate_axis_range(state, "z", coarse_step, 0.5),
+        }
+
+        min_margin = min(
+            state.x - ranges["x"][0],
+            ranges["x"][1] - state.x,
+            state.y - ranges["y"][0],
+            ranges["y"][1] - state.y,
+            state.z - ranges["z"][0],
+            ranges["z"][1] - state.z,
+        )
+        if not reachable:
+            status = "Unreachable"
+        elif min_margin < coarse_step * 1.2:
+            status = "Near limit"
+        else:
+            status = "Reachable"
+        return {"status": status, "ranges": ranges, "reachable": reachable}
+
+
+class ControlProcess(QObject):
+    log_line = Signal(str)
+    state_changed = Signal(str)
+
+    def __init__(self, command: List[str], label: str) -> None:
+        super().__init__()
+        self._command = command
+        self._label = label
+        self._process = QProcess()
+        self._process.setProcessChannelMode(QProcess.MergedChannels)
+        self._process.readyReadStandardOutput.connect(self._read_output)
+        self._process.stateChanged.connect(self._on_state_changed)
+        self._process.finished.connect(self._on_finished)
+
+    def is_running(self) -> bool:
+        return self._process.state() != QProcess.NotRunning
+
+    def start(self) -> None:
+        if self.is_running():
+            return
+        self.log_line.emit("{} start: {}".format(self._label, " ".join(self._command)))
+        self._process.start(self._command[0], self._command[1:])
+
+    def stop(self) -> None:
+        if not self.is_running():
+            return
+        self.log_line.emit("{} stop requested".format(self._label))
+        self._process.terminate()
+        if not self._process.waitForFinished(3000):
+            self._process.kill()
+
+    def _read_output(self) -> None:
+        text = bytes(self._process.readAllStandardOutput()).decode("utf-8", errors="replace")
+        if text.strip():
+            self.log_line.emit("[{}] {}".format(self._label, text.rstrip()))
+
+    def _on_state_changed(self, state) -> None:
+        mapping = {
+            QProcess.NotRunning: "stopped",
+            QProcess.Starting: "starting",
+            QProcess.Running: "running",
+        }
+        self.state_changed.emit("{}: {}".format(self._label, mapping.get(state, "unknown")))
+
+    def _on_finished(self, exit_code: int, exit_status) -> None:
+        self.log_line.emit("{} exited code={} status={}".format(self._label, exit_code, int(exit_status)))
+
+
+class TargetPublisherWindow(QMainWindow):
+    def __init__(self, args) -> None:
+        super().__init__()
+        self._args = args
+        self._editing_target = TargetState(args.init_x, args.init_y, args.init_z, args.init_j4_rad)
+        self._last_sent: Optional[TargetState] = None
+        self._actual_pose: Optional[ActualPose] = None
+        self._home_target: Optional[TargetState] = None
+        self._payload_active = False
+        self._reachability = None
+        self._initial_target_synced = False
+        self._editing_dirty = False
+        self._actual_pose_ready = False
+        self._startup_time = time.monotonic()
+        self._syncing_editor = False
+
+        self.setWindowTitle("RC Arm TF Target Publisher")
+        self.resize(1080, 760)
+
+        self._backend = RosBackend(args)
+        self._backend.actual_pose_updated.connect(self._on_actual_pose)
+        self._backend.reachability_updated.connect(self._on_reachability)
+        self._backend.payload_state_updated.connect(self._on_payload_state)
+        self._backend.last_sent_updated.connect(self._on_last_sent)
+        self._backend.last_send_status.connect(self._set_send_status)
+        self._backend.last_vacuum_status.connect(self._set_vacuum_status)
+        self._backend.backend_error.connect(self._append_log)
+
+        self._mujoco_stack = ControlProcess(["bash", str(SCRIPT_RUN_MUJOCO)], "MuJoCo stack")
+        self._mujoco_bridge = ControlProcess(["bash", str(SCRIPT_RUN_MUJOCO_BRIDGE)], "MuJoCo bridge")
+        self._real_stack = ControlProcess(["bash", str(SCRIPT_RUN_REAL)], "Real stack")
+        for proc in (self._mujoco_stack, self._mujoco_bridge, self._real_stack):
+            proc.log_line.connect(self._append_log)
+            proc.state_changed.connect(self._on_process_state_changed)
+
+        self._reachability_timer = QTimer(self)
+        self._reachability_timer.setInterval(300)
+        self._reachability_timer.setSingleShot(True)
+        self._reachability_timer.timeout.connect(self._request_reachability)
+
+        self._build_ui()
+        self._install_shortcuts()
+        self._sync_editing_widgets()
+        self._update_status_labels()
+        self._backend.start()
+        self._request_reachability()
+
+    def _build_ui(self) -> None:
+        central = QWidget()
+        root = QVBoxLayout(central)
+        top = QHBoxLayout()
+        bottom = QHBoxLayout()
+        root.addLayout(top, stretch=3)
+        root.addLayout(bottom, stretch=2)
+        self.setCentralWidget(central)
+
+        top.addWidget(self._build_target_editor(), stretch=3)
+        top.addWidget(self._build_reachability_panel(), stretch=2)
+        top.addWidget(self._build_system_panel(), stretch=2)
+        bottom.addWidget(self._build_status_panel(), stretch=2)
+        bottom.addWidget(self._build_log_panel(), stretch=3)
+
+    def _build_target_editor(self) -> QWidget:
+        box = QGroupBox("Target Editor")
+        layout = QGridLayout(box)
+
+        self._xyz_step_spin = QDoubleSpinBox()
+        self._xyz_step_spin.setDecimals(3)
+        self._xyz_step_spin.setRange(0.001, 1.0)
+        self._xyz_step_spin.setValue(0.1)
+        self._j4_step_spin = QDoubleSpinBox()
+        self._j4_step_spin.setDecimals(1)
+        self._j4_step_spin.setRange(0.1, 180.0)
+        self._j4_step_spin.setValue(5.0)
+
+        self._field_spins = {}
+        rows = [
+            ("x", "x", "m"),
+            ("y", "y", "m"),
+            ("z", "z", "m"),
+            ("j4", "j4", "deg"),
+        ]
+        for row, (field_key, display_name, unit) in enumerate(rows):
+            label = QLabel(f"{display_name} ({unit})")
+            spin = QDoubleSpinBox()
+            spin.setDecimals(4 if field_key != "j4" else 2)
+            spin.setRange(-10.0, 10.0 if field_key != "j4" else 360.0)
+            if field_key == "j4":
+                spin.setRange(-360.0, 360.0)
+            spin.valueChanged.connect(self._on_editing_changed)
+            minus = QPushButton("-")
+            plus = QPushButton("+")
+            minus.clicked.connect(lambda _=False, axis=field_key: self._step_axis(axis, -1.0))
+            plus.clicked.connect(lambda _=False, axis=field_key: self._step_axis(axis, 1.0))
+            layout.addWidget(label, row, 0)
+            layout.addWidget(minus, row, 1)
+            layout.addWidget(spin, row, 2)
+            layout.addWidget(plus, row, 3)
+            self._field_spins[field_key] = spin
+
+        layout.addWidget(QLabel("xyz step"), 4, 0)
+        layout.addWidget(self._xyz_step_spin, 4, 2)
+        layout.addWidget(QLabel("j4 step"), 5, 0)
+        layout.addWidget(self._j4_step_spin, 5, 2)
+
+        self._send_if_changed = QCheckBox("Send if changed only")
+        self._send_if_changed.setChecked(True)
+
+        send_btn = QPushButton("Send")
+        send_btn.clicked.connect(self._send_target)
+        self._send_btn = send_btn
+        reset_btn = QPushButton("Reset to current")
+        reset_btn.clicked.connect(self._reset_to_current)
+        self._reset_btn = reset_btn
+        home_btn = QPushButton("Home")
+        home_btn.clicked.connect(self._reset_to_home)
+        self._home_btn = home_btn
+
+        layout.addWidget(self._send_if_changed, 6, 0, 1, 4)
+        layout.addWidget(send_btn, 7, 0, 1, 2)
+        layout.addWidget(reset_btn, 7, 2)
+        layout.addWidget(home_btn, 7, 3)
+        return box
+
+    def _build_reachability_panel(self) -> QWidget:
+        box = QGroupBox("Reachability")
+        layout = QFormLayout(box)
+        self._reachability_label = QLabel("Unknown")
+        self._range_labels = {
+            "x": QLabel("NA"),
+            "y": QLabel("NA"),
+            "z": QLabel("NA"),
+        }
+        layout.addRow("Status", self._reachability_label)
+        layout.addRow("x range", self._range_labels["x"])
+        layout.addRow("y range", self._range_labels["y"])
+        layout.addRow("z range", self._range_labels["z"])
+        return box
+
+    def _build_system_panel(self) -> QWidget:
+        box = QGroupBox("System Control")
+        layout = QVBoxLayout(box)
+        self._start_mujoco_btn = QPushButton("Start MuJoCo")
+        self._stop_mujoco_btn = QPushButton("Stop MuJoCo")
+        self._start_real_btn = QPushButton("Start Real")
+        self._stop_real_btn = QPushButton("Stop Real")
+        vacuum_on = QPushButton("Vacuum ON")
+        vacuum_off = QPushButton("Vacuum OFF")
+
+        self._start_mujoco_btn.clicked.connect(self._start_mujoco)
+        self._stop_mujoco_btn.clicked.connect(self._stop_mujoco)
+        self._start_real_btn.clicked.connect(self._start_real)
+        self._stop_real_btn.clicked.connect(self._stop_real)
+        vacuum_on.clicked.connect(lambda: self._backend.queue_vacuum(True))
+        vacuum_off.clicked.connect(lambda: self._backend.queue_vacuum(False))
+
+        for widget in (
+            self._start_mujoco_btn,
+            self._stop_mujoco_btn,
+            self._start_real_btn,
+            self._stop_real_btn,
+            vacuum_on,
+            vacuum_off,
+        ):
+            layout.addWidget(widget)
+        layout.addStretch(1)
+        return box
+
+    def _build_status_panel(self) -> QWidget:
+        box = QGroupBox("Status")
+        layout = QFormLayout(box)
+        self._actual_label = QLabel("NA")
+        self._editing_label = QLabel("NA")
+        self._last_sent_label = QLabel("NA")
+        self._send_status_label = QLabel("idle")
+        self._vacuum_status_label = QLabel("unknown")
+        self._payload_status_label = QLabel("false")
+        self._process_status_label = QLabel("all stopped")
+
+        layout.addRow("Actual current pose", self._actual_label)
+        layout.addRow("Editing target", self._editing_label)
+        layout.addRow("Last sent target", self._last_sent_label)
+        layout.addRow("Last send result", self._send_status_label)
+        layout.addRow("Last vacuum command", self._vacuum_status_label)
+        layout.addRow("Payload active", self._payload_status_label)
+        layout.addRow("Process status", self._process_status_label)
+        return box
+
+    def _build_log_panel(self) -> QWidget:
+        box = QGroupBox("Log")
+        layout = QVBoxLayout(box)
+        self._log_view = QPlainTextEdit()
+        self._log_view.setReadOnly(True)
+        self._log_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout.addWidget(self._log_view)
+        return box
+
+    def _install_shortcuts(self) -> None:
+        QShortcut(QKeySequence("Ctrl+Return"), self, activated=self._send_target)
+        QShortcut(QKeySequence(Qt.Key_Left), self, activated=lambda: self._step_axis("x", -1.0))
+        QShortcut(QKeySequence(Qt.Key_Right), self, activated=lambda: self._step_axis("x", 1.0))
+        QShortcut(QKeySequence(Qt.Key_Down), self, activated=lambda: self._step_axis("y", -1.0))
+        QShortcut(QKeySequence(Qt.Key_Up), self, activated=lambda: self._step_axis("y", 1.0))
+        QShortcut(QKeySequence(Qt.Key_PageDown), self, activated=lambda: self._step_axis("z", -1.0))
+        QShortcut(QKeySequence(Qt.Key_PageUp), self, activated=lambda: self._step_axis("z", 1.0))
+        QShortcut(QKeySequence("["), self, activated=lambda: self._step_axis("j4", -1.0))
+        QShortcut(QKeySequence("]"), self, activated=lambda: self._step_axis("j4", 1.0))
+
+    def _step_axis(self, axis: str, direction: float) -> None:
+        spin = self._field_spins[axis]
+        step = self._xyz_step_spin.value() if axis != "j4" else self._j4_step_spin.value()
+        spin.setValue(spin.value() + direction * step)
+
+    def _sync_editing_widgets(self) -> None:
+        self._syncing_editor = True
+        try:
+            self._field_spins["x"].setValue(self._editing_target.x)
+            self._field_spins["y"].setValue(self._editing_target.y)
+            self._field_spins["z"].setValue(self._editing_target.z)
+            self._field_spins["j4"].setValue(math.degrees(self._editing_target.j4_rad))
+        finally:
+            self._syncing_editor = False
+        self._update_status_labels()
+
+    def _read_editing_target(self) -> TargetState:
+        return TargetState(
+            x=self._field_spins["x"].value(),
+            y=self._field_spins["y"].value(),
+            z=self._field_spins["z"].value(),
+            j4_rad=math.radians(self._field_spins["j4"].value()),
+        )
+
+    def _update_status_labels(self) -> None:
+        self._editing_label.setText(self._editing_target.to_display())
+        self._last_sent_label.setText(self._last_sent.to_display() if self._last_sent else "NA")
+        if self._actual_pose is None:
+            self._actual_label.setText("waiting for actual pose")
+        elif self._actual_pose.joint_j4_rad is None:
+            self._actual_label.setText(
+                "x={:.4f} y={:.4f} z={:.4f} j4=waiting joint states".format(
+                    self._actual_pose.x, self._actual_pose.y, self._actual_pose.z
+                )
+            )
+        else:
+            self._actual_label.setText(
+                "x={:.4f} y={:.4f} z={:.4f} j4={:.2f} deg ({:.4f} rad)".format(
+                    self._actual_pose.x,
+                    self._actual_pose.y,
+                    self._actual_pose.z,
+                    math.degrees(self._actual_pose.joint_j4_rad),
+                    self._actual_pose.joint_j4_rad,
+                )
+            )
+        self._payload_status_label.setText("true" if self._payload_active else "false")
+        self._reset_btn.setEnabled(self._actual_pose_ready and self._actual_pose is not None)
+        self._home_btn.setEnabled(self._actual_pose_ready and self._home_target is not None)
+        self._send_btn.setEnabled(self._actual_pose_ready)
+
+    def _request_reachability(self) -> None:
+        if not self._actual_pose_ready:
+            return
+        self._backend.queue_reachability(self._editing_target)
+
+    def _on_editing_changed(self) -> None:
+        if self._syncing_editor:
+            return
+        self._editing_target = self._read_editing_target()
+        self._editing_dirty = True
+        self._update_status_labels()
+        self._reachability_timer.start()
+
+    def _send_target(self) -> None:
+        if not self._actual_pose_ready:
+            return
+        self._editing_target = self._read_editing_target()
+        self._backend.queue_send_target(self._editing_target, self._send_if_changed.isChecked())
+
+    def _reset_to_current(self) -> None:
+        if self._actual_pose is None or self._actual_pose.joint_j4_rad is None:
+            return
+        self._editing_target = TargetState(
+            self._actual_pose.x,
+            self._actual_pose.y,
+            self._actual_pose.z,
+            self._actual_pose.joint_j4_rad,
+        )
+        self._sync_editing_widgets()
+        self._reachability_timer.start()
+
+    def _reset_to_home(self) -> None:
+        home = self._home_target or TargetState(
+            self._args.init_x, self._args.init_y, self._args.init_z, self._args.init_j4_rad
+        )
+        self._editing_target = TargetState(home.x, home.y, home.z, home.j4_rad)
+        self._sync_editing_widgets()
+        self._reachability_timer.start()
+
+    @Slot(object)
+    def _on_actual_pose(self, state: object) -> None:
+        self._actual_pose = state
+        self._actual_pose_ready = True
+        if self._home_target is None and (time.monotonic() - self._startup_time) >= HOME_CAPTURE_DELAY_SEC:
+            home_j4_rad = state.joint_j4_rad if state.joint_j4_rad is not None else self._args.init_j4_rad
+            self._home_target = TargetState(state.x, state.y, state.z, home_j4_rad)
+        if self._home_target is not None and not self._initial_target_synced and not self._editing_dirty:
+            self._initial_target_synced = True
+            self._editing_target = TargetState(
+                self._home_target.x,
+                self._home_target.y,
+                self._home_target.z,
+                self._home_target.j4_rad,
+            )
+            self._sync_editing_widgets()
+            self._reachability_timer.start()
+        self._update_status_labels()
+
+    @Slot(object)
+    def _on_last_sent(self, state: object) -> None:
+        self._last_sent = state
+        self._update_status_labels()
+
+    @Slot(object)
+    def _on_reachability(self, report: object) -> None:
+        self._reachability = report
+        status = report["status"]
+        self._reachability_label.setText(status)
+        color = QColor("#1f7a1f" if status == "Reachable" else "#b57600" if status == "Near limit" else "#aa2222")
+        self._reachability_label.setStyleSheet(f"color: {color.name()}; font-weight: 600;")
+        for axis, label in self._range_labels.items():
+            lo, hi = report["ranges"][axis]
+            label.setText("[{:.3f}, {:.3f}]".format(lo, hi))
+
+        for axis in ("x", "y", "z"):
+            spin = self._field_spins[axis]
+            lo, hi = report["ranges"][axis]
+            value = getattr(self._editing_target, axis)
+            style = ""
+            if not report["reachable"] or value < lo - 1.0e-6 or value > hi + 1.0e-6:
+                style = "background-color: #3a1111; color: #ffd0d0;"
+            elif min(value - lo, hi - value) < self._xyz_step_spin.value():
+                style = "background-color: #3b2d15; color: #ffe8b3;"
+            spin.setStyleSheet(style)
+
+    @Slot(bool)
+    def _on_payload_state(self, active: bool) -> None:
+        self._payload_active = active
+        self._update_status_labels()
+
+    @Slot(str)
+    def _set_send_status(self, text: str) -> None:
+        self._send_status_label.setText(text)
+        self._append_log(text)
+
+    @Slot(str)
+    def _set_vacuum_status(self, text: str) -> None:
+        self._vacuum_status_label.setText(text)
+        self._append_log("vacuum command: " + text)
+
+    def _start_mujoco(self) -> None:
+        if self._real_stack.is_running():
+            QMessageBox.warning(self, "Mode Busy", "Real stack is running. Stop it first.")
+            return
+        self._mujoco_bridge.start()
+        self._mujoco_stack.start()
+        self._refresh_process_buttons()
+
+    def _stop_mujoco(self) -> None:
+        self._mujoco_stack.stop()
+        self._mujoco_bridge.stop()
+        self._refresh_process_buttons()
+
+    def _start_real(self) -> None:
+        if self._mujoco_stack.is_running() or self._mujoco_bridge.is_running():
+            QMessageBox.warning(self, "Mode Busy", "MuJoCo mode is running. Stop it first.")
+            return
+        self._real_stack.start()
+        self._refresh_process_buttons()
+
+    def _stop_real(self) -> None:
+        self._real_stack.stop()
+        self._refresh_process_buttons()
+
+    @Slot(str)
+    def _on_process_state_changed(self, _text: str) -> None:
+        self._refresh_process_buttons()
+
+    def _refresh_process_buttons(self) -> None:
+        mujoco_running = self._mujoco_stack.is_running() or self._mujoco_bridge.is_running()
+        real_running = self._real_stack.is_running()
+        self._start_mujoco_btn.setEnabled(not mujoco_running and not real_running)
+        self._start_real_btn.setEnabled(not real_running and not mujoco_running)
+        self._stop_mujoco_btn.setEnabled(mujoco_running)
+        self._stop_real_btn.setEnabled(real_running)
+        if mujoco_running:
+            text = "MuJoCo running"
+        elif real_running:
+            text = "Real running"
+        else:
+            text = "all stopped"
+        self._process_status_label.setText(text)
+
+    @Slot(str)
+    def _append_log(self, text: str) -> None:
+        if not text:
+            return
+        self._log_view.appendPlainText(text)
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self._mujoco_stack.stop()
+        self._mujoco_bridge.stop()
+        self._real_stack.stop()
+        self._backend.stop()
+        super().closeEvent(event)
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Interactive TF target publisher")
+    parser = argparse.ArgumentParser(description="PySide6 TF target publisher")
     parser.add_argument("--tf-topic", default="/tf")
     parser.add_argument("--parent-frame", default="world")
     parser.add_argument("--child-frame", default="rc_arm_2_target")
-    parser.add_argument("--rate", type=float, default=2.0)
-    parser.add_argument("--print-publish", action="store_true", help="Print every publish (verbose)")
+    parser.add_argument("--current-pose-parent-frame", default="world")
+    parser.add_argument("--current-pose-child-frame", default="end_effector")
+    parser.add_argument("--planning-group", default="arm")
+    parser.add_argument("--compute-ik-service", default="/compute_ik")
+    parser.add_argument("--vacuum-topic", default="/rc_arm_2/vacuum_activate")
+    parser.add_argument("--payload-active-topic", default="/rc_arm_2/payload_active")
+    parser.add_argument("--joint-state-topic", default="/joint_states")
+    parser.add_argument("--j4-joint-name", default="j4_joint")
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
-    parser.add_argument("--radians", action="store_true", help="Treat input j4 as radians (default: degrees)")
-    parser.add_argument("--init-x", type=float, default=0.099)
-    parser.add_argument("--init-y", type=float, default=0.026)
-    parser.add_argument("--init-z", type=float, default=0.242)
-    parser.add_argument("--init-j4", type=float, default=0.0, help="deg by default, rad with --radians")
-    return parser.parse_args()
+    parser.add_argument("--reachability-step", type=float, default=0.05)
+    parser.add_argument("--init-x", type=float, default=0.0)
+    parser.add_argument("--init-y", type=float, default=0.0)
+    parser.add_argument("--init-z", type=float, default=0.0)
+    parser.add_argument("--init-j4", type=float, default=0.0, help="degrees")
+    args = parser.parse_args()
+    args.init_j4_rad = math.radians(float(args.init_j4))
+    return args
 
 
 def main() -> None:
     args = parse_args()
-    rclpy.init()
-    node = InteractiveTfPublisher(
-        tf_topic=args.tf_topic,
-        parent_frame=args.parent_frame,
-        child_frame=args.child_frame,
-        publish_rate=args.rate,
-        print_publish=args.print_publish,
-        j4_axis=args.j4_axis,
-        input_in_radians=args.radians,
-        initial_xyz=(args.init_x, args.init_y, args.init_z),
-        initial_j4=args.init_j4,
-    )
-
-    executor = rclpy.executors.SingleThreadedExecutor()
-    executor.add_node(node)
-
-    try:
-        while rclpy.ok() and not node.shutdown_requested:
-            executor.spin_once(timeout_sec=0.1)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        executor.remove_node(node)
-        node.destroy_node()
-        rclpy.shutdown()
+    app = QApplication(sys.argv)
+    window = TargetPublisherWindow(args)
+    window.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

@@ -26,6 +26,7 @@ echo "[run_rc_arm_real] workspace: ${WORKSPACE_DIR}"
 echo "[run_rc_arm_real] hardware_config_file=${HARDWARE_CONFIG_FILE}"
 echo "[run_rc_arm_real] controllers_file=${CONTROLLERS_FILE}"
 echo "[run_rc_arm_real] use_rviz=${USE_RVIZ}"
+echo "[run_rc_arm_real] payload and unloaded defaults are read directly from ${HARDWARE_CONFIG_FILE}"
 
 exec ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py \
   hardware_config_file:="${HARDWARE_CONFIG_FILE}" \

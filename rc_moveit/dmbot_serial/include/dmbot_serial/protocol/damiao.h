@@ -237,6 +237,8 @@ namespace damiao
         void CtrlMotors(float pos[6], float vel[6], float kp[6], float kd[6], float tff[6]);
         void enable_motor();
         void disable_motor();
+        void enable_vacuum_gripper();
+        void disable_vacuum_gripper();
 
         float current_motor_pos[MOTOR_NUM];
         float current_motor_vel[MOTOR_NUM];

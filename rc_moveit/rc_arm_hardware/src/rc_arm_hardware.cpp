@@ -32,6 +32,18 @@ bool parseBoolParam(const std::string& raw_value)
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   return value == "true" || value == "1" || value == "yes" || value == "on";
 }
+
+double getDoubleParamOr(
+  const hardware_interface::HardwareInfo & info,
+  const std::string & key,
+  double fallback_value)
+{
+  const auto it = info.hardware_parameters.find(key);
+  if (it == info.hardware_parameters.end()) {
+    return fallback_value;
+  }
+  return std::stod(it->second);
+}
 }  // namespace
 
 RsA3HardwareInterface::RsA3HardwareInterface()
@@ -44,10 +56,22 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , dm_nominal_baud_(1000000)
   , dm_data_baud_(2000000)
   , dm_control_mode_(0)
+  , dm_startup_delay_sec_(0.0)
+  , dm_enable_retry_count_(3)
+  , dm_enable_retry_interval_sec_(0.5)
   , mujoco_command_topic_("/rc_arm_2/mujoco_joint_command")
-  , position_kp_(60.0)    // 降低 Kp 以减小振荡
-  , position_kd_(3.5)     // 增大 Kd 以提高阻尼
   , velocity_limit_(10.0)
+  , vacuum_activate_topic_("/rc_arm_2/vacuum_activate")
+  , payload_active_topic_("/rc_arm_2/payload_active")
+  , payload_frame_("end_effector")
+  , payload_mass_(0.63)
+  , payload_diaginertia_{0.02, 0.02, 0.02}
+  , payload_com_offset_{0.0, 0.0, 0.0}
+  , payload_box_size_{0.05, 0.05, 0.05}
+  , mujoco_payload_body_name_("payload_block")
+  , mujoco_payload_site_name_("attachment_site")
+  , mujoco_payload_initial_pos_{0.30, 0.0, 0.20}
+  , payload_active_(false)
   , control_mode_(ControlMode::POSITION)
   , use_mock_hardware_(false)
   , external_feedback_enabled_(false)
@@ -58,14 +82,12 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , zero_torque_mode_(false)
   , zero_torque_kd_(1.0)
   , low_stiffness_mode_(false)
-  , low_stiffness_kp_(20.0)
-  , low_stiffness_kd_(2.0)
-  , low_stiffness_torque_bias_(0.0)
   , gravity_comp_enabled_(false)
   , gravity_feedforward_ratio_(0.5)  // 默认 50% 重力补偿前馈
   , use_pinocchio_gravity_(false)    // 默认使用简化重力模型
   , use_pinocchio_inverse_dynamics_(true)
   , pinocchio_initialized_(false)
+  , pinocchio_loaded_initialized_(false)
   , pinocchio_mapping_ready_(false)
   , use_calibrated_inertia_(false)   // 默认不使用标定后的惯量参数
   , spin_thread_running_(false)      // 服务回调线程运行标志初始化
@@ -104,15 +126,41 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   if (info_.hardware_parameters.count("host_can_id")) {
     host_can_id_ = std::stoi(info_.hardware_parameters.at("host_can_id"));
   }
-  if (info_.hardware_parameters.count("position_kp")) {
-    position_kp_ = std::stod(info_.hardware_parameters.at("position_kp"));
-  }
-  if (info_.hardware_parameters.count("position_kd")) {
-    position_kd_ = std::stod(info_.hardware_parameters.at("position_kd"));
-  }
   if (info_.hardware_parameters.count("velocity_limit")) {
     velocity_limit_ = std::stod(info_.hardware_parameters.at("velocity_limit"));
   }
+  if (info_.hardware_parameters.count("vacuum_activate_topic")) {
+    vacuum_activate_topic_ = info_.hardware_parameters.at("vacuum_activate_topic");
+  }
+  if (info_.hardware_parameters.count("payload_active_topic")) {
+    payload_active_topic_ = info_.hardware_parameters.at("payload_active_topic");
+  }
+  if (info_.hardware_parameters.count("payload_frame")) {
+    payload_frame_ = info_.hardware_parameters.at("payload_frame");
+  }
+  payload_mass_ = getDoubleParamOr(
+    info_, "payload_mass", payload_mass_);
+  payload_diaginertia_[0] = getDoubleParamOr(info_, "payload_diaginertia_x", payload_diaginertia_[0]);
+  payload_diaginertia_[1] = getDoubleParamOr(info_, "payload_diaginertia_y", payload_diaginertia_[1]);
+  payload_diaginertia_[2] = getDoubleParamOr(info_, "payload_diaginertia_z", payload_diaginertia_[2]);
+  payload_com_offset_[0] = getDoubleParamOr(info_, "payload_com_offset_x", payload_com_offset_[0]);
+  payload_com_offset_[1] = getDoubleParamOr(info_, "payload_com_offset_y", payload_com_offset_[1]);
+  payload_com_offset_[2] = getDoubleParamOr(info_, "payload_com_offset_z", payload_com_offset_[2]);
+  payload_box_size_[0] = getDoubleParamOr(info_, "payload_box_size_x", payload_box_size_[0]);
+  payload_box_size_[1] = getDoubleParamOr(info_, "payload_box_size_y", payload_box_size_[1]);
+  payload_box_size_[2] = getDoubleParamOr(info_, "payload_box_size_z", payload_box_size_[2]);
+  if (info_.hardware_parameters.count("mujoco_payload_body_name")) {
+    mujoco_payload_body_name_ = info_.hardware_parameters.at("mujoco_payload_body_name");
+  }
+  if (info_.hardware_parameters.count("mujoco_payload_site_name")) {
+    mujoco_payload_site_name_ = info_.hardware_parameters.at("mujoco_payload_site_name");
+  }
+  mujoco_payload_initial_pos_[0] = getDoubleParamOr(
+    info_, "mujoco_payload_initial_pos_x", mujoco_payload_initial_pos_[0]);
+  mujoco_payload_initial_pos_[1] = getDoubleParamOr(
+    info_, "mujoco_payload_initial_pos_y", mujoco_payload_initial_pos_[1]);
+  mujoco_payload_initial_pos_[2] = getDoubleParamOr(
+    info_, "mujoco_payload_initial_pos_z", mujoco_payload_initial_pos_[2]);
   if (info_.hardware_parameters.count("use_mock_hardware")) {
     use_mock_hardware_ = parseBoolParam(info_.hardware_parameters.at("use_mock_hardware"));
   }
@@ -138,6 +186,15 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   if (info_.hardware_parameters.count("dm_control_mode")) {
     dm_control_mode_ = std::stoi(info_.hardware_parameters.at("dm_control_mode"));
   }
+  dm_startup_delay_sec_ = std::max(
+    0.0,
+    getDoubleParamOr(info_, "dm_startup_delay_sec", dm_startup_delay_sec_));
+  dm_enable_retry_count_ = std::max(
+    1,
+    static_cast<int>(getDoubleParamOr(info_, "dm_enable_retry_count", dm_enable_retry_count_)));
+  dm_enable_retry_interval_sec_ = std::max(
+    0.0,
+    getDoubleParamOr(info_, "dm_enable_retry_interval_sec", dm_enable_retry_interval_sec_));
 
   std::string backend_lower = backend_name_;
   std::transform(
@@ -160,17 +217,36 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   if (info_.hardware_parameters.count("low_stiffness_mode")) {
     low_stiffness_mode_ = parseBoolParam(info_.hardware_parameters.at("low_stiffness_mode"));
   }
-  if (info_.hardware_parameters.count("low_stiffness_kp")) {
-    low_stiffness_kp_ = std::stod(info_.hardware_parameters.at("low_stiffness_kp"));
-  }
-  if (info_.hardware_parameters.count("low_stiffness_kd")) {
-    low_stiffness_kd_ = std::stod(info_.hardware_parameters.at("low_stiffness_kd"));
-  }
-  if (info_.hardware_parameters.count("low_stiffness_torque_bias")) {
-    low_stiffness_torque_bias_ = std::stod(info_.hardware_parameters.at("low_stiffness_torque_bias"));
-  }
-  low_stiffness_kp_ = std::clamp(low_stiffness_kp_, 0.0, 500.0);
-  low_stiffness_kd_ = std::clamp(low_stiffness_kd_, 0.0, 5.0);
+  unloaded_gains_.position_kp = getDoubleParamOr(
+    info_, "unloaded_position_kp", getDoubleParamOr(info_, "position_kp", unloaded_gains_.position_kp));
+  unloaded_gains_.position_kd = getDoubleParamOr(
+    info_, "unloaded_position_kd", getDoubleParamOr(info_, "position_kd", unloaded_gains_.position_kd));
+  unloaded_gains_.low_stiffness_kp = std::clamp(
+    getDoubleParamOr(
+      info_, "unloaded_low_stiffness_kp",
+      getDoubleParamOr(info_, "low_stiffness_kp", unloaded_gains_.low_stiffness_kp)),
+    0.0, 500.0);
+  unloaded_gains_.low_stiffness_kd = std::clamp(
+    getDoubleParamOr(
+      info_, "unloaded_low_stiffness_kd",
+      getDoubleParamOr(info_, "low_stiffness_kd", unloaded_gains_.low_stiffness_kd)),
+    0.0, 5.0);
+  unloaded_gains_.low_stiffness_torque_bias = getDoubleParamOr(
+    info_, "unloaded_low_stiffness_torque_bias",
+    getDoubleParamOr(info_, "low_stiffness_torque_bias", unloaded_gains_.low_stiffness_torque_bias));
+
+  payload_gains_.position_kp = getDoubleParamOr(
+    info_, "payload_position_kp", unloaded_gains_.position_kp);
+  payload_gains_.position_kd = getDoubleParamOr(
+    info_, "payload_position_kd", unloaded_gains_.position_kd);
+  payload_gains_.low_stiffness_kp = std::clamp(
+    getDoubleParamOr(info_, "payload_low_stiffness_kp", unloaded_gains_.low_stiffness_kp),
+    0.0, 500.0);
+  payload_gains_.low_stiffness_kd = std::clamp(
+    getDoubleParamOr(info_, "payload_low_stiffness_kd", unloaded_gains_.low_stiffness_kd),
+    0.0, 5.0);
+  payload_gains_.low_stiffness_torque_bias = getDoubleParamOr(
+    info_, "payload_low_stiffness_torque_bias", unloaded_gains_.low_stiffness_torque_bias);
 
   if (info_.hardware_parameters.count("use_pinocchio_gravity")) {
     use_pinocchio_gravity_ = parseBoolParam(info_.hardware_parameters.at("use_pinocchio_gravity"));
@@ -271,13 +347,21 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
               "  回退控制周期：%.4f s",
               fallback_control_period_);
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "  PID：Kp=%.1f，Kd=%.1f，重力补偿前馈比例=%.0f%%",
-              position_kp_, position_kd_, gravity_feedforward_ratio_ * 100.0);
+              "  空载 PID：Kp=%.1f，Kd=%.1f，低刚度[Kp=%.1f Kd=%.1f bias=%.3f]",
+              unloaded_gains_.position_kp, unloaded_gains_.position_kd,
+              unloaded_gains_.low_stiffness_kp, unloaded_gains_.low_stiffness_kd,
+              unloaded_gains_.low_stiffness_torque_bias);
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "  低刚度模式：%s（Kp=%.1f，Kd=%.1f，torque_bias=%.3f）",
+              "  带载 PID：Kp=%.1f，Kd=%.1f，低刚度[Kp=%.1f Kd=%.1f bias=%.3f]，重力补偿前馈比例=%.0f%%",
+              payload_gains_.position_kp, payload_gains_.position_kd,
+              payload_gains_.low_stiffness_kp, payload_gains_.low_stiffness_kd,
+              payload_gains_.low_stiffness_torque_bias,
+              gravity_feedforward_ratio_ * 100.0);
+  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
+              "  低刚度模式：%s，vacuum_topic=%s，payload_topic=%s",
               low_stiffness_mode_ ? "启用" : "禁用",
-              low_stiffness_kp_, low_stiffness_kd_,
-              low_stiffness_torque_bias_);
+              vacuum_activate_topic_.c_str(),
+              payload_active_topic_.c_str());
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "  Pinocchio：gravity=%s, inverse_dynamics=%s",
               use_pinocchio_gravity_ ? "启用" : "禁用",
@@ -306,7 +390,12 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   final_torque_ff_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/final_joint_torque_ff", 10);
   j2_qd_ref_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>("/debug/j2_qd_ref", 10);
   j2_qd_actual_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>("/debug/j2_qd_actual", 10);
+  payload_active_pub_ = debug_node_->create_publisher<std_msgs::msg::Bool>(payload_active_topic_, 10);
   mujoco_command_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>(mujoco_command_topic_, 10);
+  vacuum_activate_sub_ = debug_node_->create_subscription<std_msgs::msg::Bool>(
+    vacuum_activate_topic_,
+    10,
+    std::bind(&RsA3HardwareInterface::vacuumActivateCallback, this, std::placeholders::_1));
 
   if (external_feedback_enabled_) {
     external_feedback_sub_ = debug_node_->create_subscription<sensor_msgs::msg::JointState>(
@@ -317,6 +406,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "调试发布器已创建：/debug/hw_command, /debug/smoothed_command, /debug/gravity_torque, /debug/velocity_feedforward, /debug/motor_temperature, /debug/final_joint_command, /debug/final_joint_command_joint_frame, /debug/final_pd_gains, /debug/final_joint_torque_ff, /debug/j2_qd_ref, /debug/j2_qd_actual");
+  publishPayloadActiveState();
 
   // ============ 初始化重力补偿参数 ============
   gravity_params_.resize(num_joints);
@@ -540,42 +630,58 @@ bool RsA3HardwareInterface::parseJointConfig(const hardware_interface::HardwareI
     const double span = config.upper_limit - config.lower_limit;
     config.is_continuous = std::isfinite(span) && span >= (2.0 * M_PI - 1e-3);
 
-    // Parse joint-specific Kp/Kd (0 means use global value)
-    config.kp = 0.0;
-    config.kd = 0.0;
-    if (joint.parameters.count("kp")) {
-      config.kp = std::stod(joint.parameters.at("kp"));
-    }
-    if (joint.parameters.count("kd")) {
-      config.kd = std::stod(joint.parameters.at("kd"));
-    }
+    // Parse joint-specific unloaded/payload Kp/Kd (0 means use global value)
+    config.unloaded_kp = joint.parameters.count("unloaded_kp")
+      ? std::stod(joint.parameters.at("unloaded_kp"))
+      : (joint.parameters.count("kp") ? std::stod(joint.parameters.at("kp")) : 0.0);
+    config.unloaded_kd = joint.parameters.count("unloaded_kd")
+      ? std::stod(joint.parameters.at("unloaded_kd"))
+      : (joint.parameters.count("kd") ? std::stod(joint.parameters.at("kd")) : 0.0);
+    config.payload_kp = joint.parameters.count("payload_kp")
+      ? std::stod(joint.parameters.at("payload_kp"))
+      : config.unloaded_kp;
+    config.payload_kd = joint.parameters.count("payload_kd")
+      ? std::stod(joint.parameters.at("payload_kd"))
+      : config.unloaded_kd;
 
-    // Parse joint-specific low-stiffness Kp/Kd (0 means use global low-stiffness value)
-    config.low_stiffness_kp = 0.0;
-    config.low_stiffness_kd = 0.0;
-    if (joint.parameters.count("low_stiffness_kp")) {
-      config.low_stiffness_kp = std::stod(joint.parameters.at("low_stiffness_kp"));
-    }
-    if (joint.parameters.count("low_stiffness_kd")) {
-      config.low_stiffness_kd = std::stod(joint.parameters.at("low_stiffness_kd"));
-    }
-    config.low_stiffness_kp = std::clamp(config.low_stiffness_kp, 0.0, 500.0);
-    config.low_stiffness_kd = std::clamp(config.low_stiffness_kd, 0.0, 5.0);
+    config.unloaded_low_stiffness_kp = joint.parameters.count("unloaded_low_stiffness_kp")
+      ? std::stod(joint.parameters.at("unloaded_low_stiffness_kp"))
+      : (joint.parameters.count("low_stiffness_kp") ? std::stod(joint.parameters.at("low_stiffness_kp")) : 0.0);
+    config.unloaded_low_stiffness_kd = joint.parameters.count("unloaded_low_stiffness_kd")
+      ? std::stod(joint.parameters.at("unloaded_low_stiffness_kd"))
+      : (joint.parameters.count("low_stiffness_kd") ? std::stod(joint.parameters.at("low_stiffness_kd")) : 0.0);
+    config.payload_low_stiffness_kp = joint.parameters.count("payload_low_stiffness_kp")
+      ? std::stod(joint.parameters.at("payload_low_stiffness_kp"))
+      : config.unloaded_low_stiffness_kp;
+    config.payload_low_stiffness_kd = joint.parameters.count("payload_low_stiffness_kd")
+      ? std::stod(joint.parameters.at("payload_low_stiffness_kd"))
+      : config.unloaded_low_stiffness_kd;
+
+    config.unloaded_low_stiffness_kp = std::clamp(config.unloaded_low_stiffness_kp, 0.0, 500.0);
+    config.unloaded_low_stiffness_kd = std::clamp(config.unloaded_low_stiffness_kd, 0.0, 5.0);
+    config.payload_low_stiffness_kp = std::clamp(config.payload_low_stiffness_kp, 0.0, 500.0);
+    config.payload_low_stiffness_kd = std::clamp(config.payload_low_stiffness_kd, 0.0, 5.0);
 
     joint_configs_.push_back(config);
 
-    const bool has_joint_pd = (config.kp > 0.0 || config.kd > 0.0);
-    const bool has_low_stiffness_pd = (config.low_stiffness_kp > 0.0 || config.low_stiffness_kd > 0.0);
+    const bool has_joint_pd = (
+      config.unloaded_kp > 0.0 || config.unloaded_kd > 0.0 ||
+      config.payload_kp > 0.0 || config.payload_kd > 0.0);
+    const bool has_low_stiffness_pd = (
+      config.unloaded_low_stiffness_kp > 0.0 || config.unloaded_low_stiffness_kd > 0.0 ||
+      config.payload_low_stiffness_kp > 0.0 || config.payload_low_stiffness_kd > 0.0);
 
     if (has_joint_pd || has_low_stiffness_pd) {
       RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-                  "关节 %s：motor_id=%d，type=%s，dir=%.1f，限位=[%.1f°~%.1f°]，普通PD[Kp=%.1f，Kd=%.1f]，低刚度PD[Kp=%.1f，Kd=%.1f]",
+                  "关节 %s：motor_id=%d，type=%s，dir=%.1f，限位=[%.1f°~%.1f°]，空载PD[Kp=%.1f，Kd=%.1f]，带载PD[Kp=%.1f，Kd=%.1f]，空载低刚度[Kp=%.1f，Kd=%.1f]，带载低刚度[Kp=%.1f，Kd=%.1f]",
                   config.name.c_str(), config.motor_id,
                   config.motor_type == MotorType::RS00 ? "RS00" : "EL05",
                   config.direction,
                   config.lower_limit * 180.0 / M_PI, config.upper_limit * 180.0 / M_PI,
-                  config.kp, config.kd,
-                  config.low_stiffness_kp, config.low_stiffness_kd);
+                  config.unloaded_kp, config.unloaded_kd,
+                  config.payload_kp, config.payload_kd,
+                  config.unloaded_low_stiffness_kp, config.unloaded_low_stiffness_kd,
+                  config.payload_low_stiffness_kp, config.payload_low_stiffness_kd);
     } else {
       RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
                   "关节 %s：motor_id=%d，type=%s，dir=%.1f，限位=[%.1f°~%.1f°]",
@@ -605,6 +711,14 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_configure(
       external_feedback_topic_.c_str(),
       mujoco_command_topic_.c_str());
     return hardware_interface::CallbackReturn::SUCCESS;
+  }
+
+  if (dm_startup_delay_sec_ > 0.0) {
+    RCLCPP_INFO(
+      rclcpp::get_logger("RsA3HardwareInterface"),
+      "等待 dmbot_serial 启动 %.2f 秒，规避 USB2CANFD 过早初始化",
+      dm_startup_delay_sec_);
+    std::this_thread::sleep_for(std::chrono::duration<double>(dm_startup_delay_sec_));
   }
 
   std::vector<dmbot_serial::MotorConfig> motor_configs;
@@ -677,11 +791,23 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_activate(
   first_command_ = false;
 
   if (backend_mode_ == BackendMode::REAL) {
-    dm_driver_->enable();
+    for (int attempt = 1; attempt <= dm_enable_retry_count_; ++attempt) {
+      if (attempt > 1 && dm_enable_retry_interval_sec_ > 0.0) {
+        std::this_thread::sleep_for(std::chrono::duration<double>(dm_enable_retry_interval_sec_));
+      }
+
+      dm_driver_->enable();
+      RCLCPP_INFO(
+        rclcpp::get_logger("RsA3HardwareInterface"),
+        "已发送 DM 电机使能，第 %d/%d 次",
+        attempt,
+        dm_enable_retry_count_);
+    }
     RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"), "实机后端已激活");
   } else {
     RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"), "MuJoCo 后端已激活");
   }
+  publishPayloadActiveState();
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -905,6 +1031,9 @@ hardware_interface::return_type RsA3HardwareInterface::write(
                 "收到首条指令，初始化执行参考（直接跟随上层 position/velocity/acceleration）");
   }
 
+  const bool payload_active = payload_active_.load();
+  const ControlGainSet & active_gains = payload_active ? payload_gains_ : unloaded_gains_;
+
   std::vector<double> cmd_positions_motor(joint_configs_.size(), 0.0);
   std::vector<double> cmd_velocities_motor(joint_configs_.size(), 0.0);
   std::vector<double> final_motor_positions(joint_configs_.size(), 0.0);
@@ -1005,17 +1134,17 @@ hardware_interface::return_type RsA3HardwareInterface::write(
 
   std::vector<double> pinocchio_gravity_torques_actual;
   if (pinocchio_initialized_ && (use_pinocchio_gravity_ || use_pinocchio_inverse_dynamics_)) {
-    pinocchio_gravity_torques_actual = computePinocchioGravity(hw_positions_);
+    pinocchio_gravity_torques_actual = computePinocchioGravity(hw_positions_, payload_active);
   }
 
   std::vector<double> pinocchio_id_torques;
   if (use_pinocchio_inverse_dynamics_ && pinocchio_initialized_) {
     pinocchio_id_torques = computePinocchioInverseDynamics(
-      id_ref_positions, id_ref_velocities, id_ref_accelerations);
+      id_ref_positions, id_ref_velocities, id_ref_accelerations, payload_active);
   }
   std::vector<double> pinocchio_gravity_torques_ref;
   if (use_pinocchio_inverse_dynamics_ && pinocchio_initialized_) {
-    pinocchio_gravity_torques_ref = computePinocchioGravity(id_ref_positions);
+    pinocchio_gravity_torques_ref = computePinocchioGravity(id_ref_positions, payload_active);
   }
   std::vector<double> pinocchio_dynamic_only_torques(joint_configs_.size(), 0.0);
   if (pinocchio_initialized_) {
@@ -1051,10 +1180,16 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       }
     }
 
+    const double active_low_joint_kp = payload_active
+      ? config.payload_low_stiffness_kp
+      : config.unloaded_low_stiffness_kp;
+    const double active_low_joint_kd = payload_active
+      ? config.payload_low_stiffness_kd
+      : config.unloaded_low_stiffness_kd;
     const double low_joint_kp = std::clamp(
-      (config.low_stiffness_kp > 0.0) ? config.low_stiffness_kp : low_stiffness_kp_, 0.0, 500.0);
+      (active_low_joint_kp > 0.0) ? active_low_joint_kp : active_gains.low_stiffness_kp, 0.0, 500.0);
     const double low_joint_kd = std::clamp(
-      (config.low_stiffness_kd > 0.0) ? config.low_stiffness_kd : low_stiffness_kd_, 0.0, 5.0);
+      (active_low_joint_kd > 0.0) ? active_low_joint_kd : active_gains.low_stiffness_kd, 0.0, 5.0);
 
     double motor_kp = 0.0;
     double motor_kd = 0.0;
@@ -1077,10 +1212,12 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     } else if (low_stiffness_mode_) {
       motor_kp = low_joint_kp;
       motor_kd = low_joint_kd;
-      joint_cmd_torque = model_feedforward_torque + low_stiffness_torque_bias_;
+      joint_cmd_torque = model_feedforward_torque + active_gains.low_stiffness_torque_bias;
     } else {
-      const double joint_kp = (config.kp > 0.0) ? config.kp : position_kp_;
-      const double joint_kd = (config.kd > 0.0) ? config.kd : position_kd_;
+      const double active_joint_kp = payload_active ? config.payload_kp : config.unloaded_kp;
+      const double active_joint_kd = payload_active ? config.payload_kd : config.unloaded_kd;
+      const double joint_kp = (active_joint_kp > 0.0) ? active_joint_kp : active_gains.position_kp;
+      const double joint_kd = (active_joint_kd > 0.0) ? active_joint_kd : active_gains.position_kd;
       motor_kp = std::clamp(joint_kp, 0.0, 500.0);
       motor_kd = std::clamp(joint_kd, 0.0, 5.0);
       joint_cmd_torque = model_feedforward_torque;
@@ -1276,6 +1413,42 @@ void RsA3HardwareInterface::zeroTorqueModeCallback(
   response->success = true;
 }
 
+void RsA3HardwareInterface::publishPayloadActiveState()
+{
+  if (!payload_active_pub_ || !debug_node_) {
+    return;
+  }
+  std_msgs::msg::Bool msg;
+  msg.data = payload_active_.load();
+  payload_active_pub_->publish(msg);
+}
+
+void RsA3HardwareInterface::vacuumActivateCallback(const std_msgs::msg::Bool::SharedPtr msg)
+{
+  if (!msg) {
+    return;
+  }
+
+  const bool previous = payload_active_.exchange(msg->data);
+  if (backend_mode_ == BackendMode::REAL && dm_driver_) {
+    const bool ok = msg->data ? dm_driver_->enableVacuum() : dm_driver_->disableVacuum();
+    if (!ok) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("RsA3HardwareInterface"),
+        "真空命令已接收，但当前 dmbot_serial 后端未就绪");
+    }
+  }
+
+  publishPayloadActiveState();
+  if (previous != msg->data) {
+    RCLCPP_INFO(
+      rclcpp::get_logger("RsA3HardwareInterface"),
+      "payload_active -> %s (vacuum topic=%s)",
+      msg->data ? "true" : "false",
+      vacuum_activate_topic_.c_str());
+  }
+}
+
 double RsA3HardwareInterface::computeLimitProtectionFactor(
   size_t joint_idx, double current_pos, double target_pos)
 {
@@ -1375,8 +1548,11 @@ bool RsA3HardwareInterface::initPinocchioModel(const std::string& urdf_path)
   try {
     pinocchio::urdf::buildModel(urdf_path, pinocchio_model_);
     pinocchio_data_ = pinocchio::Data(pinocchio_model_);
+    pinocchio_loaded_model_ = pinocchio_model_;
+    pinocchio_loaded_data_ = pinocchio::Data(pinocchio_loaded_model_);
 
     pinocchio_initialized_ = true;
+    pinocchio_loaded_initialized_ = true;
     pinocchio_mapping_ready_ = false;
 
     RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
@@ -1400,6 +1576,8 @@ bool RsA3HardwareInterface::initPinocchioModel(const std::string& urdf_path)
       pinocchio_mapping_ready_ = false;
       return false;
     }
+
+    configureLoadedPinocchioModel();
 
     return true;
   } catch (const std::exception& e) {
@@ -1498,8 +1676,26 @@ bool RsA3HardwareInterface::buildPinocchioJointMapping()
   return true;
 }
 
+void RsA3HardwareInterface::configureLoadedPinocchioModel()
+{
+  if (!pinocchio_loaded_initialized_) {
+    return;
+  }
+
+  // Keep the same kinematic structure and a separate data/model instance for the payload case.
+  // Payload geometry and gain switching are driven explicitly by payload_* config values.
+  pinocchio_loaded_data_ = pinocchio::Data(pinocchio_loaded_model_);
+}
+
 std::vector<double> RsA3HardwareInterface::computePinocchioGravity(
   const std::vector<double>& positions)
+{
+  return computePinocchioGravity(positions, false);
+}
+
+std::vector<double> RsA3HardwareInterface::computePinocchioGravity(
+  const std::vector<double>& positions,
+  bool use_payload_model)
 {
   std::vector<double> gravity_torques(joint_configs_.size(), 0.0);
 
@@ -1508,9 +1704,13 @@ std::vector<double> RsA3HardwareInterface::computePinocchioGravity(
   }
 
   try {
-    Eigen::VectorXd q = Eigen::VectorXd::Zero(pinocchio_model_.nq);
-    Eigen::VectorXd v = Eigen::VectorXd::Zero(pinocchio_model_.nv);
-    Eigen::VectorXd a = Eigen::VectorXd::Zero(pinocchio_model_.nv);
+    const pinocchio::Model & model =
+      (use_payload_model && pinocchio_loaded_initialized_) ? pinocchio_loaded_model_ : pinocchio_model_;
+    pinocchio::Data & data =
+      (use_payload_model && pinocchio_loaded_initialized_) ? pinocchio_loaded_data_ : pinocchio_data_;
+    Eigen::VectorXd q = Eigen::VectorXd::Zero(model.nq);
+    Eigen::VectorXd v = Eigen::VectorXd::Zero(model.nv);
+    Eigen::VectorXd a = Eigen::VectorXd::Zero(model.nv);
 
     for (size_t i = 0; i < joint_configs_.size(); ++i) {
       const int q_idx = pinocchio_q_index_map_[i];
@@ -1519,7 +1719,7 @@ std::vector<double> RsA3HardwareInterface::computePinocchioGravity(
       }
     }
 
-    const Eigen::VectorXd tau = pinocchio::rnea(pinocchio_model_, pinocchio_data_, q, v, a);
+    const Eigen::VectorXd tau = pinocchio::rnea(model, data, q, v, a);
 
     for (size_t i = 0; i < joint_configs_.size(); ++i) {
       const int v_idx = pinocchio_v_index_map_[i];
@@ -1549,6 +1749,15 @@ std::vector<double> RsA3HardwareInterface::computePinocchioInverseDynamics(
   const std::vector<double>& velocities,
   const std::vector<double>& accelerations)
 {
+  return computePinocchioInverseDynamics(positions, velocities, accelerations, false);
+}
+
+std::vector<double> RsA3HardwareInterface::computePinocchioInverseDynamics(
+  const std::vector<double>& positions,
+  const std::vector<double>& velocities,
+  const std::vector<double>& accelerations,
+  bool use_payload_model)
+{
   std::vector<double> id_torques(joint_configs_.size(), 0.0);
 
   if (!pinocchio_initialized_ || !pinocchio_mapping_ready_ ||
@@ -1559,9 +1768,13 @@ std::vector<double> RsA3HardwareInterface::computePinocchioInverseDynamics(
   }
 
   try {
-    Eigen::VectorXd q = Eigen::VectorXd::Zero(pinocchio_model_.nq);
-    Eigen::VectorXd v = Eigen::VectorXd::Zero(pinocchio_model_.nv);
-    Eigen::VectorXd a = Eigen::VectorXd::Zero(pinocchio_model_.nv);
+    const pinocchio::Model & model =
+      (use_payload_model && pinocchio_loaded_initialized_) ? pinocchio_loaded_model_ : pinocchio_model_;
+    pinocchio::Data & data =
+      (use_payload_model && pinocchio_loaded_initialized_) ? pinocchio_loaded_data_ : pinocchio_data_;
+    Eigen::VectorXd q = Eigen::VectorXd::Zero(model.nq);
+    Eigen::VectorXd v = Eigen::VectorXd::Zero(model.nv);
+    Eigen::VectorXd a = Eigen::VectorXd::Zero(model.nv);
 
     for (size_t i = 0; i < joint_configs_.size(); ++i) {
       const int q_idx = pinocchio_q_index_map_[i];
@@ -1578,7 +1791,7 @@ std::vector<double> RsA3HardwareInterface::computePinocchioInverseDynamics(
       }
     }
 
-    const Eigen::VectorXd tau = pinocchio::rnea(pinocchio_model_, pinocchio_data_, q, v, a);
+    const Eigen::VectorXd tau = pinocchio::rnea(model, data, q, v, a);
 
     for (size_t i = 0; i < joint_configs_.size(); ++i) {
       const int v_idx = pinocchio_v_index_map_[i];
@@ -1763,6 +1976,9 @@ void RsA3HardwareInterface::applyCalibratedInertiaToModel()
   
   // Recreate Pinocchio Data object to apply changes
   pinocchio_data_ = pinocchio::Data(pinocchio_model_);
+  pinocchio_loaded_model_ = pinocchio_model_;
+  pinocchio_loaded_data_ = pinocchio::Data(pinocchio_loaded_model_);
+  pinocchio_loaded_initialized_ = true;
   
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "Pinocchio 模型已更新（已应用标定惯量参数）");

@@ -58,9 +58,9 @@ def generate_launch_description():
         DeclareLaunchArgument('target_pose_executor_status_eef_frame', default_value='end_effector', description='状态打印使用的末端坐标系'),
         DeclareLaunchArgument('target_pose_executor_avoid_collisions_enabled', default_value='true', description='target_pose 执行器是否启用 MoveIt 避障'),
         DeclareLaunchArgument('target_pose_executor_world_boxes_json', default_value='[]', description='启动时注入的世界障碍物 box JSON 数组'),
-        DeclareLaunchArgument('target_pose_executor_attached_box_command_topic', default_value='/rc_arm_2/attached_box_command', description='运行时末端附着方块 JSON 命令话题'),
         DeclareLaunchArgument('target_pose_executor_planning_scene_topic', default_value='/planning_scene', description='PlanningScene diff 发布话题'),
         DeclareLaunchArgument('target_pose_executor_scene_publish_retries', default_value='5', description='启动后重复发布固定世界障碍物次数'),
+        DeclareLaunchArgument('use_payload_scene_sync', default_value='true', description='是否启用 payload_active -> MoveIt 场景同步'),
         DeclareLaunchArgument('use_position_printer', default_value='false', description='是否打印各关节当前角度'),
         DeclareLaunchArgument('position_print_topic', default_value='/rc_arm_2/mujoco_joint_positions', description='角度打印订阅话题（JointState.position）'),
         DeclareLaunchArgument('position_print_rate', default_value='10.0', description='角度打印频率（Hz）'),
@@ -156,8 +156,6 @@ def generate_launch_description():
             LaunchConfiguration('target_pose_executor_avoid_collisions_enabled'),
             '--world-boxes-json',
             LaunchConfiguration('target_pose_executor_world_boxes_json'),
-            '--attached-box-command-topic',
-            LaunchConfiguration('target_pose_executor_attached_box_command_topic'),
             '--planning-scene-topic',
             LaunchConfiguration('target_pose_executor_planning_scene_topic'),
             '--scene-publish-retries',
@@ -165,6 +163,23 @@ def generate_launch_description():
         ],
         output='screen',
         condition=IfCondition(LaunchConfiguration('use_target_pose_moveit_executor')),
+    )
+
+    payload_scene_sync = ExecuteProcess(
+        cmd=[
+            'python3',
+            PathJoinSubstitution([
+                FindPackageShare('rc_arm_moveit_config'),
+                'launch',
+                'payload_scene_sync.py',
+            ]),
+            '--hardware-config-file',
+            LaunchConfiguration('hardware_config_file'),
+            '--planning-scene-topic',
+            LaunchConfiguration('target_pose_executor_planning_scene_topic'),
+        ],
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('use_payload_scene_sync')),
     )
 
     torque_printer = ExecuteProcess(
@@ -202,5 +217,5 @@ def generate_launch_description():
     )
 
     return LaunchDescription(
-        declared_arguments + [include_robot, tf_target_bridge, target_pose_executor, position_printer, torque_printer]
+        declared_arguments + [include_robot, tf_target_bridge, target_pose_executor, payload_scene_sync, position_printer, torque_printer]
     )

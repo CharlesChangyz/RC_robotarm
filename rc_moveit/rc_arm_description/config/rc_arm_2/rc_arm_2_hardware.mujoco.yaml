@@ -22,6 +22,9 @@ external_feedback_timeout: 0.2
 
 # MuJoCo 接收命令 JointState 的话题
 mujoco_command_topic: /rc_arm_2/mujoco_joint_command
+vacuum_activate_topic: /rc_arm_2/vacuum_activate
+payload_active_topic: /rc_arm_2/payload_active
+payload_frame: end_effector
 
 # USB2CANFD 设备序列号；
 # MuJoCo 模式通常不用，但保留统一字段
@@ -43,11 +46,11 @@ motor_id_j2: 1
 motor_id_j3: 2
 motor_id_j4: 3
 
-# 位置环比例增益 Kp
-position_kp: 60.0
+# 空载位置环比例增益 Kp
+unloaded_position_kp: 60.0
 
-# 位置环微分增益 Kd
-position_kd: 3.0
+# 空载位置环微分增益 Kd
+unloaded_position_kd: 3.0
 
 # 硬件层统一速度限制，单位 rad/s
 velocity_limit: 8.0
@@ -61,40 +64,69 @@ max_acceleration: 20.0
 # 是否启用低刚度模式
 low_stiffness_mode: true
 
-# 低刚度模式全局 Kp
-low_stiffness_kp: 0.0
+# 空载低刚度模式全局 Kp
+unloaded_low_stiffness_kp: 0.0
 
-# 低刚度模式全局 Kd
-low_stiffness_kd: 0.0
+# 空载低刚度模式全局 Kd
+unloaded_low_stiffness_kd: 0.0
 
-# 低刚度模式额外常量力矩偏置，单位 Nm
-low_stiffness_torque_bias: 0.0
+# 空载低刚度模式额外常量力矩偏置，单位 Nm
+unloaded_low_stiffness_torque_bias: 0.0
+
+payload_mass: 0.63
+payload_diaginertia_x: 0.02
+payload_diaginertia_y: 0.02
+payload_diaginertia_z: 0.02
+payload_com_offset_x: 0.0
+payload_com_offset_y: 0.0
+payload_com_offset_z: 0.0
+payload_box_size_x: 0.05
+payload_box_size_y: 0.05
+payload_box_size_z: 0.05
+payload_position_kp: 60.0
+payload_position_kd: 3.0
+payload_low_stiffness_kp: 0.0
+payload_low_stiffness_kd: 0.0
+payload_low_stiffness_torque_bias: 0.0
+mujoco_payload_body_name: payload_block
+mujoco_payload_site_name: attachment_site
+mujoco_payload_initial_pos_x: 0.30
+mujoco_payload_initial_pos_y: 0.00
+mujoco_payload_initial_pos_z: 0.20
 
 # j1 低刚度 Kp 覆盖值；
-# 0 表示回退到 low_stiffness_kp
-low_stiffness_kp_j1: 1.5
+# 0 表示回退到 unloaded_low_stiffness_kp
+unloaded_low_stiffness_kp_j1: 1.5
 
-# j1 低刚度 Kd 覆盖值；
-# 0 表示回退到 low_stiffness_kd
-low_stiffness_kd_j1: 1.0
+# j1 空载低刚度 Kd 覆盖值；
+# 0 表示回退到 unloaded_low_stiffness_kd
+unloaded_low_stiffness_kd_j1: 1.0
+payload_low_stiffness_kp_j1: 1.5
+payload_low_stiffness_kd_j1: 1.0
 
 # j2 低刚度 Kp 覆盖值
-low_stiffness_kp_j2: 20.0
+unloaded_low_stiffness_kp_j2: 20.0
 
-# j2 低刚度 Kd 覆盖值
-low_stiffness_kd_j2: 4.0
+# j2 空载低刚度 Kd 覆盖值
+unloaded_low_stiffness_kd_j2: 4.0
+payload_low_stiffness_kp_j2: 20.0
+payload_low_stiffness_kd_j2: 4.0
 
 # j3 低刚度 Kp 覆盖值
-low_stiffness_kp_j3: 10.0
+unloaded_low_stiffness_kp_j3: 10.0
 
-# j3 低刚度 Kd 覆盖值
-low_stiffness_kd_j3: 2.0
+# j3 空载低刚度 Kd 覆盖值
+unloaded_low_stiffness_kd_j3: 2.0
+payload_low_stiffness_kp_j3: 10.0
+payload_low_stiffness_kd_j3: 2.0
 
 # j4 低刚度 Kp 覆盖值
-low_stiffness_kp_j4: 5.0
+unloaded_low_stiffness_kp_j4: 5.0
 
-# j4 低刚度 Kd 覆盖值
-low_stiffness_kd_j4: 1.0
+# j4 空载低刚度 Kd 覆盖值
+unloaded_low_stiffness_kd_j4: 1.0
+payload_low_stiffness_kp_j4: 5.0
+payload_low_stiffness_kd_j4: 1.0
 
 # 是否启用 Pinocchio 重力补偿项
 use_pinocchio_gravity: false

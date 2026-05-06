@@ -4,11 +4,13 @@ import os
 import sys
 import threading
 import time
+from pathlib import Path
 
 from dm_control import mjcf
 import mujoco
 import mujoco.viewer
 import numpy as np
+import yaml
 
 # 将项目根路径加入 sys.path，便于在未通过 pip 安装包时直接以源码方式导入
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,12 +19,14 @@ if ROOT_DIR not in sys.path:
 
 from rc_robotarm_mujoco.arenas import StandardArena
 from rc_robotarm_mujoco.robots import RCArm_2
+from rc_robotarm_mujoco.utils.transform_utils import convert_quat, mat2quat
 
 try:
     import rclpy
-    from rclpy.node import Node
     from geometry_msgs.msg import PoseStamped
+    from rclpy.node import Node
     from sensor_msgs.msg import JointState
+    from std_msgs.msg import Bool
 except Exception as exc:  # pragma: no cover
     raise SystemExit(
         "未找到 ROS2 依赖。请先确保 rclpy、geometry_msgs、sensor_msgs 已安装并可用。"
@@ -35,6 +39,28 @@ HARD_TORQUE_LIMITS = np.array([14.0, 14.0, 14.0, 6.0], dtype=np.float64)
 ARM_BASE_POS = [0.0, 1.8, 0.61]
 ARM_BASE_QUAT = [0.7071068, 0.0, 0.0, -0.7071068]
 HOME_QPOS = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float64)
+DEFAULT_HARDWARE_CONFIG = str(
+    Path(ROOT_DIR) / "rc_moveit" / "rc_arm_description" / "config" / "rc_arm_2" / "rc_arm_2_hardware.mujoco.yaml"
+)
+
+
+def _load_hardware_config(path: str) -> dict:
+    with open(path, "r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"invalid hardware config: {path}")
+    return data
+
+
+def _cfg_xyz(cfg: dict, prefix: str, fallback) -> np.ndarray:
+    return np.array(
+        [
+            float(cfg.get(f"{prefix}_x", fallback[0])),
+            float(cfg.get(f"{prefix}_y", fallback[1])),
+            float(cfg.get(f"{prefix}_z", fallback[2])),
+        ],
+        dtype=np.float64,
+    )
 
 
 class SimBridgeNode(Node):
@@ -49,6 +75,7 @@ class SimBridgeNode(Node):
         joint_position_topic: str,
         eef_pose_topic: str,
         eef_frame_id: str,
+        payload_active_topic: str,
     ) -> None:
         super().__init__("rc_arm_2_sim_bridge")
 
@@ -65,6 +92,7 @@ class SimBridgeNode(Node):
         self._have_pd = False
         self._have_torque_ff = False
         self._have_torque_input = False
+        self._payload_active = False
 
         if joint_command_topic:
             self.create_subscription(JointState, joint_command_topic, self._on_joint_command, 20)
@@ -77,6 +105,8 @@ class SimBridgeNode(Node):
 
         if torque_input_topic:
             self.create_subscription(JointState, torque_input_topic, self._on_torque_input, 20)
+
+        self.create_subscription(Bool, payload_active_topic, self._on_payload_active, 10)
 
         self._torque_pub = self.create_publisher(JointState, torque_output_topic, 20)
         self._torque_msg = JointState()
@@ -151,6 +181,14 @@ class SimBridgeNode(Node):
             self._tau_input = tau
             self._have_torque_input = True
 
+    def _on_payload_active(self, msg: Bool) -> None:
+        with self._lock:
+            self._payload_active = bool(msg.data)
+
+    def get_payload_active(self) -> bool:
+        with self._lock:
+            return self._payload_active
+
     def get_mit_inputs(self):
         with self._lock:
             return (
@@ -202,17 +240,45 @@ class SimBridgeNode(Node):
         self._eef_pose_pub.publish(pose_msg)
 
 
-def _create_sim():
+def _create_sim(config: dict):
     arena = StandardArena()
     arm = RCArm_2()
     arena.attach(arm.mjcf_model, pos=ARM_BASE_POS, quat=ARM_BASE_QUAT)
+
+    payload_body_name = str(config.get("mujoco_payload_body_name", "payload_block")).strip() or "payload_block"
+    payload_size = _cfg_xyz(config, "payload_box_size", (0.05, 0.05, 0.05))
+    payload_initial_pos = _cfg_xyz(config, "mujoco_payload_initial_pos", (0.30, 0.0, 0.20))
+    payload_com = _cfg_xyz(config, "payload_com_offset", (0.0, 0.0, 0.0))
+    payload_diaginertia = _cfg_xyz(config, "payload_diaginertia", (0.02, 0.02, 0.02))
+    payload_mass = float(config.get("payload_mass", 0.63))
+
+    payload_body = arena.mjcf_model.worldbody.add(
+        "body",
+        name=payload_body_name,
+        pos=payload_initial_pos.tolist(),
+    )
+    payload_freejoint = payload_body.add("freejoint", name=f"{payload_body_name}_freejoint")
+    payload_body.add(
+        "inertial",
+        pos=payload_com.tolist(),
+        mass=payload_mass,
+        diaginertia=payload_diaginertia.tolist(),
+    )
+    payload_body.add(
+        "geom",
+        name=f"{payload_body_name}_geom",
+        type="box",
+        size=(payload_size * 0.5).tolist(),
+        rgba=[0.0, 0.55, 0.9, 1.0],
+    )
+
     physics = mjcf.Physics.from_mjcf_model(arena.mjcf_model)
 
     with physics.reset_context():
         physics.bind(arm.joints).qpos = HOME_QPOS
 
     physics.forward()
-    return arena, arm, physics
+    return arena, arm, physics, payload_freejoint
 
 
 def _render_frame(viewer, physics):
@@ -279,13 +345,17 @@ def parse_args():
     parser.add_argument("--eef-pose-topic", default="/rc_arm_2/mujoco_eef_pose")
     parser.add_argument("--eef-frame-id", default="world")
     parser.add_argument("--collision-print-interval", type=int, default=20)
+    parser.add_argument("--hardware-config-file", default=DEFAULT_HARDWARE_CONFIG)
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    _, arm, physics = _create_sim()
+    hardware_config = _load_hardware_config(args.hardware_config_file)
+    _, arm, physics, payload_freejoint = _create_sim(hardware_config)
     joint_binding = physics.bind(arm.joints)
+    payload_binding = physics.bind(payload_freejoint)
+    attachment_site_binding = physics.bind(arm._attachment_site)
     viewer = None
     render_disabled = False
 
@@ -300,6 +370,7 @@ def main():
         joint_position_topic=args.joint_position_topic,
         eef_pose_topic=args.eef_pose_topic,
         eef_frame_id=args.eef_frame_id,
+        payload_active_topic=str(hardware_config.get("payload_active_topic", "/rc_arm_2/payload_active")),
     )
 
     last_step_time = time.time()
@@ -311,7 +382,8 @@ def main():
         effective_limit = np.minimum(effective_limit, float(args.torque_limit))
 
     node.get_logger().info(
-        f"MIT simulation bridge started. Torque clamp: global={args.torque_limit:.3f} Nm, per-joint={effective_limit.tolist()}"
+        "MIT simulation bridge started. Torque clamp: global=%.3f Nm, per-joint=%s, payload_config=%s"
+        % (args.torque_limit, effective_limit.tolist(), args.hardware_config_file)
     )
 
     try:
@@ -356,6 +428,17 @@ def main():
 
             joint_binding.qfrc_applied = tau
             physics.step()
+
+            if node.get_payload_active():
+                payload_qpos = np.concatenate(
+                    [
+                        attachment_site_binding.xpos.copy(),
+                        convert_quat(mat2quat(attachment_site_binding.xmat.reshape(3, 3)), to="wxyz"),
+                    ]
+                )
+                payload_binding.qpos[:] = payload_qpos
+                payload_binding.qvel[:] = 0.0
+                physics.forward()
 
             if not render_disabled:
                 try:

@@ -49,6 +49,8 @@ public:
 
   bool enable();
   bool disable();
+  bool enableVacuum();
+  bool disableVacuum();
 
   bool writeCommands(
     const std::vector<double> & position,

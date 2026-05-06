@@ -10,6 +10,8 @@ setup(
         'mujoco>=2.3.3',
         'dm-control',
         'numpy<2.0.0',
+        'PySide6',
+        'PyYAML',
     ],
     python_requires='>=3.8',
 )
