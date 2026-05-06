@@ -44,7 +44,7 @@ dm_startup_delay_sec: 8.0
 
 # 激活阶段重复发送使能，降低首次使能包丢失的概率
 dm_enable_retry_count: 3
-dm_enable_retry_interval_sec: 0.5
+dm_enable_retry_interval_sec: 1.0
 
 # 关节到电机 CAN ID 的映射
 motor_id_j1: 0

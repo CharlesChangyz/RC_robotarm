@@ -44,6 +44,9 @@
           <param name="dm_nom_baud">${hardware_config.dm_nom_baud}</param>
           <param name="dm_dat_baud">${hardware_config.dm_dat_baud}</param>
           <param name="dm_control_mode">${hardware_config.dm_control_mode}</param>
+          <param name="dm_startup_delay_sec">${hardware_config.dm_startup_delay_sec}</param>
+          <param name="dm_enable_retry_count">${hardware_config.dm_enable_retry_count}</param>
+          <param name="dm_enable_retry_interval_sec">${hardware_config.dm_enable_retry_interval_sec}</param>
           <param name="unloaded_position_kp">${hardware_config.unloaded_position_kp}</param>
           <param name="unloaded_position_kd">${hardware_config.unloaded_position_kd}</param>
           <param name="payload_position_kp">${hardware_config.payload_position_kp}</param>
