@@ -173,8 +173,8 @@
         <param name="payload_low_stiffness_kd">${hardware_config.payload_low_stiffness_kd_j4}</param>
         <command_interface name="position">
           <!--
-          <param name="min">-0.5313</param>
-          <param name="max">1.2963</param>
+          <param name="min">-3.14159265358979</param>
+          <param name="max">3.14159265358979</param>
           -->
           <param name="min">-3.14</param>
           <param name="max">3.14</param>

@@ -139,7 +139,7 @@
     <parent link="l3"/>
     <child link="l4"/>
     <axis xyz="0 0 -1"/>
-    <limit effort="6.0" lower="-0.5313" upper="1.2963" velocity="20.0"/>
+    <limit effort="6.0" lower="-3.14159265358979" upper="3.14159265358979" velocity="20.0"/>
   </joint>
   <link name="end_effector"/>
   <joint name="l4_to_end_effector" type="fixed">
@@ -263,8 +263,8 @@
       <param name="low_stiffness_kd">0.0</param>
       <command_interface name="position">
         <!--
-        <param name="min">-0.5313</param>
-        <param name="max">1.2963</param>
+        <param name="min">-3.14159265358979</param>
+        <param name="max">3.14159265358979</param>
         -->
         <param name="min">-3.14</param>
         <param name="max">3.14</param>

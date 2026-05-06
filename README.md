@@ -123,7 +123,7 @@ USE_RVIZ=false ./scripts/run_rc_arm_real.sh
 `rc_arm_2_robot.launch.py` 默认会启动两段链路：
 
 1. `tf_target_pose_bridge.py`：从 `/tf` 中读取 `world -> rc_arm_2_target`。
-2. `target_pose_moveit_executor.py`：订阅 `/rc_arm_2/target_pose`，调用 MoveIt 进行 IK、规划和执行。
+2. `target_pose_moveit_executor.py`：订阅 `/rc_arm_2/target_pose`，用仓库内共享 4DOF solver 先解出 `j1..j4`，再把 joint goal 交给 MoveIt 做规划、避障和执行。
 
 可以使用 GUI 工具发布目标 TF：
 
@@ -135,13 +135,15 @@ python3 demo/tf_target_cli_publisher.py
 
 GUI 主要行为：
 
-- `Target Editor`：编辑 `x / y / z / j4`，支持手输和步进按钮
+- `Target Editor`：编辑 `x / y / z / j4 world`，其中 `j4 world = 0 deg` 表示工具水平
 - `Send`：只在按下时单次发布一次 `/tf` 目标，不再周期持续发布
-- `Reset to current`：用当前 `world -> end_effector` 实际位姿回填编辑框
-- `Home`：回到脚本默认初始点
+- `Reset to current`：用当前 `world -> end_effector` 实际位置和真实关节态经共享 FK 算出的当前 `j4 world` 回填编辑框
+- `Home`：回到 URDF/实机零位 FK 对应的固定 `xyz + 0 deg`
 - `Editing target / Last sent target / Actual current pose` 分开显示，避免“改了但没发”的歧义
 - `Reachability`：显示当前编辑点的 `Reachable / Near limit / Unreachable` 状态和近似 `x/y/z` 范围
 - `System Control`：可直接启动 `run_rc_arm_mujoco.sh`、`run_rc_arm_mujoco_bridge.sh`、`run_rc_arm_real.sh`，以及单次发送 `Vacuum ON/OFF`
+
+这条 GUI 目标链不再调用 MoveIt 的 `/compute_ik`。`/compute_ik` 仍保留给 teleop 等其他链路使用；当前 GUI / target executor 链只把 MoveIt 用在 joint-goal 规划、碰撞检查和执行上。
 
 默认快捷键：
 
@@ -420,7 +422,7 @@ USE_RVIZ=false ./scripts/run_rc_arm_real.sh
 `rc_arm_2_robot.launch.py` starts two target-pose components by default:
 
 1. `tf_target_pose_bridge.py`: reads `world -> rc_arm_2_target` from `/tf`.
-2. `target_pose_moveit_executor.py`: subscribes to `/rc_arm_2/target_pose`, then runs IK, planning, and execution through MoveIt.
+2. `target_pose_moveit_executor.py`: subscribes to `/rc_arm_2/target_pose`, solves `j1..j4` with the shared 4DOF solver in this repo, then passes the joint goal to MoveIt for planning, collision checking, and execution.
 
 Use the GUI TF publisher to command a target:
 
@@ -430,7 +432,7 @@ source rc_moveit/install/setup.bash
 python3 demo/tf_target_cli_publisher.py
 ```
 
-The GUI keeps `Editing target`, `Last sent target`, and `Actual current pose` separate. It only publishes on `Send`, supports `Reset to current`, `Home`, `Send if changed only`, `Vacuum ON/OFF`, MuJoCo / Real start-stop buttons, and approximate reachability feedback.
+The GUI uses `j4 world` semantics: `0 deg` means the tool is level in the arm's radial vertical plane. It keeps `Editing target`, `Last sent target`, and `Actual current pose` separate, publishes only on `Send`, and supports `Reset to current`, `Home`, `Send if changed only`, `Vacuum ON/OFF`, MuJoCo / Real start-stop buttons, and approximate reachability feedback. This GUI/executor chain no longer calls MoveIt's `/compute_ik`; `/compute_ik` remains available for teleop and other chains.
 
 Common target executor options:
 

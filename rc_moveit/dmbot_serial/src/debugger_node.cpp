@@ -20,7 +20,7 @@ RobotCommandPublisher::RobotCommandPublisher()
     {5.0F, 1.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}};
 
   commands_ = create_commands();
-  joint_q_limits_ = {{{-1.865F, 2.365F}, {-1.85F, 0.0F}, {-2.13861F, 0.0F}, {-0.5313F, 1.2963F}}};
+  joint_q_limits_ = {{{-1.865F, 2.365F}, {-1.85F, 0.0F}, {-2.13861F, 0.0F}, {-3.1415927F, 3.1415927F}}};
   apply_q_limits_to_commands();
 
   running_.store(true);

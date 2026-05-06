@@ -180,7 +180,7 @@
     <parent link="l3"/>
     <child link="l4"/>
     <axis xyz="0 0 -1"/>
-    <limit lower="-0.5313" upper="1.2963" effort="6.0" velocity="20.0"/>
+    <limit lower="-3.14159265358979" upper="3.14159265358979" effort="6.0" velocity="20.0"/>
   </joint>
 
   <link name="end_effector"/>

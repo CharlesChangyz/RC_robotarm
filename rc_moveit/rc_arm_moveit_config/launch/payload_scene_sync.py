@@ -2,6 +2,7 @@
 """Sync /rc_arm_2/payload_active into the MoveIt planning scene."""
 
 import argparse
+import ast
 from pathlib import Path
 from typing import Tuple
 
@@ -12,15 +13,51 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from shape_msgs.msg import SolidPrimitive
 from std_msgs.msg import Bool
-import yaml
+
+
+def _parse_scalar(raw_value: str):
+    value = raw_value.strip()
+    if not value:
+        return ""
+
+    lowered = value.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if lowered in {"null", "none", "~"}:
+        return None
+
+    try:
+        return ast.literal_eval(value)
+    except (SyntaxError, ValueError):
+        return value
+
+
+def _load_flat_yaml(path: Path) -> dict:
+    data = {}
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            raise ValueError(f"unsupported config line {line_number}: {raw_line}")
+
+        key, raw_value = line.split(":", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError(f"empty config key on line {line_number}")
+
+        value = raw_value.split("#", 1)[0]
+        data[key] = _parse_scalar(value)
+    return data
 
 
 def _load_config(config_path: str) -> dict:
     path = Path(config_path)
     if not path.is_file():
         raise FileNotFoundError(f"hardware config not found: {config_path}")
-    with path.open("r", encoding="utf-8") as handle:
-        data = yaml.safe_load(handle) or {}
+    data = _load_flat_yaml(path)
     if not isinstance(data, dict):
         raise ValueError(f"hardware config must be a mapping: {config_path}")
     return data

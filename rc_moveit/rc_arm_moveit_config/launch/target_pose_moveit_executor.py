@@ -11,12 +11,14 @@ import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import CollisionObject, Constraints, JointConstraint, PlanningScene
-from moveit_msgs.srv import GetPositionIK
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from sensor_msgs.msg import JointState
 from shape_msgs.msg import SolidPrimitive
 import tf2_ros
+
+from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics
 
 
 def _normalize_frame_id(frame_id: str) -> str:
@@ -83,7 +85,6 @@ class TargetPoseMoveItExecutor(Node):
         joint_names: List[str],
         default_frame: str,
         move_action_name: str,
-        compute_ik_service: str,
         pos_threshold: float,
         rot_threshold: float,
         planning_time: float,
@@ -93,9 +94,9 @@ class TargetPoseMoveItExecutor(Node):
         joint_tolerance: float,
         check_period: float,
         avoid_collisions: bool,
-        enforce_j4_from_target: bool,
-        j4_joint_name: str,
         j4_axis: str,
+        joint_state_topic: str,
+        urdf_path: str,
         status_log_period: float,
         status_base_frame: str,
         status_eef_frame: str,
@@ -116,8 +117,6 @@ class TargetPoseMoveItExecutor(Node):
         self._acc_scale = max(0.01, min(1.0, float(acc_scale)))
         self._joint_tolerance = max(1.0e-4, float(joint_tolerance))
         self._avoid_collisions = bool(avoid_collisions)
-        self._enforce_j4_from_target = bool(enforce_j4_from_target)
-        self._j4_joint_name = str(j4_joint_name).strip() or "j4_joint"
         self._j4_axis = str(j4_axis).strip().lower() if str(j4_axis).strip() else "x"
         if self._j4_axis not in {"x", "y", "z"}:
             self._j4_axis = "x"
@@ -135,13 +134,18 @@ class TargetPoseMoveItExecutor(Node):
 
         self._busy = False
         self._ready_move_action = False
-        self._ready_compute_ik = False
+        self._ready_solver = False
         self._last_ready_tuple = None
+        self._latest_joint_map: Dict[str, float] = {}
 
         self._last_event = "init"
         self._last_event_time_sec = self._now_sec()
 
-        self._ik_client = self.create_client(GetPositionIK, compute_ik_service)
+        self._kinematics = RcArmWorldPitchKinematics(
+            urdf_path=urdf_path or None,
+            joint_names=self._joint_names,
+            j4_axis=self._j4_axis,
+        )
         self._move_group_client = ActionClient(self, MoveGroup, move_action_name)
         scene_qos = QoSProfile(
             depth=1,
@@ -154,6 +158,7 @@ class TargetPoseMoveItExecutor(Node):
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
         self.create_subscription(PoseStamped, target_topic, self._on_target, 20)
+        self.create_subscription(JointState, joint_state_topic, self._on_joint_state, 20)
         self._timer = self.create_timer(max(0.02, float(check_period)), self._on_timer)
         self._scene_timer = self.create_timer(1.0, self._publish_static_world_scene)
         if self._status_log_period > 0.0:
@@ -172,6 +177,15 @@ class TargetPoseMoveItExecutor(Node):
                 self._status_eef_frame,
             )
         )
+
+    def _on_joint_state(self, msg: JointState) -> None:
+        if not msg.name or not msg.position:
+            return
+        mapping = self._latest_joint_map.copy()
+        for idx, name in enumerate(msg.name):
+            if idx < len(msg.position):
+                mapping[name] = float(msg.position[idx])
+        self._latest_joint_map = mapping
 
     def _now_sec(self) -> float:
         return self.get_clock().now().nanoseconds * 1.0e-9
@@ -350,16 +364,16 @@ class TargetPoseMoveItExecutor(Node):
 
     def _update_ready(self) -> None:
         mg_ready = self._move_group_client.server_is_ready()
-        ik_ready = self._ik_client.service_is_ready()
+        solver_ready = self._kinematics is not None
 
         self._ready_move_action = mg_ready
-        self._ready_compute_ik = ik_ready
+        self._ready_solver = solver_ready
 
-        ready_tuple = (mg_ready, ik_ready)
+        ready_tuple = (mg_ready, solver_ready)
         if ready_tuple != self._last_ready_tuple:
             self.get_logger().info(
-                "[STATE] ready move_action=%d compute_ik=%d %s"
-                % (1 if mg_ready else 0, 1 if ik_ready else 0, self._format_eef())
+                "[STATE] ready move_action=%d solver=%d %s"
+                % (1 if mg_ready else 0, 1 if solver_ready else 0, self._format_eef())
             )
             self._last_ready_tuple = ready_tuple
 
@@ -368,11 +382,11 @@ class TargetPoseMoveItExecutor(Node):
         with self._target_lock:
             has_target = self._latest_target is not None
         self.get_logger().info(
-            "[STATE] busy=%d ready(move_action=%d,ik=%d) target=%d event=%s(%.2fs) %s"
+            "[STATE] busy=%d ready(move_action=%d,solver=%d) target=%d event=%s(%.2fs) %s"
             % (
                 1 if self._busy else 0,
                 1 if self._ready_move_action else 0,
-                1 if self._ready_compute_ik else 0,
+                1 if self._ready_solver else 0,
                 1 if has_target else 0,
                 self._last_event,
                 event_age,
@@ -421,7 +435,7 @@ class TargetPoseMoveItExecutor(Node):
 
         if self._busy:
             return
-        if not (self._ready_move_action and self._ready_compute_ik):
+        if not (self._ready_move_action and self._ready_solver):
             return
 
         with self._target_lock:
@@ -432,87 +446,49 @@ class TargetPoseMoveItExecutor(Node):
         if self._last_sent_target is not None and not self._target_changed(self._last_sent_target, target):
             return
 
-        self._set_busy(True, "request_ik")
-        self._event("ik_request", target)
-        self._request_ik(target)
+        self._set_busy(True, "solve_target")
+        self._event("solve_request", target)
+        self._solve_target(target)
 
-    def _request_ik(self, target: PoseStamped) -> None:
-        req = GetPositionIK.Request()
-        req.ik_request.group_name = self._planning_group
-        req.ik_request.avoid_collisions = self._avoid_collisions
-        req.ik_request.robot_state.is_diff = False
-        req.ik_request.pose_stamped = self._resolve_target_pose(target)
-
-        sec = int(self._planning_time)
-        nsec = int((self._planning_time - sec) * 1e9)
-        req.ik_request.timeout.sec = sec
-        req.ik_request.timeout.nanosec = nsec
-
-        future = self._ik_client.call_async(req)
-        future.add_done_callback(lambda f, target=target: self._on_ik_done(f, target))
-
-    def _extract_j4_target_rad(self, target: PoseStamped) -> float:
+    def _extract_target_pitch_rad(self, target: PoseStamped) -> float:
         q = target.pose.orientation
-        qx, qy, qz, qw = _normalize_quat_xyzw((float(q.x), float(q.y), float(q.z), float(q.w)))
-        axis_comp = qx
-        if self._j4_axis == "y":
-            axis_comp = qy
-        elif self._j4_axis == "z":
-            axis_comp = qz
+        return self._kinematics.world_pitch_from_quaternion((float(q.x), float(q.y), float(q.z), float(q.w)))
 
-        angle = 2.0 * math.atan2(axis_comp, qw)
-        while angle > math.pi:
-            angle -= 2.0 * math.pi
-        while angle < -math.pi:
-            angle += 2.0 * math.pi
-        return angle
-
-    def _extract_joint_targets(self, joint_state) -> Optional[Dict[str, float]]:
-        mapping = {name: float(pos) for name, pos in zip(joint_state.name, joint_state.position)}
-        missing = [j for j in self._joint_names if j not in mapping]
-        if missing:
-            self.get_logger().warn("IK result missing joints: %s" % ", ".join(missing))
+    def _current_seed_joints(self) -> Optional[Dict[str, float]]:
+        if not self._latest_joint_map:
             return None
-        return {j: mapping[j] for j in self._joint_names}
+        missing = [name for name in self._joint_names if name not in self._latest_joint_map]
+        if missing:
+            return None
+        return {name: self._latest_joint_map[name] for name in self._joint_names}
 
-    def _on_ik_done(self, future, target: PoseStamped) -> None:
-        try:
-            response = future.result()
-        except Exception as exc:
-            self._event("ik_exception", target)
-            self.get_logger().warn(f"IK request exception: {exc}")
-            self._set_busy(False, "ik_exception")
-            return
-
-        if response is None:
-            self._event("ik_empty", target)
-            self.get_logger().warn("IK empty response")
-            self._set_busy(False, "ik_empty")
-            return
-
-        if response.error_code.val != response.error_code.SUCCESS:
-            self._event("ik_fail", target)
-            self.get_logger().warn(
-                "IK failed, error_code=%d %s %s"
-                % (response.error_code.val, self._format_target(target), self._format_eef())
-            )
-            self._set_busy(False, "ik_fail")
-            return
-
-        q_target = self._extract_joint_targets(response.solution.joint_state)
+    def _solve_target(self, target: PoseStamped) -> None:
+        pose = self._resolve_target_pose(target)
+        pitch_rad = self._extract_target_pitch_rad(pose)
+        seed = self._current_seed_joints()
+        q_target = self._kinematics.solve_xyz_pitch(
+            float(pose.pose.position.x),
+            float(pose.pose.position.y),
+            float(pose.pose.position.z),
+            pitch_rad,
+            seed_joints=seed,
+        )
         if q_target is None:
-            self._event("ik_missing_joint", target)
-            self._set_busy(False, "ik_missing_joint")
+            self._event("solve_fail", target)
+            self.get_logger().warn(
+                "4DOF solve failed target_xyz=(%.3f, %.3f, %.3f) target_pitch=%.3f %s"
+                % (
+                    float(pose.pose.position.x),
+                    float(pose.pose.position.y),
+                    float(pose.pose.position.z),
+                    pitch_rad,
+                    self._format_eef(),
+                )
+            )
+            self._set_busy(False, "solve_fail")
             return
 
-        if self._enforce_j4_from_target:
-            if self._j4_joint_name in q_target:
-                q_target[self._j4_joint_name] = self._extract_j4_target_rad(target)
-            else:
-                self.get_logger().warn(
-                    "j4 override skipped: joint '%s' not found in IK result" % self._j4_joint_name
-                )
-
+        self._event("solve_ok", target, extra="pitch=%.3f" % pitch_rad)
         self._send_goal(target, q_target)
 
     def _send_goal(self, target: PoseStamped, q_target: Dict[str, float]) -> None:
@@ -593,7 +569,8 @@ def parse_args():
     parser.add_argument("--joint-names", default="j1_joint,j2_joint,j3_joint,j4_joint")
     parser.add_argument("--default-frame", default="world")
     parser.add_argument("--move-action-name", default="/move_action")
-    parser.add_argument("--compute-ik-service", default="/compute_ik")
+    parser.add_argument("--joint-state-topic", default="/joint_states")
+    parser.add_argument("--urdf-path", default="")
     parser.add_argument("--pos-threshold", type=float, default=0.003)
     parser.add_argument("--rot-threshold", type=float, default=0.03)
     parser.add_argument("--planning-time", type=float, default=2.0)
@@ -604,8 +581,6 @@ def parse_args():
     parser.add_argument("--check-period", type=float, default=0.05)
     parser.add_argument("--avoid-collisions", action="store_true")
     parser.add_argument("--avoid-collisions-enabled", default="true")
-    parser.add_argument("--enforce-j4-from-target", default="true")
-    parser.add_argument("--j4-joint-name", default="j4_joint")
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--status-log-period", type=float, default=1.0, help="state log period, <=0 to disable")
     parser.add_argument("--status-base-frame", default="world")
@@ -633,7 +608,6 @@ def main() -> None:
         joint_names=joints,
         default_frame=args.default_frame,
         move_action_name=args.move_action_name,
-        compute_ik_service=args.compute_ik_service,
         pos_threshold=args.pos_threshold,
         rot_threshold=args.rot_threshold,
         planning_time=args.planning_time,
@@ -643,9 +617,9 @@ def main() -> None:
         joint_tolerance=args.joint_tolerance,
         check_period=args.check_period,
         avoid_collisions=args.avoid_collisions or _parse_bool(args.avoid_collisions_enabled),
-        enforce_j4_from_target=_parse_bool(args.enforce_j4_from_target),
-        j4_joint_name=args.j4_joint_name,
         j4_axis=args.j4_axis,
+        joint_state_topic=args.joint_state_topic,
+        urdf_path=args.urdf_path,
         status_log_period=args.status_log_period,
         status_base_frame=args.status_base_frame,
         status_eef_frame=args.status_eef_frame,

@@ -8,11 +8,10 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import rclpy
-from geometry_msgs.msg import PoseStamped, TransformStamped
-from moveit_msgs.srv import GetPositionIK
+from geometry_msgs.msg import TransformStamped
 from PySide6.QtCore import QObject, QProcess, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -40,10 +39,16 @@ import tf2_ros
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR / "rc_moveit" / "rc_arm_moveit_config" / "launch"))
+
+from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E402
+
+
 SCRIPT_RUN_MUJOCO = ROOT_DIR / "scripts" / "run_rc_arm_mujoco.sh"
 SCRIPT_RUN_MUJOCO_BRIDGE = ROOT_DIR / "scripts" / "run_rc_arm_mujoco_bridge.sh"
 SCRIPT_RUN_REAL = ROOT_DIR / "scripts" / "run_rc_arm_real.sh"
-HOME_CAPTURE_DELAY_SEC = 5.0
+J4_WORLD_MIN_DEG = 0.0
+J4_WORLD_MAX_DEG = 90.0
 
 
 @dataclass
@@ -54,7 +59,7 @@ class TargetState:
     j4_rad: float
 
     def to_display(self) -> str:
-        return "x={:.4f} y={:.4f} z={:.4f} j4={:.2f} deg ({:.4f} rad)".format(
+        return "x={:.4f} y={:.4f} z={:.4f} j4 world={:.2f} deg ({:.4f} rad)".format(
             self.x, self.y, self.z, math.degrees(self.j4_rad), self.j4_rad
         )
 
@@ -72,44 +77,11 @@ class ActualPose:
     x: float
     y: float
     z: float
-    qx: float
-    qy: float
-    qz: float
-    qw: float
-    joint_j4_rad: Optional[float]
+    world_pitch_rad: Optional[float]
 
 
 def normalize_frame_id(frame_id: str) -> str:
     return (frame_id or "").strip().lstrip("/")
-
-
-def quat_from_axis_angle(axis: str, angle_rad: float):
-    half = 0.5 * angle_rad
-    s = math.sin(half)
-    c = math.cos(half)
-    if axis == "x":
-        return (s, 0.0, 0.0, c)
-    if axis == "y":
-        return (0.0, s, 0.0, c)
-    return (0.0, 0.0, s, c)
-
-
-def normalize_angle_rad(angle: float) -> float:
-    while angle > math.pi:
-        angle -= 2.0 * math.pi
-    while angle < -math.pi:
-        angle += 2.0 * math.pi
-    return angle
-
-
-def extract_axis_angle_rad(axis: str, qx: float, qy: float, qz: float, qw: float) -> float:
-    comp = qx
-    if axis == "y":
-        comp = qy
-    elif axis == "z":
-        comp = qz
-    return normalize_angle_rad(2.0 * math.atan2(comp, qw))
-
 
 class RosBackend(QObject):
     actual_pose_updated = Signal(object)
@@ -123,12 +95,15 @@ class RosBackend(QObject):
     def __init__(self, args) -> None:
         super().__init__()
         self._args = args
+        self._kinematics = RcArmWorldPitchKinematics(
+            urdf_path=args.urdf_path or None,
+            j4_axis=args.j4_axis,
+        )
         self._node: Optional[Node] = None
         self._tf_pub = None
         self._vacuum_pub = None
         self._payload_sub = None
         self._joint_state_sub = None
-        self._ik_client = None
         self._tf_buffer = None
         self._tf_listener = None
         self._lock = threading.Lock()
@@ -139,7 +114,8 @@ class RosBackend(QObject):
         self._pending_vacuum: Optional[bool] = None
         self._pending_reachability: Optional[TargetState] = None
         self._last_actual_emit = 0.0
-        self._latest_joint_j4_rad: Optional[float] = None
+        self._latest_joint_map: Dict[str, float] = {}
+        self._last_solver_solution: Optional[Dict[str, float]] = None
 
     def start(self) -> None:
         if not rclpy.ok():
@@ -153,7 +129,6 @@ class RosBackend(QObject):
         self._joint_state_sub = self._node.create_subscription(
             JointState, self._args.joint_state_topic, self._on_joint_state, 20
         )
-        self._ik_client = self._node.create_client(GetPositionIK, self._args.compute_ik_service)
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self._node, spin_thread=False)
         self._thread = threading.Thread(target=self._spin_loop, daemon=True)
@@ -190,12 +165,11 @@ class RosBackend(QObject):
     def _on_joint_state(self, msg: JointState) -> None:
         if not msg.name or not msg.position:
             return
-        try:
-            idx = msg.name.index(self._args.j4_joint_name)
-        except ValueError:
-            return
-        if idx < len(msg.position):
-            self._latest_joint_j4_rad = float(msg.position[idx])
+        mapping = self._latest_joint_map.copy()
+        for idx, name in enumerate(msg.name):
+            if idx < len(msg.position):
+                mapping[name] = float(msg.position[idx])
+        self._latest_joint_map = mapping
 
     def _spin_loop(self) -> None:
         while not self._stop_event.is_set():
@@ -225,16 +199,18 @@ class RosBackend(QObject):
         except Exception:
             return
 
-        q = trans.transform.rotation
+        world_pitch = None
+        if all(name in self._latest_joint_map for name in self._kinematics.zero_home_joint_map()):
+            try:
+                world_pitch = self._kinematics.forward_world_pitch(self._latest_joint_map)
+            except Exception:
+                world_pitch = None
+
         actual = ActualPose(
             x=float(trans.transform.translation.x),
             y=float(trans.transform.translation.y),
             z=float(trans.transform.translation.z),
-            qx=float(q.x),
-            qy=float(q.y),
-            qz=float(q.z),
-            qw=float(q.w),
-            joint_j4_rad=self._latest_joint_j4_rad,
+            world_pitch_rad=world_pitch,
         )
         self.actual_pose_updated.emit(actual)
 
@@ -250,7 +226,7 @@ class RosBackend(QObject):
             self.last_send_status.emit("skipped: unchanged target")
             return
 
-        qx, qy, qz, qw = quat_from_axis_angle(self._args.j4_axis, state.j4_rad)
+        qx, qy, qz, qw = self._kinematics.quaternion_from_world_pitch(state.j4_rad)
         tf_msg = TransformStamped()
         tf_msg.header.stamp = self._node.get_clock().now().to_msg()
         tf_msg.header.frame_id = normalize_frame_id(self._args.parent_frame)
@@ -293,44 +269,36 @@ class RosBackend(QObject):
         report = self._compute_reachability(pending)
         self.reachability_updated.emit(report)
 
-    def _state_to_pose(self, state: TargetState) -> PoseStamped:
-        pose = PoseStamped()
-        pose.header.frame_id = normalize_frame_id(self._args.parent_frame)
-        pose.pose.position.x = state.x
-        pose.pose.position.y = state.y
-        pose.pose.position.z = state.z
-        qx, qy, qz, qw = quat_from_axis_angle(self._args.j4_axis, state.j4_rad)
-        pose.pose.orientation.x = qx
-        pose.pose.orientation.y = qy
-        pose.pose.orientation.z = qz
-        pose.pose.orientation.w = qw
-        return pose
+    def _current_seed_joints(self) -> Optional[Dict[str, float]]:
+        needed = self._kinematics.zero_home_joint_map().keys()
+        if not all(name in self._latest_joint_map for name in needed):
+            return self._last_solver_solution
+        return {name: self._latest_joint_map[name] for name in needed}
 
-    def _ik_success(self, state: TargetState) -> bool:
-        if self._ik_client is None or self._node is None:
-            return False
-        if not self._ik_client.wait_for_service(timeout_sec=0.05):
-            return False
-
-        request = GetPositionIK.Request()
-        request.ik_request.group_name = self._args.planning_group
-        request.ik_request.avoid_collisions = True
-        request.ik_request.pose_stamped = self._state_to_pose(state)
-        request.ik_request.timeout.sec = 0
-        request.ik_request.timeout.nanosec = int(0.3 * 1e9)
-
-        future = self._ik_client.call_async(request)
-        deadline = time.time() + 0.5
-        while not future.done() and time.time() < deadline and not self._stop_event.is_set():
-            rclpy.spin_once(self._node, timeout_sec=0.02)
-
-        if not future.done():
-            return False
-        response = future.result()
-        return response is not None and response.error_code.val == response.error_code.SUCCESS
+    def _solve_state(
+        self,
+        state: TargetState,
+        seed_joints: Optional[Dict[str, float]] = None,
+    ) -> Optional[Dict[str, float]]:
+        seed = seed_joints or self._current_seed_joints()
+        solution = self._kinematics.solve_xyz_pitch(
+            state.x,
+            state.y,
+            state.z,
+            state.j4_rad,
+            seed_joints=seed,
+        )
+        if solution is not None:
+            self._last_solver_solution = dict(solution)
+        return solution
 
     def _estimate_axis_range(
-        self, state: TargetState, axis: str, coarse_step: float, search_limit: float
+        self,
+        state: TargetState,
+        axis: str,
+        coarse_step: float,
+        search_limit: float,
+        center_solution: Optional[Dict[str, float]],
     ) -> Tuple[float, float]:
         def with_axis(value: float) -> TargetState:
             if axis == "x":
@@ -343,31 +311,72 @@ class RosBackend(QObject):
         lo = center
         hi = center
 
-        probe = center
-        while center - probe <= search_limit:
-            candidate = probe - coarse_step
-            if not self._ik_success(with_axis(candidate)):
-                break
-            probe = candidate
-            lo = candidate
+        def search_direction(direction: float) -> Tuple[float, Optional[Dict[str, float]]]:
+            success_value = center
+            success_solution = dict(center_solution) if center_solution is not None else None
+            failure_value: Optional[float] = None
+            probe = center
+            while abs(probe - center) <= search_limit:
+                candidate = probe + direction * coarse_step
+                if abs(candidate - center) > search_limit:
+                    break
+                candidate_state = with_axis(candidate)
+                candidate_solution = self._solve_state(candidate_state, success_solution)
+                if candidate_solution is None:
+                    failure_value = candidate
+                    break
+                probe = candidate
+                success_value = candidate
+                success_solution = candidate_solution
 
-        probe = center
-        while probe - center <= search_limit:
-            candidate = probe + coarse_step
-            if not self._ik_success(with_axis(candidate)):
-                break
-            probe = candidate
-            hi = candidate
+            if failure_value is None:
+                return success_value, success_solution
+
+            best_value = success_value
+            best_solution = success_solution
+            if direction > 0.0:
+                reachable = success_value
+                unreachable = failure_value
+                for _ in range(8):
+                    mid = 0.5 * (reachable + unreachable)
+                    mid_state = with_axis(mid)
+                    mid_solution = self._solve_state(mid_state, best_solution)
+                    if mid_solution is not None:
+                        best_value = mid
+                        best_solution = mid_solution
+                        reachable = mid
+                    else:
+                        unreachable = mid
+            else:
+                unreachable = failure_value
+                reachable = success_value
+                for _ in range(8):
+                    mid = 0.5 * (unreachable + reachable)
+                    mid_state = with_axis(mid)
+                    mid_solution = self._solve_state(mid_state, best_solution)
+                    if mid_solution is not None:
+                        best_value = mid
+                        best_solution = mid_solution
+                        reachable = mid
+                    else:
+                        unreachable = mid
+            return best_value, best_solution
+
+        neg_bound, _ = search_direction(-1.0)
+        pos_bound, _ = search_direction(1.0)
+        lo = neg_bound
+        hi = pos_bound
 
         return (lo, hi)
 
     def _compute_reachability(self, state: TargetState) -> dict:
-        reachable = self._ik_success(state)
-        coarse_step = max(0.02, min(0.10, float(self._args.reachability_step)))
+        center_solution = self._solve_state(state)
+        reachable = center_solution is not None
+        coarse_step = max(0.005, min(0.03, float(self._args.reachability_step)))
         ranges = {
-            "x": self._estimate_axis_range(state, "x", coarse_step, 0.5),
-            "y": self._estimate_axis_range(state, "y", coarse_step, 0.5),
-            "z": self._estimate_axis_range(state, "z", coarse_step, 0.5),
+            "x": self._estimate_axis_range(state, "x", coarse_step, 0.30, center_solution),
+            "y": self._estimate_axis_range(state, "y", coarse_step, 0.30, center_solution),
+            "z": self._estimate_axis_range(state, "z", coarse_step, 0.30, center_solution),
         }
 
         min_margin = min(
@@ -439,16 +448,19 @@ class TargetPublisherWindow(QMainWindow):
     def __init__(self, args) -> None:
         super().__init__()
         self._args = args
-        self._editing_target = TargetState(args.init_x, args.init_y, args.init_z, args.init_j4_rad)
+        self._kinematics = RcArmWorldPitchKinematics(
+            urdf_path=args.urdf_path or None,
+            j4_axis=args.j4_axis,
+        )
+        home_x, home_y, home_z, home_pitch = self._kinematics.zero_home_pose()
+        self._editing_target = TargetState(home_x, home_y, home_z, home_pitch)
         self._last_sent: Optional[TargetState] = None
         self._actual_pose: Optional[ActualPose] = None
-        self._home_target: Optional[TargetState] = None
+        self._home_target: Optional[TargetState] = TargetState(home_x, home_y, home_z, home_pitch)
         self._payload_active = False
         self._reachability = None
-        self._initial_target_synced = False
         self._editing_dirty = False
         self._actual_pose_ready = False
-        self._startup_time = time.monotonic()
         self._syncing_editor = False
 
         self.setWindowTitle("RC Arm TF Target Publisher")
@@ -515,15 +527,16 @@ class TargetPublisherWindow(QMainWindow):
             ("x", "x", "m"),
             ("y", "y", "m"),
             ("z", "z", "m"),
-            ("j4", "j4", "deg"),
+            ("j4", "j4 world", "deg"),
         ]
         for row, (field_key, display_name, unit) in enumerate(rows):
             label = QLabel(f"{display_name} ({unit})")
             spin = QDoubleSpinBox()
             spin.setDecimals(4 if field_key != "j4" else 2)
-            spin.setRange(-10.0, 10.0 if field_key != "j4" else 360.0)
             if field_key == "j4":
-                spin.setRange(-360.0, 360.0)
+                spin.setRange(J4_WORLD_MIN_DEG, J4_WORLD_MAX_DEG)
+            else:
+                spin.setRange(-10.0, 10.0)
             spin.valueChanged.connect(self._on_editing_changed)
             minus = QPushButton("-")
             plus = QPushButton("+")
@@ -660,11 +673,12 @@ class TargetPublisherWindow(QMainWindow):
         self._update_status_labels()
 
     def _read_editing_target(self) -> TargetState:
+        j4_deg = max(J4_WORLD_MIN_DEG, min(J4_WORLD_MAX_DEG, self._field_spins["j4"].value()))
         return TargetState(
             x=self._field_spins["x"].value(),
             y=self._field_spins["y"].value(),
             z=self._field_spins["z"].value(),
-            j4_rad=math.radians(self._field_spins["j4"].value()),
+            j4_rad=math.radians(j4_deg),
         )
 
     def _update_status_labels(self) -> None:
@@ -672,20 +686,20 @@ class TargetPublisherWindow(QMainWindow):
         self._last_sent_label.setText(self._last_sent.to_display() if self._last_sent else "NA")
         if self._actual_pose is None:
             self._actual_label.setText("waiting for actual pose")
-        elif self._actual_pose.joint_j4_rad is None:
+        elif self._actual_pose.world_pitch_rad is None:
             self._actual_label.setText(
-                "x={:.4f} y={:.4f} z={:.4f} j4=waiting joint states".format(
+                "x={:.4f} y={:.4f} z={:.4f} j4 world=waiting joint states".format(
                     self._actual_pose.x, self._actual_pose.y, self._actual_pose.z
                 )
             )
         else:
             self._actual_label.setText(
-                "x={:.4f} y={:.4f} z={:.4f} j4={:.2f} deg ({:.4f} rad)".format(
+                "x={:.4f} y={:.4f} z={:.4f} j4 world={:.2f} deg ({:.4f} rad)".format(
                     self._actual_pose.x,
                     self._actual_pose.y,
                     self._actual_pose.z,
-                    math.degrees(self._actual_pose.joint_j4_rad),
-                    self._actual_pose.joint_j4_rad,
+                    math.degrees(self._actual_pose.world_pitch_rad),
+                    self._actual_pose.world_pitch_rad,
                 )
             )
         self._payload_status_label.setText("true" if self._payload_active else "false")
@@ -710,24 +724,54 @@ class TargetPublisherWindow(QMainWindow):
         if not self._actual_pose_ready:
             return
         self._editing_target = self._read_editing_target()
+        if not (math.radians(J4_WORLD_MIN_DEG) - 1.0e-9 <= self._editing_target.j4_rad <= math.radians(J4_WORLD_MAX_DEG) + 1.0e-9):
+            text = "blocked: j4 world must stay within [{:.0f}, {:.0f}] deg".format(
+                J4_WORLD_MIN_DEG,
+                J4_WORLD_MAX_DEG,
+            )
+            self._send_status_label.setText(text)
+            self._append_log(text)
+            QMessageBox.warning(
+                self,
+                "Invalid j4 World Range",
+                "j4 world target must stay within {:.0f} to {:.0f} deg.".format(
+                    J4_WORLD_MIN_DEG,
+                    J4_WORLD_MAX_DEG,
+                ),
+            )
+            return
+        if self._reachability is not None and not bool(self._reachability.get("reachable", False)):
+            text = "blocked: unreachable target"
+            self._send_status_label.setText(text)
+            self._append_log(
+                "{} {}".format(
+                    text,
+                    self._editing_target.to_display(),
+                )
+            )
+            QMessageBox.warning(
+                self,
+                "Unreachable Target",
+                "Current target is unreachable for the world-pitch solver.\n"
+                "Adjust xyz or reduce j4 world before sending.",
+            )
+            return
         self._backend.queue_send_target(self._editing_target, self._send_if_changed.isChecked())
 
     def _reset_to_current(self) -> None:
-        if self._actual_pose is None or self._actual_pose.joint_j4_rad is None:
+        if self._actual_pose is None or self._actual_pose.world_pitch_rad is None:
             return
         self._editing_target = TargetState(
             self._actual_pose.x,
             self._actual_pose.y,
             self._actual_pose.z,
-            self._actual_pose.joint_j4_rad,
+            self._actual_pose.world_pitch_rad,
         )
         self._sync_editing_widgets()
         self._reachability_timer.start()
 
     def _reset_to_home(self) -> None:
-        home = self._home_target or TargetState(
-            self._args.init_x, self._args.init_y, self._args.init_z, self._args.init_j4_rad
-        )
+        home = self._home_target
         self._editing_target = TargetState(home.x, home.y, home.z, home.j4_rad)
         self._sync_editing_widgets()
         self._reachability_timer.start()
@@ -736,19 +780,6 @@ class TargetPublisherWindow(QMainWindow):
     def _on_actual_pose(self, state: object) -> None:
         self._actual_pose = state
         self._actual_pose_ready = True
-        if self._home_target is None and (time.monotonic() - self._startup_time) >= HOME_CAPTURE_DELAY_SEC:
-            home_j4_rad = state.joint_j4_rad if state.joint_j4_rad is not None else self._args.init_j4_rad
-            self._home_target = TargetState(state.x, state.y, state.z, home_j4_rad)
-        if self._home_target is not None and not self._initial_target_synced and not self._editing_dirty:
-            self._initial_target_synced = True
-            self._editing_target = TargetState(
-                self._home_target.x,
-                self._home_target.y,
-                self._home_target.z,
-                self._home_target.j4_rad,
-            )
-            self._sync_editing_widgets()
-            self._reachability_timer.start()
         self._update_status_labels()
 
     @Slot(object)
@@ -857,21 +888,13 @@ def parse_args():
     parser.add_argument("--child-frame", default="rc_arm_2_target")
     parser.add_argument("--current-pose-parent-frame", default="world")
     parser.add_argument("--current-pose-child-frame", default="end_effector")
-    parser.add_argument("--planning-group", default="arm")
-    parser.add_argument("--compute-ik-service", default="/compute_ik")
     parser.add_argument("--vacuum-topic", default="/rc_arm_2/vacuum_activate")
     parser.add_argument("--payload-active-topic", default="/rc_arm_2/payload_active")
     parser.add_argument("--joint-state-topic", default="/joint_states")
-    parser.add_argument("--j4-joint-name", default="j4_joint")
+    parser.add_argument("--urdf-path", default="")
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--reachability-step", type=float, default=0.05)
-    parser.add_argument("--init-x", type=float, default=0.0)
-    parser.add_argument("--init-y", type=float, default=0.0)
-    parser.add_argument("--init-z", type=float, default=0.0)
-    parser.add_argument("--init-j4", type=float, default=0.0, help="degrees")
-    args = parser.parse_args()
-    args.init_j4_rad = math.radians(float(args.init_j4))
-    return args
+    return parser.parse_args()
 
 
 def main() -> None:

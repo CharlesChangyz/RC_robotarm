@@ -713,14 +713,6 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_configure(
     return hardware_interface::CallbackReturn::SUCCESS;
   }
 
-  if (dm_startup_delay_sec_ > 0.0) {
-    RCLCPP_INFO(
-      rclcpp::get_logger("RsA3HardwareInterface"),
-      "等待 dmbot_serial 启动 %.2f 秒，规避 USB2CANFD 过早初始化",
-      dm_startup_delay_sec_);
-    std::this_thread::sleep_for(std::chrono::duration<double>(dm_startup_delay_sec_));
-  }
-
   std::vector<dmbot_serial::MotorConfig> motor_configs;
   motor_configs.reserve(joint_configs_.size());
   for (const auto & config : joint_configs_) {
@@ -734,6 +726,14 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_configure(
 
   dm_driver_ = std::make_unique<dmbot_serial::DmMotorDriver>(
     dm_serial_number_, dm_nominal_baud_, dm_data_baud_, motor_configs);
+
+  if (dm_startup_delay_sec_ > 0.0) {
+    RCLCPP_INFO(
+      rclcpp::get_logger("RsA3HardwareInterface"),
+      "等待 dmbot_serial 启动 %.2f 秒，规避 USB2CANFD 过早初始化",
+      dm_startup_delay_sec_);
+    std::this_thread::sleep_for(std::chrono::duration<double>(dm_startup_delay_sec_));
+  }
 
   if (!dm_driver_->connect()) {
     RCLCPP_ERROR(rclcpp::get_logger("RsA3HardwareInterface"),
@@ -772,8 +772,8 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_activate(
     return hardware_interface::CallbackReturn::SUCCESS;
   }
 
-  if (backend_mode_ == BackendMode::REAL && (!dm_driver_ || !dm_driver_->isConnected())) {
-    RCLCPP_ERROR(rclcpp::get_logger("RsA3HardwareInterface"), "实机后端未连接");
+  if (backend_mode_ == BackendMode::REAL && !dm_driver_) {
+    RCLCPP_ERROR(rclcpp::get_logger("RsA3HardwareInterface"), "实机后端未配置");
     return hardware_interface::CallbackReturn::ERROR;
   }
 
