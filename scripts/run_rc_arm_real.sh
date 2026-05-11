@@ -18,7 +18,7 @@ set -u
 
 HARDWARE_CONFIG_FILE="${HARDWARE_CONFIG_FILE:-${WORKSPACE_DIR}/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.real.yaml}"
 CONTROLLERS_FILE="${CONTROLLERS_FILE:-${WORKSPACE_DIR}/rc_arm_description/config/rc_arm_2/rc_arm_2_controllers.yaml}"
-USE_RVIZ="${USE_RVIZ:-true}"
+USE_RVIZ="${USE_RVIZ:-false}"
 USE_TF_TARGET_BRIDGE="${USE_TF_TARGET_BRIDGE:-true}"
 USE_TARGET_POSE_MOVEIT_EXECUTOR="${USE_TARGET_POSE_MOVEIT_EXECUTOR:-true}"
 

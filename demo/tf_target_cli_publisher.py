@@ -499,7 +499,7 @@ class ControlProcess(QObject):
         self.state_changed.emit("{}: {}".format(self._label, mapping.get(state, "unknown")))
 
     def _on_finished(self, exit_code: int, exit_status) -> None:
-        self.log_line.emit("{} exited code={} status={}".format(self._label, exit_code, int(exit_status)))
+        self.log_line.emit("{} exited code={} status={}".format(self._label, exit_code, exit_status.value))
 
 
 class TargetPublisherWindow(QMainWindow):

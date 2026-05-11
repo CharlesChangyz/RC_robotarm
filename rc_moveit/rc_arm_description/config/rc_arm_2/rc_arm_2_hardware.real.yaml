@@ -86,10 +86,10 @@ payload_diaginertia_y: 0.02
 payload_diaginertia_z: 0.02
 payload_com_offset_x: 0.0
 payload_com_offset_y: 0.0
-payload_com_offset_z: 0.0
-payload_box_size_x: 0.05
-payload_box_size_y: 0.05
-payload_box_size_z: 0.05
+payload_com_offset_z: -10.0
+payload_box_size_x: 0.0
+payload_box_size_y: 0.0
+payload_box_size_z: 0.0
 payload_position_kp: 60.0
 payload_position_kd: 3.0
 payload_low_stiffness_kp: 0.0
@@ -103,37 +103,37 @@ mujoco_payload_initial_pos_z: 0.20
 
 # j1 低刚度 Kp 覆盖值；
 # 0 表示回退到 unloaded_low_stiffness_kp
-unloaded_low_stiffness_kp_j1: 1.5
+unloaded_low_stiffness_kp_j1: 5.0
 
 # j1 空载低刚度 Kd 覆盖值；
 # 0 表示回退到 unloaded_low_stiffness_kd
-unloaded_low_stiffness_kd_j1: 1.0
-payload_low_stiffness_kp_j1: 1.5
-payload_low_stiffness_kd_j1: 1.0
+unloaded_low_stiffness_kd_j1: 0.5
+payload_low_stiffness_kp_j1: 5.0
+payload_low_stiffness_kd_j1: 0.5
 
 # j2 低刚度 Kp 覆盖值
-unloaded_low_stiffness_kp_j2: 20.0
+unloaded_low_stiffness_kp_j2: 50.0
 
 # j2 空载低刚度 Kd 覆盖值
-unloaded_low_stiffness_kd_j2: 4.0
-payload_low_stiffness_kp_j2: 20.0
-payload_low_stiffness_kd_j2: 4.0
+unloaded_low_stiffness_kd_j2: 5.0
+payload_low_stiffness_kp_j2: 200.0
+payload_low_stiffness_kd_j2: 28.28
 
 # j3 低刚度 Kp 覆盖值
-unloaded_low_stiffness_kp_j3: 10.0
+unloaded_low_stiffness_kp_j3: 30.0
 
 # j3 空载低刚度 Kd 覆盖值
-unloaded_low_stiffness_kd_j3: 2.0
-payload_low_stiffness_kp_j3: 10.0
-payload_low_stiffness_kd_j3: 2.0
+unloaded_low_stiffness_kd_j3: 3.0
+payload_low_stiffness_kp_j3: 150.0
+payload_low_stiffness_kd_j3: 24.5
 
 # j4 低刚度 Kp 覆盖值
 unloaded_low_stiffness_kp_j4: 5.0
 
 # j4 空载低刚度 Kd 覆盖值
-unloaded_low_stiffness_kd_j4: 1.0
-payload_low_stiffness_kp_j4: 5.0
-payload_low_stiffness_kd_j4: 1.0
+unloaded_low_stiffness_kd_j4: 0.03
+payload_low_stiffness_kp_j4: 90.0
+payload_low_stiffness_kd_j4: 3.0
 
 # 是否启用 Pinocchio 重力补偿项
 use_pinocchio_gravity: false
