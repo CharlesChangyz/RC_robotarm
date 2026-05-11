@@ -1,0 +1,16 @@
+string[] joint_names
+float64[] current_position
+float64[] current_velocity
+float64[] current_acceleration
+float64[] target_position
+float64[] target_velocity
+float64[] target_acceleration
+float64[] max_velocity
+float64[] max_acceleration
+float64[] max_jerk
+float64 control_period
+float64 minimum_duration
+---
+trajectory_msgs/JointTrajectory trajectory
+bool success
+string message

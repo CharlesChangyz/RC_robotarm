@@ -39,9 +39,9 @@ import tf2_ros
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT_DIR / "rc_moveit" / "rc_arm_moveit_config" / "launch"))
+sys.path.insert(0, str(ROOT_DIR / "rc_ruckig" / "rc_arm_kinematics"))
 
-from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E402
+from rc_arm_kinematics.world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E402
 
 
 SCRIPT_RUN_MUJOCO = ROOT_DIR / "scripts" / "run_rc_arm_mujoco.sh"
