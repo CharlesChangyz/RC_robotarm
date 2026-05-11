@@ -3,6 +3,7 @@
 
 import argparse
 import math
+import shlex
 import sys
 import threading
 import time
@@ -28,17 +29,21 @@ from PySide6.QtWidgets import (
     QPushButton,
     QPlainTextEdit,
     QSizePolicy,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Int32
 from tf2_msgs.msg import TFMessage
 import tf2_ros
 
+from arm_msgs.msg import Arm2TargetPoint
+
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+RC_MOVEIT_DIR = ROOT_DIR / "rc_moveit"
 sys.path.insert(0, str(ROOT_DIR / "rc_moveit" / "rc_arm_moveit_config" / "launch"))
 
 from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E402
@@ -49,6 +54,16 @@ SCRIPT_RUN_MUJOCO_BRIDGE = ROOT_DIR / "scripts" / "run_rc_arm_mujoco_bridge.sh"
 SCRIPT_RUN_REAL = ROOT_DIR / "scripts" / "run_rc_arm_real.sh"
 J4_WORLD_MIN_DEG = 0.0
 J4_WORLD_MAX_DEG = 90.0
+
+
+def middleware_command() -> List[str]:
+    command = (
+        f"cd {shlex.quote(str(RC_MOVEIT_DIR))} && "
+        "source /opt/ros/humble/setup.bash && "
+        "source install/setup.bash && "
+        "ros2 run rc_arm2_middleware arm2_middleware"
+    )
+    return ["bash", "-lc", command]
 
 
 @dataclass
@@ -90,6 +105,7 @@ class RosBackend(QObject):
     last_sent_updated = Signal(object)
     last_send_status = Signal(str)
     last_vacuum_status = Signal(str)
+    last_middleware_status = Signal(str)
     backend_error = Signal(str)
 
     def __init__(self, args) -> None:
@@ -102,6 +118,8 @@ class RosBackend(QObject):
         self._node: Optional[Node] = None
         self._tf_pub = None
         self._vacuum_pub = None
+        self._middleware_target_pub = None
+        self._middleware_run_pub = None
         self._payload_sub = None
         self._joint_state_sub = None
         self._tf_buffer = None
@@ -112,6 +130,7 @@ class RosBackend(QObject):
         self._last_sent: Optional[TargetState] = None
         self._pending_send: Optional[Tuple[TargetState, bool]] = None
         self._pending_vacuum: Optional[bool] = None
+        self._pending_middleware_command: Optional[Tuple[TargetState, int]] = None
         self._pending_reachability: Optional[TargetState] = None
         self._last_actual_emit = 0.0
         self._latest_joint_map: Dict[str, float] = {}
@@ -123,6 +142,12 @@ class RosBackend(QObject):
         self._node = Node("rc_arm_tf_target_gui_publisher")
         self._tf_pub = self._node.create_publisher(TFMessage, self._args.tf_topic, 10)
         self._vacuum_pub = self._node.create_publisher(Bool, self._args.vacuum_topic, 10)
+        self._middleware_target_pub = self._node.create_publisher(
+            Arm2TargetPoint, self._args.middleware_target_topic, 10
+        )
+        self._middleware_run_pub = self._node.create_publisher(
+            Int32, self._args.middleware_run_action_set_topic, 10
+        )
         self._payload_sub = self._node.create_subscription(
             Bool, self._args.payload_active_topic, self._on_payload_state, 10
         )
@@ -159,6 +184,11 @@ class RosBackend(QObject):
         with self._lock:
             self._pending_reachability = state
 
+    @Slot(object, int)
+    def queue_run_action_set(self, state: object, action_set_id: int) -> None:
+        with self._lock:
+            self._pending_middleware_command = (state, int(action_set_id))
+
     def _on_payload_state(self, msg: Bool) -> None:
         self.payload_state_updated.emit(bool(msg.data))
 
@@ -178,6 +208,7 @@ class RosBackend(QObject):
                 self._refresh_actual_pose()
                 self._flush_send_request()
                 self._flush_vacuum_request()
+                self._flush_middleware_request()
                 self._flush_reachability_request()
             except Exception as exc:  # pragma: no cover
                 self.backend_error.emit(str(exc))
@@ -259,6 +290,33 @@ class RosBackend(QObject):
         msg.data = bool(pending)
         self._vacuum_pub.publish(msg)
         self.last_vacuum_status.emit("ON" if pending else "OFF")
+
+    def _flush_middleware_request(self) -> None:
+        with self._lock:
+            pending = self._pending_middleware_command
+            self._pending_middleware_command = None
+        if pending is None or self._middleware_target_pub is None or self._middleware_run_pub is None:
+            return
+
+        state, action_set_id = pending
+        target_msg = Arm2TargetPoint()
+        target_msg.xyz.x = float(state.x)
+        target_msg.xyz.y = float(state.y)
+        target_msg.xyz.z = float(state.z)
+        target_msg.target_spin_deg = math.degrees(float(state.j4_rad))
+        self._middleware_target_pub.publish(target_msg)
+
+        run_msg = Int32()
+        run_msg.data = int(action_set_id)
+        self._middleware_run_pub.publish(run_msg)
+
+        self.last_middleware_status.emit(
+            "published middleware target + action_set={} to {} / {}".format(
+                action_set_id,
+                self._args.middleware_target_topic,
+                self._args.middleware_run_action_set_topic,
+            )
+        )
 
     def _flush_reachability_request(self) -> None:
         with self._lock:
@@ -473,12 +531,14 @@ class TargetPublisherWindow(QMainWindow):
         self._backend.last_sent_updated.connect(self._on_last_sent)
         self._backend.last_send_status.connect(self._set_send_status)
         self._backend.last_vacuum_status.connect(self._set_vacuum_status)
+        self._backend.last_middleware_status.connect(self._set_middleware_status)
         self._backend.backend_error.connect(self._append_log)
 
         self._mujoco_stack = ControlProcess(["bash", str(SCRIPT_RUN_MUJOCO)], "MuJoCo stack")
         self._mujoco_bridge = ControlProcess(["bash", str(SCRIPT_RUN_MUJOCO_BRIDGE)], "MuJoCo bridge")
         self._real_stack = ControlProcess(["bash", str(SCRIPT_RUN_REAL)], "Real stack")
-        for proc in (self._mujoco_stack, self._mujoco_bridge, self._real_stack):
+        self._middleware_stack = ControlProcess(middleware_command(), "Middleware")
+        for proc in (self._mujoco_stack, self._mujoco_bridge, self._real_stack, self._middleware_stack):
             proc.log_line.connect(self._append_log)
             proc.state_changed.connect(self._on_process_state_changed)
 
@@ -594,6 +654,12 @@ class TargetPublisherWindow(QMainWindow):
         self._stop_mujoco_btn = QPushButton("Stop MuJoCo")
         self._start_real_btn = QPushButton("Start Real")
         self._stop_real_btn = QPushButton("Stop Real")
+        self._start_middleware_btn = QPushButton("Start Middleware")
+        self._stop_middleware_btn = QPushButton("Stop Middleware")
+        self._action_set_spin = QSpinBox()
+        self._action_set_spin.setRange(1, 999)
+        self._action_set_spin.setValue(1)
+        self._run_action_set_btn = QPushButton("Run Action Set")
         vacuum_on = QPushButton("Vacuum ON")
         vacuum_off = QPushButton("Vacuum OFF")
 
@@ -601,6 +667,9 @@ class TargetPublisherWindow(QMainWindow):
         self._stop_mujoco_btn.clicked.connect(self._stop_mujoco)
         self._start_real_btn.clicked.connect(self._start_real)
         self._stop_real_btn.clicked.connect(self._stop_real)
+        self._start_middleware_btn.clicked.connect(self._start_middleware)
+        self._stop_middleware_btn.clicked.connect(self._stop_middleware)
+        self._run_action_set_btn.clicked.connect(self._run_action_set)
         vacuum_on.clicked.connect(lambda: self._backend.queue_vacuum(True))
         vacuum_off.clicked.connect(lambda: self._backend.queue_vacuum(False))
 
@@ -609,10 +678,17 @@ class TargetPublisherWindow(QMainWindow):
             self._stop_mujoco_btn,
             self._start_real_btn,
             self._stop_real_btn,
+            self._start_middleware_btn,
+            self._stop_middleware_btn,
             vacuum_on,
             vacuum_off,
         ):
             layout.addWidget(widget)
+        action_row = QHBoxLayout()
+        action_row.addWidget(QLabel("Action set id"))
+        action_row.addWidget(self._action_set_spin, stretch=1)
+        layout.addLayout(action_row)
+        layout.addWidget(self._run_action_set_btn)
         layout.addStretch(1)
         return box
 
@@ -624,6 +700,7 @@ class TargetPublisherWindow(QMainWindow):
         self._last_sent_label = QLabel("NA")
         self._send_status_label = QLabel("idle")
         self._vacuum_status_label = QLabel("unknown")
+        self._middleware_status_label = QLabel("idle")
         self._payload_status_label = QLabel("false")
         self._process_status_label = QLabel("all stopped")
 
@@ -632,6 +709,7 @@ class TargetPublisherWindow(QMainWindow):
         layout.addRow("Last sent target", self._last_sent_label)
         layout.addRow("Last send result", self._send_status_label)
         layout.addRow("Last vacuum command", self._vacuum_status_label)
+        layout.addRow("Last middleware command", self._middleware_status_label)
         layout.addRow("Payload active", self._payload_status_label)
         layout.addRow("Process status", self._process_status_label)
         return box
@@ -655,6 +733,7 @@ class TargetPublisherWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.Key_PageUp), self, activated=lambda: self._step_axis("z", 1.0))
         QShortcut(QKeySequence("["), self, activated=lambda: self._step_axis("j4", -1.0))
         QShortcut(QKeySequence("]"), self, activated=lambda: self._step_axis("j4", 1.0))
+        QShortcut(QKeySequence("Ctrl+Shift+Return"), self, activated=self._run_action_set)
 
     def _step_axis(self, axis: str, direction: float) -> None:
         spin = self._field_spins[axis]
@@ -706,6 +785,8 @@ class TargetPublisherWindow(QMainWindow):
         self._reset_btn.setEnabled(self._actual_pose_ready and self._actual_pose is not None)
         self._home_btn.setEnabled(self._actual_pose_ready and self._home_target is not None)
         self._send_btn.setEnabled(self._actual_pose_ready)
+        self._run_action_set_btn.setEnabled(self._actual_pose_ready)
+        self._action_set_spin.setEnabled(self._actual_pose_ready)
 
     def _request_reachability(self) -> None:
         if not self._actual_pose_ready:
@@ -721,15 +802,40 @@ class TargetPublisherWindow(QMainWindow):
         self._reachability_timer.start()
 
     def _send_target(self) -> None:
-        if not self._actual_pose_ready:
-            return
         self._editing_target = self._read_editing_target()
-        if not (math.radians(J4_WORLD_MIN_DEG) - 1.0e-9 <= self._editing_target.j4_rad <= math.radians(J4_WORLD_MAX_DEG) + 1.0e-9):
+        if not self._validate_motion_target("Last send result"):
+            return
+        self._backend.queue_send_target(self._editing_target, self._send_if_changed.isChecked())
+
+    def _run_action_set(self) -> None:
+        self._editing_target = self._read_editing_target()
+        if not self._validate_motion_target("Last middleware command"):
+            return
+        action_set_id = self._action_set_spin.value()
+        self._backend.queue_run_action_set(self._editing_target, action_set_id)
+
+    def _validate_motion_target(self, label_name: str) -> bool:
+        if not self._actual_pose_ready:
+            text = "blocked: waiting for actual pose"
+            if label_name == "Last middleware command":
+                self._middleware_status_label.setText(text)
+            else:
+                self._send_status_label.setText(text)
+            self._append_log(text)
+            return False
+        if not (
+            math.radians(J4_WORLD_MIN_DEG) - 1.0e-9
+            <= self._editing_target.j4_rad
+            <= math.radians(J4_WORLD_MAX_DEG) + 1.0e-9
+        ):
             text = "blocked: j4 world must stay within [{:.0f}, {:.0f}] deg".format(
                 J4_WORLD_MIN_DEG,
                 J4_WORLD_MAX_DEG,
             )
-            self._send_status_label.setText(text)
+            if label_name == "Last middleware command":
+                self._middleware_status_label.setText(text)
+            else:
+                self._send_status_label.setText(text)
             self._append_log(text)
             QMessageBox.warning(
                 self,
@@ -739,10 +845,13 @@ class TargetPublisherWindow(QMainWindow):
                     J4_WORLD_MAX_DEG,
                 ),
             )
-            return
+            return False
         if self._reachability is not None and not bool(self._reachability.get("reachable", False)):
             text = "blocked: unreachable target"
-            self._send_status_label.setText(text)
+            if label_name == "Last middleware command":
+                self._middleware_status_label.setText(text)
+            else:
+                self._send_status_label.setText(text)
             self._append_log(
                 "{} {}".format(
                     text,
@@ -755,8 +864,8 @@ class TargetPublisherWindow(QMainWindow):
                 "Current target is unreachable for the world-pitch solver.\n"
                 "Adjust xyz or reduce j4 world before sending.",
             )
-            return
-        self._backend.queue_send_target(self._editing_target, self._send_if_changed.isChecked())
+            return False
+        return True
 
     def _reset_to_current(self) -> None:
         if self._actual_pose is None or self._actual_pose.world_pitch_rad is None:
@@ -824,6 +933,11 @@ class TargetPublisherWindow(QMainWindow):
         self._vacuum_status_label.setText(text)
         self._append_log("vacuum command: " + text)
 
+    @Slot(str)
+    def _set_middleware_status(self, text: str) -> None:
+        self._middleware_status_label.setText(text)
+        self._append_log(text)
+
     def _start_mujoco(self) -> None:
         if self._real_stack.is_running():
             QMessageBox.warning(self, "Mode Busy", "Real stack is running. Stop it first.")
@@ -848,6 +962,14 @@ class TargetPublisherWindow(QMainWindow):
         self._real_stack.stop()
         self._refresh_process_buttons()
 
+    def _start_middleware(self) -> None:
+        self._middleware_stack.start()
+        self._refresh_process_buttons()
+
+    def _stop_middleware(self) -> None:
+        self._middleware_stack.stop()
+        self._refresh_process_buttons()
+
     @Slot(str)
     def _on_process_state_changed(self, _text: str) -> None:
         self._refresh_process_buttons()
@@ -855,16 +977,21 @@ class TargetPublisherWindow(QMainWindow):
     def _refresh_process_buttons(self) -> None:
         mujoco_running = self._mujoco_stack.is_running() or self._mujoco_bridge.is_running()
         real_running = self._real_stack.is_running()
+        middleware_running = self._middleware_stack.is_running()
         self._start_mujoco_btn.setEnabled(not mujoco_running and not real_running)
         self._start_real_btn.setEnabled(not real_running and not mujoco_running)
         self._stop_mujoco_btn.setEnabled(mujoco_running)
         self._stop_real_btn.setEnabled(real_running)
+        self._start_middleware_btn.setEnabled(not middleware_running)
+        self._stop_middleware_btn.setEnabled(middleware_running)
+        status_parts = []
         if mujoco_running:
-            text = "MuJoCo running"
-        elif real_running:
-            text = "Real running"
-        else:
-            text = "all stopped"
+            status_parts.append("MuJoCo running")
+        if real_running:
+            status_parts.append("Real running")
+        if middleware_running:
+            status_parts.append("Middleware running")
+        text = ", ".join(status_parts) if status_parts else "all stopped"
         self._process_status_label.setText(text)
 
     @Slot(str)
@@ -877,6 +1004,7 @@ class TargetPublisherWindow(QMainWindow):
         self._mujoco_stack.stop()
         self._mujoco_bridge.stop()
         self._real_stack.stop()
+        self._middleware_stack.stop()
         self._backend.stop()
         super().closeEvent(event)
 
@@ -891,6 +1019,8 @@ def parse_args():
     parser.add_argument("--vacuum-topic", default="/rc_arm_2/vacuum_activate")
     parser.add_argument("--payload-active-topic", default="/rc_arm_2/payload_active")
     parser.add_argument("--joint-state-topic", default="/joint_states")
+    parser.add_argument("--middleware-target-topic", default="/arm2/middleware/target_point")
+    parser.add_argument("--middleware-run-action-set-topic", default="/arm2/middleware/run_action_set")
     parser.add_argument("--urdf-path", default="")
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--reachability-step", type=float, default=0.05)

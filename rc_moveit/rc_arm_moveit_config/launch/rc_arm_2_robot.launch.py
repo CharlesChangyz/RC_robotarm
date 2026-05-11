@@ -31,7 +31,7 @@ def generate_launch_description():
             default_value=default_controllers_file,
             description='ros2_control 控制器配置 YAML',
         ),
-        DeclareLaunchArgument('use_rviz', default_value='false', description='是否启动带 MoveIt 插件的 RViz2'),
+        DeclareLaunchArgument('use_rviz', default_value='true', description='是否启动带 MoveIt 插件的 RViz2'),
         DeclareLaunchArgument('use_tf_target_bridge', default_value='true', description='是否启动 TF->Pose 目标桥接（放在 rc_moveit 中订阅 TF）'),
         DeclareLaunchArgument('tf_target_topic', default_value='/tf', description='TF 动态变换话题'),
         DeclareLaunchArgument('tf_target_static_topic', default_value='/tf_static', description='TF 静态变换话题'),

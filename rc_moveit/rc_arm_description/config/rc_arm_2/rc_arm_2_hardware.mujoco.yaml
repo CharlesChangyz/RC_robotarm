@@ -79,7 +79,7 @@ payload_diaginertia_y: 0.02
 payload_diaginertia_z: 0.02
 payload_com_offset_x: 0.0
 payload_com_offset_y: 0.0
-payload_com_offset_z: 0.0
+payload_com_offset_z: -0.05
 payload_box_size_x: 0.05
 payload_box_size_y: 0.05
 payload_box_size_z: 0.05
@@ -124,9 +124,9 @@ payload_low_stiffness_kd_j3: 2.0
 unloaded_low_stiffness_kp_j4: 5.0
 
 # j4 空载低刚度 Kd 覆盖值
-unloaded_low_stiffness_kd_j4: 1.0
+unloaded_low_stiffness_kd_j4: 0.03
 payload_low_stiffness_kp_j4: 5.0
-payload_low_stiffness_kd_j4: 1.0
+payload_low_stiffness_kd_j4: 0.03
 
 # 是否启用 Pinocchio 重力补偿项
 use_pinocchio_gravity: false
@@ -152,3 +152,9 @@ limit_decel_factor: 0.3
 
 # 当 controller_manager 提供的周期异常时，硬件层采用的回退控制周期，单位秒
 fallback_control_period: 0.005
+
+
+dm_startup_delay_sec: 5.0
+dm_enable_retry_count: 3
+dm_enable_retry_interval_sec: 1.0
+

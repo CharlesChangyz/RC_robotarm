@@ -1,0 +1,65 @@
+action_sets:
+  # Assumptions for fixed points:
+  # - default point: [0.25, 0.0, 0.24]
+  # - staging point: [0.30, -0.10, 0.20]
+  # - warehouse point: temporarily reuse [0.30, -0.10, 0.20], replace as needed
+
+  - id: 1
+    name: pick_sequence
+    steps:
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_target_offset
+        label: move_to_subscribed_target
+        offset_xyz: [0.0, 0.0, 0.0]
+        target_spin: 0.0
+
+      - type: move_fixed_pose
+        label: move_to_staging_pose
+        xyz: [0.30, -0.10, 0.20]
+        target_spin: 0.0
+
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.24]
+        target_spin: 0.0
+
+  - id: 2
+    name: place_sequence
+    steps:
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_fixed_pose
+        label: move_to_staging_pose
+        xyz: [0.30, -0.10, 0.20]
+        target_spin: 0.0
+
+      - type: move_fixed_pose
+        label: move_to_warehouse_pose
+        xyz: [0.30, -0.10, 0.20]
+        target_spin: 0.0
+
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.24]
+        target_spin: 0.0
+
+  - id: 3
+    name: default_sequence
+    steps:
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.24]
+        target_spin: 0.0

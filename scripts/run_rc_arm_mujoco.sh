@@ -18,7 +18,7 @@ set -u
 
 HARDWARE_CONFIG_FILE="${HARDWARE_CONFIG_FILE:-${WORKSPACE_DIR}/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.mujoco.yaml}"
 CONTROLLERS_FILE="${CONTROLLERS_FILE:-${WORKSPACE_DIR}/rc_arm_description/config/rc_arm_2/rc_arm_2_controllers.yaml}"
-USE_RVIZ="${USE_RVIZ:-false}"
+USE_RVIZ="${USE_RVIZ:-true}"
 USE_TF_TARGET_BRIDGE="${USE_TF_TARGET_BRIDGE:-true}"
 USE_TARGET_POSE_MOVEIT_EXECUTOR="${USE_TARGET_POSE_MOVEIT_EXECUTOR:-true}"
 
@@ -35,4 +35,6 @@ exec ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py \
   use_rviz:="${USE_RVIZ}" \
   use_tf_target_bridge:="${USE_TF_TARGET_BRIDGE}" \
   use_target_pose_moveit_executor:="${USE_TARGET_POSE_MOVEIT_EXECUTOR}" \
+  target_pose_executor_world_boxes_json:='[{"id":"keep_out","frame_id":"world","size":[1.6,0.05,1.6],"position":[0.0,0.3,0.0]}]'\
+  target_pose_executor_world_boxes_json:='[{"id":"keep_out2","frame_id":"world","size":[1.6,0.05,1.6],"position":[0.0,0.3,0.0]}]'\
   "$@"
