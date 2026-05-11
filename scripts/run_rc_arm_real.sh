@@ -21,11 +21,16 @@ CONTROLLERS_FILE="${CONTROLLERS_FILE:-${WORKSPACE_DIR}/rc_arm_description/config
 USE_RVIZ="${USE_RVIZ:-false}"
 USE_TF_TARGET_BRIDGE="${USE_TF_TARGET_BRIDGE:-true}"
 USE_TARGET_POSE_MOVEIT_EXECUTOR="${USE_TARGET_POSE_MOVEIT_EXECUTOR:-true}"
+RC_ARM_TIMING_DIR="${RC_ARM_TIMING_DIR:-${REPO_ROOT}/logs/rc_arm_timing}"
+
+mkdir -p "${RC_ARM_TIMING_DIR}"
+export RC_ARM_TIMING_DIR
 
 echo "[run_rc_arm_real] workspace: ${WORKSPACE_DIR}"
 echo "[run_rc_arm_real] hardware_config_file=${HARDWARE_CONFIG_FILE}"
 echo "[run_rc_arm_real] controllers_file=${CONTROLLERS_FILE}"
 echo "[run_rc_arm_real] use_rviz=${USE_RVIZ}"
+echo "[run_rc_arm_real] timing_dir=${RC_ARM_TIMING_DIR}"
 echo "[run_rc_arm_real] payload and unloaded defaults are read directly from ${HARDWARE_CONFIG_FILE}"
 
 exec ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py \

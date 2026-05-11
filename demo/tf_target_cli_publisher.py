@@ -41,6 +41,7 @@ import tf2_ros
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR / "rc_moveit" / "rc_arm_moveit_config" / "launch"))
 
+from rc_arm_timing_logger import JsonlTimingLogger, trace_id_from_ros_stamp  # noqa: E402
 from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E402
 
 
@@ -110,12 +111,13 @@ class RosBackend(QObject):
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._last_sent: Optional[TargetState] = None
-        self._pending_send: Optional[Tuple[TargetState, bool]] = None
+        self._pending_send: Optional[Tuple[TargetState, bool, int]] = None
         self._pending_vacuum: Optional[bool] = None
         self._pending_reachability: Optional[TargetState] = None
         self._last_actual_emit = 0.0
         self._latest_joint_map: Dict[str, float] = {}
         self._last_solver_solution: Optional[Dict[str, float]] = None
+        self._timing_logger = JsonlTimingLogger("gui")
 
     def start(self) -> None:
         if not rclpy.ok():
@@ -143,11 +145,12 @@ class RosBackend(QObject):
             self._node = None
         if rclpy.ok():
             rclpy.shutdown()
+        self._timing_logger.close()
 
     @Slot(object, bool)
     def queue_send_target(self, state: object, changed_only: bool) -> None:
         with self._lock:
-            self._pending_send = (state, changed_only)
+            self._pending_send = (state, changed_only, time.time_ns())
 
     @Slot(bool)
     def queue_vacuum(self, enabled: bool) -> None:
@@ -221,7 +224,7 @@ class RosBackend(QObject):
         if pending is None or self._node is None:
             return
 
-        state, changed_only = pending
+        state, changed_only, click_wall_time_ns = pending
         if changed_only and self._last_sent is not None and state.almost_equal(self._last_sent):
             self.last_send_status.emit("skipped: unchanged target")
             return
@@ -238,7 +241,22 @@ class RosBackend(QObject):
         tf_msg.transform.rotation.y = qy
         tf_msg.transform.rotation.z = qz
         tf_msg.transform.rotation.w = qw
+        trace_id = trace_id_from_ros_stamp(tf_msg.header.stamp) or str(click_wall_time_ns)
+        target = self._target_summary(state)
+        self._timing_logger.log_event(
+            "gui_send_click",
+            trace_id,
+            ros_stamp=tf_msg.header.stamp,
+            wall_time_ns=click_wall_time_ns,
+            target=target,
+        )
         self._tf_pub.publish(TFMessage(transforms=[tf_msg]))
+        self._timing_logger.log_event(
+            "gui_tf_published",
+            trace_id,
+            ros_stamp=tf_msg.header.stamp,
+            target=target,
+        )
         self._last_sent = TargetState(state.x, state.y, state.z, state.j4_rad)
         self.last_sent_updated.emit(self._last_sent)
         self.last_send_status.emit(
@@ -248,6 +266,14 @@ class RosBackend(QObject):
                 time.time(),
             )
         )
+
+    def _target_summary(self, state: TargetState) -> dict:
+        return {
+            "x": float(state.x),
+            "y": float(state.y),
+            "z": float(state.z),
+            "j4_rad": float(state.j4_rad),
+        }
 
     def _flush_vacuum_request(self) -> None:
         with self._lock:

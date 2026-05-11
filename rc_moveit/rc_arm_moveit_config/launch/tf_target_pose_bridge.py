@@ -8,6 +8,8 @@ from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
 from tf2_msgs.msg import TFMessage
 
+from rc_arm_timing_logger import JsonlTimingLogger, trace_id_from_ros_stamp
+
 
 def _normalize_frame_id(frame_id: str) -> str:
     return (frame_id or "").strip().lstrip("/")
@@ -26,6 +28,7 @@ class TfTargetPoseBridge(Node):
 
         self._parent_frame = _normalize_frame_id(parent_frame)
         self._child_frame = _normalize_frame_id(child_frame)
+        self._timing_logger = JsonlTimingLogger("bridge")
 
         self._pose_pub = self.create_publisher(PoseStamped, target_pose_topic, 20)
 
@@ -60,6 +63,16 @@ class TfTargetPoseBridge(Node):
             pose_msg.pose.orientation.w = transform.transform.rotation.w
 
             self._pose_pub.publish(pose_msg)
+            self._timing_logger.log_event(
+                "bridge_target_pose_published",
+                trace_id_from_ros_stamp(transform.header.stamp),
+                ros_stamp=transform.header.stamp,
+                target={
+                    "x": float(pose_msg.pose.position.x),
+                    "y": float(pose_msg.pose.position.y),
+                    "z": float(pose_msg.pose.position.z),
+                },
+            )
 
 
 def parse_args():

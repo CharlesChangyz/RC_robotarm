@@ -9,6 +9,8 @@
 #include "control_msgs/action/follow_joint_trajectory.hpp"
 #include "controller_interface/controller_interface.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
+#include "rclcpp/subscription.hpp"
+#include "std_msgs/msg/string.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
 
 namespace rc_arm_controller
@@ -51,6 +53,7 @@ private:
     rclcpp::Time start_time;
     std::shared_ptr<GoalHandle> goal_handle;
     bool from_topic{false};
+    std::string trace_id;
   };
 
   rclcpp_action::GoalResponse handle_goal(
@@ -60,6 +63,7 @@ private:
     const std::shared_ptr<GoalHandle> goal_handle);
   void handle_accepted(const std::shared_ptr<GoalHandle> goal_handle);
   void topic_trajectory_callback(const trajectory_msgs::msg::JointTrajectory::SharedPtr msg);
+  void timing_trace_callback(const std_msgs::msg::String::SharedPtr msg);
 
   bool normalize_trajectory(
     const trajectory_msgs::msg::JointTrajectory & msg,
@@ -83,16 +87,25 @@ private:
     int32_t error_code,
     const std::string & error_string,
     bool canceled = false);
+  void log_timing_event(
+    const std::string & event,
+    const std::string & trace_id,
+    const std::string & status,
+    const std::string & detail = "") const;
 
   std::vector<std::string> joint_names_;
   bool allow_topic_commands_{true};
   double feedback_publish_rate_{20.0};
+  std::string timing_log_path_;
 
   std::shared_ptr<rclcpp_action::Server<FollowJointTrajectory>> action_server_;
   rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr topic_subscription_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr timing_trace_subscription_;
 
   mutable std::mutex trajectory_mutex_;
+  mutable std::mutex timing_file_mutex_;
   std::shared_ptr<ActiveTrajectory> active_trajectory_;
+  std::string pending_trace_id_;
   rclcpp::Time last_feedback_time_{0, 0, RCL_ROS_TIME};
 };
 

@@ -13,6 +13,7 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 
 add_library(${PROJECT_NAME} SHARED
@@ -32,6 +33,7 @@ ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   rclcpp_action
   rclcpp_lifecycle
+  std_msgs
   trajectory_msgs
 )
 

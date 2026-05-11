@@ -1,11 +1,20 @@
 #include "rc_arm_controller/rc_arm_controller.hpp"
 
 #include <algorithm>
+#include <cerrno>
+#include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <fstream>
 #include <functional>
+#include <limits.h>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <string>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <utility>
 
 #include "controller_interface/helpers.hpp"
@@ -14,6 +23,98 @@
 
 namespace rc_arm_controller
 {
+
+namespace
+{
+
+int64_t wall_time_now_ns()
+{
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+    std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+bool ensure_directory_exists(const std::string & path)
+{
+  if (path.empty()) {
+    return false;
+  }
+
+  std::string current;
+  if (!path.empty() && path[0] == '/') {
+    current = "/";
+  }
+
+  std::stringstream stream(path);
+  std::string segment;
+  while (std::getline(stream, segment, '/')) {
+    if (segment.empty()) {
+      continue;
+    }
+    if (!current.empty() && current != "/") {
+      current += "/";
+    }
+    current += segment;
+    if (::mkdir(current.c_str(), 0755) != 0 && errno != EEXIST) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::string default_timing_dir()
+{
+  const std::string source_path = __FILE__;
+  const std::string marker = "/rc_moveit/";
+  const auto marker_pos = source_path.rfind(marker);
+  if (marker_pos != std::string::npos) {
+    return source_path.substr(0, marker_pos) + "/logs/rc_arm_timing";
+  }
+
+  char cwd[PATH_MAX];
+  if (::getcwd(cwd, sizeof(cwd)) != nullptr) {
+    return std::string(cwd) + "/logs/rc_arm_timing";
+  }
+  return "/tmp/rc_arm_timing";
+}
+
+std::string resolve_timing_log_path()
+{
+  const char * configured = std::getenv("RC_ARM_TIMING_DIR");
+  std::string dir = (configured != nullptr && configured[0] != '\0') ?
+    std::string(configured) : default_timing_dir();
+  ensure_directory_exists(dir);
+  return dir + "/controller.events.jsonl";
+}
+
+std::string json_escape(const std::string & text)
+{
+  std::ostringstream out;
+  for (const char ch : text) {
+    switch (ch) {
+      case '\\':
+        out << "\\\\";
+        break;
+      case '"':
+        out << "\\\"";
+        break;
+      case '\n':
+        out << "\\n";
+        break;
+      case '\r':
+        out << "\\r";
+        break;
+      case '\t':
+        out << "\\t";
+        break;
+      default:
+        out << ch;
+        break;
+    }
+  }
+  return out.str();
+}
+
+}  // namespace
 
 RcArmController::RcArmController()
 : controller_interface::ControllerInterface()
@@ -25,6 +126,7 @@ controller_interface::CallbackReturn RcArmController::on_init()
   auto_declare<std::vector<std::string>>("joints", {});
   auto_declare<bool>("allow_topic_commands", false);
   auto_declare<double>("feedback_publish_rate", 20.0);
+  timing_log_path_ = resolve_timing_log_path();
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -72,6 +174,11 @@ controller_interface::CallbackReturn RcArmController::on_configure(
     std::bind(&RcArmController::handle_cancel, this, std::placeholders::_1),
     std::bind(&RcArmController::handle_accepted, this, std::placeholders::_1));
 
+  timing_trace_subscription_ = get_node()->create_subscription<std_msgs::msg::String>(
+    "/rc_arm_2/timing_trace_id",
+    rclcpp::SystemDefaultsQoS(),
+    std::bind(&RcArmController::timing_trace_callback, this, std::placeholders::_1));
+
   if (allow_topic_commands_) {
     topic_subscription_ = get_node()->create_subscription<trajectory_msgs::msg::JointTrajectory>(
       "~/joint_trajectory",
@@ -108,6 +215,7 @@ controller_interface::CallbackReturn RcArmController::on_activate(
   {
     std::lock_guard<std::mutex> lock(trajectory_mutex_);
     active_trajectory_.reset();
+    pending_trace_id_.clear();
   }
   set_hold_command_from_current_state();
   last_feedback_time_ = get_node()->now();
@@ -118,14 +226,17 @@ controller_interface::CallbackReturn RcArmController::on_deactivate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
   std::shared_ptr<GoalHandle> goal_handle;
+  std::string trace_id;
   {
     std::lock_guard<std::mutex> lock(trajectory_mutex_);
     if (active_trajectory_) {
       goal_handle = active_trajectory_->goal_handle;
+      trace_id = active_trajectory_->trace_id;
       active_trajectory_.reset();
     }
   }
   if (goal_handle) {
+    log_timing_event("controller_goal_deactivated", trace_id, "failed", "controller deactivated");
     finish_goal(
       goal_handle,
       FollowJointTrajectory::Result::INVALID_GOAL,
@@ -152,6 +263,7 @@ controller_interface::return_type RcArmController::update(
 
   if (trajectory->goal_handle && trajectory->goal_handle->is_canceling()) {
     set_hold_command_from_current_state();
+    log_timing_event("controller_goal_canceled", trajectory->trace_id, "failed", "goal canceled");
     finish_goal(
       trajectory->goal_handle,
       FollowJointTrajectory::Result::SUCCESSFUL,
@@ -180,6 +292,7 @@ controller_interface::return_type RcArmController::update(
 
   if (finished) {
     if (trajectory->goal_handle) {
+      log_timing_event("controller_goal_finished", trajectory->trace_id, "ok");
       finish_goal(
         trajectory->goal_handle,
         FollowJointTrajectory::Result::SUCCESSFUL,
@@ -201,9 +314,23 @@ rclcpp_action::GoalResponse RcArmController::handle_goal(
   std::vector<TrajectoryPoint> normalized_points;
   std::string error;
   if (!goal) {
+    std::string trace_id;
+    {
+      std::lock_guard<std::mutex> lock(trajectory_mutex_);
+      trace_id = pending_trace_id_;
+      pending_trace_id_.clear();
+    }
+    log_timing_event("controller_goal_rejected", trace_id, "failed", "null goal");
     return rclcpp_action::GoalResponse::REJECT;
   }
   if (!normalize_trajectory(goal->trajectory, normalized_points, error)) {
+    std::string trace_id;
+    {
+      std::lock_guard<std::mutex> lock(trajectory_mutex_);
+      trace_id = pending_trace_id_;
+      pending_trace_id_.clear();
+    }
+    log_timing_event("controller_goal_rejected", trace_id, "failed", error);
     RCLCPP_WARN(get_node()->get_logger(), "rejecting FollowJointTrajectory goal: %s", error.c_str());
     return rclcpp_action::GoalResponse::REJECT;
   }
@@ -221,6 +348,13 @@ void RcArmController::handle_accepted(const std::shared_ptr<GoalHandle> goal_han
   std::vector<TrajectoryPoint> normalized_points;
   std::string error;
   if (!normalize_trajectory(goal_handle->get_goal()->trajectory, normalized_points, error)) {
+    std::string trace_id;
+    {
+      std::lock_guard<std::mutex> lock(trajectory_mutex_);
+      trace_id = pending_trace_id_;
+      pending_trace_id_.clear();
+    }
+    log_timing_event("controller_goal_invalid", trace_id, "failed", error);
     finish_goal(goal_handle, FollowJointTrajectory::Result::INVALID_GOAL, error);
     return;
   }
@@ -230,19 +364,30 @@ void RcArmController::handle_accepted(const std::shared_ptr<GoalHandle> goal_han
   next_trajectory->start_time = get_node()->now();
   next_trajectory->goal_handle = goal_handle;
   next_trajectory->from_topic = false;
+  next_trajectory->trace_id = std::to_string(next_trajectory->start_time.nanoseconds());
 
-  std::shared_ptr<GoalHandle> previous_goal;
+  std::shared_ptr<ActiveTrajectory> previous_trajectory;
   {
     std::lock_guard<std::mutex> lock(trajectory_mutex_);
     if (active_trajectory_) {
-      previous_goal = active_trajectory_->goal_handle;
+      previous_trajectory = active_trajectory_;
+    }
+    if (!pending_trace_id_.empty()) {
+      next_trajectory->trace_id = pending_trace_id_;
+      pending_trace_id_.clear();
     }
     active_trajectory_ = next_trajectory;
   }
+  log_timing_event("controller_goal_accepted", next_trajectory->trace_id, "ok");
 
-  if (previous_goal && previous_goal != goal_handle) {
+  if (previous_trajectory && previous_trajectory->goal_handle != goal_handle) {
+    log_timing_event(
+      "controller_goal_preempted",
+      previous_trajectory->trace_id,
+      "failed",
+      "preempted by newer goal");
     finish_goal(
-      previous_goal,
+      previous_trajectory->goal_handle,
       FollowJointTrajectory::Result::INVALID_GOAL,
       "preempted by newer goal");
   }
@@ -266,9 +411,24 @@ void RcArmController::topic_trajectory_callback(
   next_trajectory->points = std::move(normalized_points);
   next_trajectory->start_time = get_node()->now();
   next_trajectory->from_topic = true;
+  next_trajectory->trace_id = std::to_string(next_trajectory->start_time.nanoseconds());
 
   std::lock_guard<std::mutex> lock(trajectory_mutex_);
+  pending_trace_id_.clear();
   active_trajectory_ = next_trajectory;
+}
+
+void RcArmController::timing_trace_callback(const std_msgs::msg::String::SharedPtr msg)
+{
+  if (!msg) {
+    return;
+  }
+  const std::string trace_id = msg->data;
+  if (trace_id.empty()) {
+    return;
+  }
+  std::lock_guard<std::mutex> lock(trajectory_mutex_);
+  pending_trace_id_ = trace_id;
 }
 
 bool RcArmController::normalize_trajectory(
@@ -511,6 +671,31 @@ void RcArmController::finish_goal(
   } else {
     goal_handle->abort(result);
   }
+}
+
+void RcArmController::log_timing_event(
+  const std::string & event,
+  const std::string & trace_id,
+  const std::string & status,
+  const std::string & detail) const
+{
+  std::lock_guard<std::mutex> lock(timing_file_mutex_);
+  std::ofstream out(timing_log_path_, std::ios::app);
+  if (!out.is_open()) {
+    return;
+  }
+
+  out
+    << "{\"trace_id\":\"" << json_escape(trace_id)
+    << "\",\"component\":\"controller\""
+    << ",\"event\":\"" << json_escape(event)
+    << "\",\"wall_time_ns\":" << wall_time_now_ns()
+    << ",\"ros_stamp_ns\":" << get_node()->now().nanoseconds()
+    << ",\"status\":\"" << json_escape(status) << "\"";
+  if (!detail.empty()) {
+    out << ",\"detail\":\"" << json_escape(detail) << "\"";
+  }
+  out << "}\n";
 }
 
 }  // namespace rc_arm_controller

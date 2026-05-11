@@ -16,8 +16,10 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import JointState
 from shape_msgs.msg import SolidPrimitive
+from std_msgs.msg import String
 import tf2_ros
 
+from rc_arm_timing_logger import JsonlTimingLogger, trace_id_from_ros_stamp
 from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics
 
 
@@ -153,6 +155,8 @@ class TargetPoseMoveItExecutor(Node):
             reliability=ReliabilityPolicy.RELIABLE,
         )
         self._planning_scene_pub = self.create_publisher(PlanningScene, planning_scene_topic, scene_qos)
+        self._timing_trace_pub = self.create_publisher(String, "/rc_arm_2/timing_trace_id", 10)
+        self._timing_logger = JsonlTimingLogger("executor")
 
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
@@ -405,11 +409,58 @@ class TargetPoseMoveItExecutor(Node):
         pose_msg.pose.orientation.w = qw
         return pose_msg
 
+    def _target_trace_id(self, target: Optional[PoseStamped]) -> str:
+        if target is None:
+            return ""
+        trace_id = trace_id_from_ros_stamp(target.header.stamp)
+        return trace_id or ""
+
+    def _target_summary(self, target: Optional[PoseStamped]) -> Optional[dict]:
+        if target is None:
+            return None
+        pos = target.pose.position
+        q = target.pose.orientation
+        return {
+            "frame_id": _normalize_frame_id(target.header.frame_id),
+            "x": float(pos.x),
+            "y": float(pos.y),
+            "z": float(pos.z),
+            "qx": float(q.x),
+            "qy": float(q.y),
+            "qz": float(q.z),
+            "qw": float(q.w),
+        }
+
+    def _joint_goal_summary(self, q_target: Optional[Dict[str, float]]) -> Optional[dict]:
+        if q_target is None:
+            return None
+        return {name: float(q_target[name]) for name in self._joint_names if name in q_target}
+
+    def _log_timing_event(
+        self,
+        event: str,
+        target: Optional[PoseStamped],
+        *,
+        status: str = "ok",
+        joint_goal: Optional[Dict[str, float]] = None,
+        detail: str = "",
+    ) -> None:
+        self._timing_logger.log_event(
+            event,
+            self._target_trace_id(target),
+            ros_stamp=target.header.stamp if target is not None else None,
+            status=status,
+            target=self._target_summary(target),
+            joint_goal=self._joint_goal_summary(joint_goal),
+            detail=detail or None,
+        )
+
     def _on_target(self, msg: PoseStamped) -> None:
         pose_msg = self._resolve_target_pose(msg)
         with self._target_lock:
             self._latest_target = pose_msg
         self._event("target_rx", pose_msg)
+        self._log_timing_event("executor_target_rx", pose_msg)
 
     def _target_changed(self, prev: PoseStamped, cur: PoseStamped) -> bool:
         if _normalize_frame_id(prev.header.frame_id) != _normalize_frame_id(cur.header.frame_id):
@@ -448,6 +499,7 @@ class TargetPoseMoveItExecutor(Node):
 
         self._set_busy(True, "solve_target")
         self._event("solve_request", target)
+        self._log_timing_event("executor_solve_request", target)
         self._solve_target(target)
 
     def _extract_target_pitch_rad(self, target: PoseStamped) -> float:
@@ -475,6 +527,7 @@ class TargetPoseMoveItExecutor(Node):
         )
         if q_target is None:
             self._event("solve_fail", target)
+            self._log_timing_event("executor_solve_fail", target, status="failed")
             self.get_logger().warn(
                 "4DOF solve failed target_xyz=(%.3f, %.3f, %.3f) target_pitch=%.3f %s"
                 % (
@@ -489,6 +542,7 @@ class TargetPoseMoveItExecutor(Node):
             return
 
         self._event("solve_ok", target, extra="pitch=%.3f" % pitch_rad)
+        self._log_timing_event("executor_solve_ok", target, joint_goal=q_target)
         self._send_goal(target, q_target)
 
     def _send_goal(self, target: PoseStamped, q_target: Dict[str, float]) -> None:
@@ -515,7 +569,13 @@ class TargetPoseMoveItExecutor(Node):
         goal.planning_options.replan = True
         goal.planning_options.replan_attempts = 1
 
+        trace_id = self._target_trace_id(target)
+        if trace_id:
+            trace_msg = String()
+            trace_msg.data = trace_id
+            self._timing_trace_pub.publish(trace_msg)
         self._event("goal_send", target)
+        self._log_timing_event("executor_goal_send", target, joint_goal=q_target)
         send_future = self._move_group_client.send_goal_async(goal)
         send_future.add_done_callback(
             lambda f, target=target, q_target=dict(q_target): self._on_goal_response(f, target, q_target)
@@ -526,17 +586,26 @@ class TargetPoseMoveItExecutor(Node):
             goal_handle = future.result()
         except Exception as exc:
             self._event("goal_send_exception", target)
+            self._log_timing_event(
+                "executor_goal_send_exception",
+                target,
+                status="failed",
+                joint_goal=q_target,
+                detail=str(exc),
+            )
             self.get_logger().warn(f"MoveGroup send exception: {exc}")
             self._set_busy(False, "goal_send_exception")
             return
 
         if goal_handle is None or not goal_handle.accepted:
             self._event("goal_rejected", target)
+            self._log_timing_event("executor_goal_rejected", target, status="failed", joint_goal=q_target)
             self.get_logger().warn("MoveGroup goal rejected")
             self._set_busy(False, "goal_rejected")
             return
 
         self._event("goal_accepted", target)
+        self._log_timing_event("executor_goal_accepted", target, joint_goal=q_target)
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(
             lambda f, target=target, q_target=dict(q_target): self._on_goal_result(f, target, q_target)
@@ -548,6 +617,13 @@ class TargetPoseMoveItExecutor(Node):
             result = wrapped.result
         except Exception as exc:
             self._event("exec_result_exception", target)
+            self._log_timing_event(
+                "executor_exec_result_exception",
+                target,
+                status="failed",
+                joint_goal=q_target,
+                detail=str(exc),
+            )
             self.get_logger().warn(f"MoveGroup result exception: {exc}")
             self._set_busy(False, "exec_result_exception")
             return
@@ -555,8 +631,16 @@ class TargetPoseMoveItExecutor(Node):
         if result.error_code.val == result.error_code.SUCCESS:
             self._last_sent_target = _copy_pose_stamped(target)
             self._event("exec_ok", target)
+            self._log_timing_event("executor_exec_ok", target, joint_goal=q_target)
         else:
             self._event("exec_fail", target)
+            self._log_timing_event(
+                "executor_exec_fail",
+                target,
+                status="failed",
+                joint_goal=q_target,
+                detail=str(result.error_code.val),
+            )
             self.get_logger().warn(f"MoveGroup execute failed, error_code={result.error_code.val}")
 
         self._set_busy(False, "goal_done")
