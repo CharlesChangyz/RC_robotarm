@@ -54,11 +54,12 @@
     </collision>
   </link>
   <joint name="j1_joint" type="revolute">
-    <origin rpy="0 0 0" xyz="0 -0.00169679105026498 0.0135"/>
+    <!-- Shift the semantic zero of j1 90deg to the left. -->
+    <origin rpy="0 0 1.5707963267948966" xyz="0 -0.00169679105026498 0.0135"/>
     <parent link="base_link"/>
     <child link="l1"/>
     <axis xyz="0 0 -1"/>
-    <limit effort="14.0" lower="-1.865" upper="2.365" velocity="12.0"/>
+    <limit effort="14.0" lower="-0.2942036732051034" upper="3.9357963267948963" velocity="12.0"/>
   </joint>
   <link name="l2">
     <inertial>
@@ -150,48 +151,78 @@
   <ros2_control name="RcArm2System" type="system">
     <hardware>
       <plugin>rc_arm_hardware/RsA3HardwareInterface</plugin>
+      <param name="backend">real</param>
       <param name="can_interface">can0</param>
       <param name="host_can_id">253</param>
-      <param name="can_enabled">True</param>
-      <param name="external_feedback_enabled">False</param>
       <param name="external_feedback_topic">/rc_arm_2/mujoco_joint_states</param>
       <param name="external_feedback_timeout">0.2</param>
-      <param name="position_kp">60.0</param>
-      <param name="position_kd">3.0</param>
+      <param name="mujoco_command_topic">/rc_arm_2/mujoco_joint_command</param>
+      <param name="vacuum_activate_topic">/rc_arm_2/vacuum_activate</param>
+      <param name="payload_active_topic">/rc_arm_2/payload_active</param>
+      <param name="payload_frame">end_effector</param>
+      <param name="payload_mass">0.63</param>
+      <param name="payload_diaginertia_x">0.02</param>
+      <param name="payload_diaginertia_y">0.02</param>
+      <param name="payload_diaginertia_z">0.02</param>
+      <param name="payload_com_offset_x">0.0</param>
+      <param name="payload_com_offset_y">0.0</param>
+      <param name="payload_com_offset_z">0.0</param>
+      <param name="payload_box_size_x">0.05</param>
+      <param name="payload_box_size_y">0.05</param>
+      <param name="payload_box_size_z">0.05</param>
+      <param name="mujoco_payload_body_name">payload_block</param>
+      <param name="mujoco_payload_site_name">attachment_site</param>
+      <param name="mujoco_payload_initial_pos_x">0.3</param>
+      <param name="mujoco_payload_initial_pos_y">0.0</param>
+      <param name="mujoco_payload_initial_pos_z">0.2</param>
+      <param name="dm_sn">9940F4E149D904A69924737E3DE6629F</param>
+      <param name="dm_nom_baud">1000000</param>
+      <param name="dm_dat_baud">2000000</param>
+      <param name="dm_control_mode">0</param>
+      <param name="dm_startup_delay_sec">5.0</param>
+      <param name="dm_enable_retry_count">3</param>
+      <param name="dm_enable_retry_interval_sec">1.0</param>
+      <param name="unloaded_position_kp">60.0</param>
+      <param name="unloaded_position_kd">3.0</param>
+      <param name="payload_position_kp">60.0</param>
+      <param name="payload_position_kd">3.0</param>
       <param name="velocity_limit">8.0</param>
-      <param name="s_curve_enabled">True</param>
-      <param name="smoothing_alpha">0.2</param>
-      <param name="max_velocity">2.0</param>
-      <param name="max_acceleration">8.0</param>
-      <param name="max_jerk">50.0</param>
-      <param name="low_stiffness_mode">False</param>
-      <param name="low_stiffness_kp">20.0</param>
-      <param name="low_stiffness_kd">2.0</param>
-      <param name="low_stiffness_torque_bias">0.0</param>
-      <param name="use_pinocchio_gravity">True</param>
+      <param name="max_velocity">40.0</param>
+      <param name="max_acceleration">20.0</param>
+      <param name="low_stiffness_mode">True</param>
+      <param name="unloaded_low_stiffness_kp">0.0</param>
+      <param name="unloaded_low_stiffness_kd">0.0</param>
+      <param name="unloaded_low_stiffness_torque_bias">0.0</param>
+      <param name="payload_low_stiffness_kp">0.0</param>
+      <param name="payload_low_stiffness_kd">0.0</param>
+      <param name="payload_low_stiffness_torque_bias">0.0</param>
+      <param name="use_pinocchio_gravity">False</param>
       <param name="gravity_feedforward_ratio">1.0</param>
       <param name="use_pinocchio_inverse_dynamics">True</param>
-      <param name="urdf_path">/home/dust/rc_robotarm_mujoco/rc_moveit/install/rc_arm_description/share/rc_arm_description/urdf/rc_arm_2/rc_arm_2.pinocchio.urdf</param>
+      <param name="urdf_path">/home/dust/rc_robotarm_mujoco/rc_moveit/rc_arm_description/urdf/rc_arm_2/rc_arm_2.pinocchio.urdf</param>
+      <param name="limit_margin">0.15</param>
+      <param name="limit_stop_margin">0.02</param>
+      <param name="limit_decel_factor">0.3</param>
+      <param name="fallback_control_period">0.005</param>
     </hardware>
     <joint name="j1_joint">
-      <param name="motor_id">1</param>
+      <param name="motor_id">0</param>
       <param name="motor_type">RS00</param>
-      <param name="position_offset">0.0</param>
-      <param name="direction">-1.0</param>
-      <param name="low_stiffness_kp">0.0</param>
-      <param name="low_stiffness_kd">0.0</param>
+      <param name="position_offset">-1.5707963267948966</param>
+      <param name="direction">1.0</param>
+      <param name="unloaded_low_stiffness_kp">1.5</param>
+      <param name="unloaded_low_stiffness_kd">1.0</param>
+      <param name="payload_low_stiffness_kp">1.5</param>
+      <param name="payload_low_stiffness_kd">1.0</param>
       <command_interface name="position">
-        <!--
-        <param name="min">-1.865</param>
-        <param name="max">2.365</param>
-        --> 
-        <param name="min">-3.14</param>
-        <param name="max">3.14</param>
+        <param name="min">-0.2942036732051034</param>
+        <param name="max">3.9357963267948963</param>
       </command_interface>
       <command_interface name="velocity">
         <param name="min">-12.0</param>
         <param name="max">12.0</param>
       </command_interface>
+      <command_interface name="acceleration"/>
       <command_interface name="effort">
         <param name="min">-14.0</param>
         <param name="max">14.0</param>
@@ -201,17 +232,19 @@
       <state_interface name="effort"/>
     </joint>
     <joint name="j2_joint">
-      <param name="motor_id">2</param>
+      <param name="motor_id">1</param>
       <param name="motor_type">RS00</param>
       <param name="position_offset">0.0</param>
       <param name="direction">1.0</param>
-      <param name="low_stiffness_kp">0.0</param>
-      <param name="low_stiffness_kd">0.0</param>
+      <param name="unloaded_low_stiffness_kp">20.0</param>
+      <param name="unloaded_low_stiffness_kd">4.0</param>
+      <param name="payload_low_stiffness_kp">20.0</param>
+      <param name="payload_low_stiffness_kd">4.0</param>
       <command_interface name="position">
         <!--
-        <param name="min">0.0</param>
-        <param name="max">1.85</param>
-        -->
+          <param name="min">0.0</param>
+          <param name="max">1.85</param>
+          -->
         <param name="min">-3.14</param>
         <param name="max">3.14</param>
       </command_interface>
@@ -219,6 +252,7 @@
         <param name="min">-12.0</param>
         <param name="max">12.0</param>
       </command_interface>
+      <command_interface name="acceleration"/>
       <command_interface name="effort">
         <param name="min">-14.0</param>
         <param name="max">14.0</param>
@@ -228,17 +262,19 @@
       <state_interface name="effort"/>
     </joint>
     <joint name="j3_joint">
-      <param name="motor_id">3</param>
+      <param name="motor_id">2</param>
       <param name="motor_type">RS00</param>
       <param name="position_offset">0.0</param>
-      <param name="direction">-1.0</param>
-      <param name="low_stiffness_kp">0.0</param>
-      <param name="low_stiffness_kd">0.0</param>
+      <param name="direction">1.0</param>
+      <param name="unloaded_low_stiffness_kp">10.0</param>
+      <param name="unloaded_low_stiffness_kd">2.0</param>
+      <param name="payload_low_stiffness_kp">10.0</param>
+      <param name="payload_low_stiffness_kd">2.0</param>
       <command_interface name="position">
         <!--
-        <param name="min">0.0</param>
-        <param name="max">2.13861</param>
-        -->
+          <param name="min">0.0</param>
+          <param name="max">2.13861</param>
+          -->
         <param name="min">-3.14</param>
         <param name="max">3.14</param>
       </command_interface>
@@ -246,6 +282,7 @@
         <param name="min">-12.0</param>
         <param name="max">12.0</param>
       </command_interface>
+      <command_interface name="acceleration"/>
       <command_interface name="effort">
         <param name="min">-14.0</param>
         <param name="max">14.0</param>
@@ -255,17 +292,19 @@
       <state_interface name="effort"/>
     </joint>
     <joint name="j4_joint">
-      <param name="motor_id">4</param>
+      <param name="motor_id">3</param>
       <param name="motor_type">EL05</param>
       <param name="position_offset">0.0</param>
       <param name="direction">-1.0</param>
-      <param name="low_stiffness_kp">0.0</param>
-      <param name="low_stiffness_kd">0.0</param>
+      <param name="unloaded_low_stiffness_kp">5.0</param>
+      <param name="unloaded_low_stiffness_kd">1.0</param>
+      <param name="payload_low_stiffness_kp">5.0</param>
+      <param name="payload_low_stiffness_kd">1.0</param>
       <command_interface name="position">
         <!--
-        <param name="min">-3.14159265358979</param>
-        <param name="max">3.14159265358979</param>
-        -->
+          <param name="min">-3.14159265358979</param>
+          <param name="max">3.14159265358979</param>
+          -->
         <param name="min">-3.14</param>
         <param name="max">3.14</param>
       </command_interface>
@@ -273,6 +312,7 @@
         <param name="min">-20.0</param>
         <param name="max">20.0</param>
       </command_interface>
+      <command_interface name="acceleration"/>
       <command_interface name="effort">
         <param name="min">-6.0</param>
         <param name="max">6.0</param>
