@@ -53,7 +53,7 @@ SCRIPT_RUN_MUJOCO = ROOT_DIR / "scripts" / "run_rc_arm_mujoco.sh"
 SCRIPT_RUN_MUJOCO_BRIDGE = ROOT_DIR / "scripts" / "run_rc_arm_mujoco_bridge.sh"
 SCRIPT_RUN_REAL = ROOT_DIR / "scripts" / "run_rc_arm_real.sh"
 J4_WORLD_MIN_DEG = 0.0
-J4_WORLD_MAX_DEG = 90.0
+J4_WORLD_MAX_DEG = 120.0
 
 
 def middleware_command() -> List[str]:

@@ -1678,13 +1678,55 @@ bool RsA3HardwareInterface::buildPinocchioJointMapping()
 
 void RsA3HardwareInterface::configureLoadedPinocchioModel()
 {
-  if (!pinocchio_loaded_initialized_) {
+  if (!pinocchio_initialized_) {
     return;
   }
 
-  // Keep the same kinematic structure and a separate data/model instance for the payload case.
-  // Payload geometry and gain switching are driven explicitly by payload_* config values.
+  pinocchio_loaded_model_ = pinocchio_model_;
+
+  if (payload_mass_ <= 0.0) {
+    pinocchio_loaded_data_ = pinocchio::Data(pinocchio_loaded_model_);
+    pinocchio_loaded_initialized_ = true;
+    return;
+  }
+
+  if (!pinocchio_loaded_model_.existFrame(payload_frame_)) {
+    RCLCPP_WARN(
+      rclcpp::get_logger("RsA3HardwareInterface"),
+      "Pinocchio 带载模型未找到 frame=%s，将回退到基础模型",
+      payload_frame_.c_str());
+    pinocchio_loaded_data_ = pinocchio::Data(pinocchio_loaded_model_);
+    pinocchio_loaded_initialized_ = false;
+    return;
+  }
+
+  const pinocchio::FrameIndex payload_frame_id = pinocchio_loaded_model_.getFrameId(payload_frame_);
+  const auto & payload_frame = pinocchio_loaded_model_.frames[payload_frame_id];
+
+  Eigen::Matrix3d payload_inertia_matrix = Eigen::Matrix3d::Zero();
+  payload_inertia_matrix.diagonal() << payload_diaginertia_[0], payload_diaginertia_[1], payload_diaginertia_[2];
+
+  const Eigen::Vector3d payload_com_offset(
+    payload_com_offset_[0], payload_com_offset_[1], payload_com_offset_[2]);
+  const pinocchio::Inertia payload_inertia(
+    payload_mass_, payload_com_offset, payload_inertia_matrix);
+
+  // The payload frame placement is expressed in the supporting joint frame.
+  // Appending the inertia at that placement makes the payload follow the end effector rigidly.
+  pinocchio_loaded_model_.appendBodyToJoint(
+    payload_frame.parentJoint,
+    payload_inertia,
+    payload_frame.placement);
   pinocchio_loaded_data_ = pinocchio::Data(pinocchio_loaded_model_);
+  pinocchio_loaded_initialized_ = true;
+
+  RCLCPP_INFO(
+    rclcpp::get_logger("RsA3HardwareInterface"),
+    "Pinocchio 带载模型已配置：frame=%s mass=%.3f com=[%.4f %.4f %.4f] inertia=[%.4f %.4f %.4f]",
+    payload_frame_.c_str(),
+    payload_mass_,
+    payload_com_offset_[0], payload_com_offset_[1], payload_com_offset_[2],
+    payload_diaginertia_[0], payload_diaginertia_[1], payload_diaginertia_[2]);
 }
 
 std::vector<double> RsA3HardwareInterface::computePinocchioGravity(
@@ -1976,9 +2018,7 @@ void RsA3HardwareInterface::applyCalibratedInertiaToModel()
   
   // Recreate Pinocchio Data object to apply changes
   pinocchio_data_ = pinocchio::Data(pinocchio_model_);
-  pinocchio_loaded_model_ = pinocchio_model_;
-  pinocchio_loaded_data_ = pinocchio::Data(pinocchio_loaded_model_);
-  pinocchio_loaded_initialized_ = true;
+  configureLoadedPinocchioModel();
   
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "Pinocchio 模型已更新（已应用标定惯量参数）");

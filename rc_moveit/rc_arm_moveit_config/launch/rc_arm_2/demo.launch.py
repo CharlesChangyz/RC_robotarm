@@ -5,7 +5,7 @@ rc_arm_2 MoveIt demo launch (mock hardware)
 import os
 import yaml
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.conditions import IfCondition
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -141,6 +141,12 @@ def generate_launch_description():
         condition=IfCondition(use_rviz),
     )
 
+    delay_rviz = TimerAction(
+        period=3.0,
+        actions=[rviz_node],
+        condition=IfCondition(use_rviz),
+    )
+
     return LaunchDescription([
         use_rviz_arg,
         robot_state_publisher_node,
@@ -148,5 +154,5 @@ def generate_launch_description():
         joint_state_broadcaster_spawner,
         arm_controller_spawner,
         move_group_node,
-        rviz_node,
+        delay_rviz,
     ])

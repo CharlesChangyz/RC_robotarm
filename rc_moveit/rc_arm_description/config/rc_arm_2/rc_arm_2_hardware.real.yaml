@@ -87,9 +87,9 @@ payload_diaginertia_z: 0.02
 payload_com_offset_x: 0.01
 payload_com_offset_y: -0.05
 payload_com_offset_z: 0.025
-payload_box_size_x: 0.05
-payload_box_size_y: 0.05
-payload_box_size_z: 0.05
+payload_box_size_x: 0.0
+payload_box_size_y: 0.0
+payload_box_size_z: 0.0
 payload_position_kp: 60.0
 payload_position_kd: 3.0
 payload_low_stiffness_kp: 0.0
@@ -132,8 +132,8 @@ unloaded_low_stiffness_kp_j4: 5.0
 
 # j4 空载低刚度 Kd 覆盖值
 unloaded_low_stiffness_kd_j4: 0.5
-payload_low_stiffness_kp_j4: 10.0
-payload_low_stiffness_kd_j4: 5.0
+payload_low_stiffness_kp_j4: 100.0
+payload_low_stiffness_kd_j4: 0.5
 
 # 是否启用 Pinocchio 重力补偿项
 use_pinocchio_gravity: false
