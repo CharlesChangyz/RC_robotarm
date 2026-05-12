@@ -77,9 +77,9 @@ payload_mass: 0.63
 payload_diaginertia_x: 0.02
 payload_diaginertia_y: 0.02
 payload_diaginertia_z: 0.02
-payload_com_offset_x: 0.0
-payload_com_offset_y: 0.0
-payload_com_offset_z: -0.05
+payload_com_offset_x: 0.01
+payload_com_offset_y: -0.07
+payload_com_offset_z: 0.020
 payload_box_size_x: 0.05
 payload_box_size_y: 0.05
 payload_box_size_z: 0.05
@@ -157,4 +157,3 @@ fallback_control_period: 0.005
 dm_startup_delay_sec: 5.0
 dm_enable_retry_count: 3
 dm_enable_retry_interval_sec: 1.0
-
