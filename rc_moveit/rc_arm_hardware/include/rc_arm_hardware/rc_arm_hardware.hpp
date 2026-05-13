@@ -172,6 +172,7 @@ private:
   ControlGainSet payload_gains_;
   double velocity_limit_;
   std::string vacuum_activate_topic_;
+  std::string payload_command_topic_;
   std::string payload_active_topic_;
   std::string payload_frame_;
   double payload_mass_;
@@ -322,6 +323,7 @@ private:
   double computeGravityTorque(size_t joint_idx, double position);
   void publishPayloadActiveState();
   void vacuumActivateCallback(const std_msgs::msg::Bool::SharedPtr msg);
+  void payloadActiveCommandCallback(const std_msgs::msg::Bool::SharedPtr msg);
   void configureLoadedPinocchioModel();
   
   // 零力矩模式服务回调
@@ -351,6 +353,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr mujoco_command_pub_; // MuJoCo 命令输出
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr external_feedback_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr vacuum_activate_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr payload_command_sub_;
 
   // 外部反馈回调
   void externalFeedbackCallback(const sensor_msgs::msg::JointState::SharedPtr msg);

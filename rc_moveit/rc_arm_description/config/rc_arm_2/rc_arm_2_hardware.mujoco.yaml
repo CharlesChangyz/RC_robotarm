@@ -23,6 +23,7 @@ external_feedback_timeout: 0.2
 # MuJoCo 接收命令 JointState 的话题
 mujoco_command_topic: /rc_arm_2/mujoco_joint_command
 vacuum_activate_topic: /rc_arm_2/vacuum_activate
+payload_command_topic: /rc_arm_2/payload_active_command
 payload_active_topic: /rc_arm_2/payload_active
 payload_frame: end_effector
 

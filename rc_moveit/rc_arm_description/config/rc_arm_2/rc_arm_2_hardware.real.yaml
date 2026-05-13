@@ -23,6 +23,7 @@ external_feedback_timeout: 0.2
 # 实机模式通常不会用到，但保留统一字段
 mujoco_command_topic: /rc_arm_2/mujoco_joint_command
 vacuum_activate_topic: /rc_arm_2/vacuum_activate
+payload_command_topic: /rc_arm_2/payload_active_command
 payload_active_topic: /rc_arm_2/payload_active
 payload_frame: end_effector
 
@@ -81,11 +82,11 @@ unloaded_low_stiffness_torque_bias: 0.0
 
 # 带载动力学/场景参数
 payload_mass: 0.63
-payload_diaginertia_x: 0.02
-payload_diaginertia_y: 0.02
-payload_diaginertia_z: 0.02
+payload_diaginertia_x: 0.022
+payload_diaginertia_y: 0.022
+payload_diaginertia_z: 0.022
 payload_com_offset_x: 0.01
-payload_com_offset_y: -0.05
+payload_com_offset_y: -0.180
 payload_com_offset_z: 0.025
 payload_box_size_x: 0.0
 payload_box_size_y: 0.0
@@ -101,8 +102,8 @@ mujoco_payload_initial_pos_x: 0.30
 mujoco_payload_initial_pos_y: 0.00
 mujoco_payload_initial_pos_z: 0.20
 
-# j1 低刚度 Kp 覆盖值；
-# 0 表示回退到 unloaded_low_stiffness_kp
+#j1 低刚度 Kp 覆盖值；
+#0 表示回退到 unloaded_low_stiffness_kp
 unloaded_low_stiffness_kp_j1: 5.0
 
 # j1 空载低刚度 Kd 覆盖值；
@@ -132,7 +133,7 @@ unloaded_low_stiffness_kp_j4: 5.0
 
 # j4 空载低刚度 Kd 覆盖值
 unloaded_low_stiffness_kd_j4: 0.5
-payload_low_stiffness_kp_j4: 100.0
+payload_low_stiffness_kp_j4: 5.0
 payload_low_stiffness_kd_j4: 0.5
 
 # 是否启用 Pinocchio 重力补偿项

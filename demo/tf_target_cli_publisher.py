@@ -105,6 +105,7 @@ class RosBackend(QObject):
     last_sent_updated = Signal(object)
     last_send_status = Signal(str)
     last_vacuum_status = Signal(str)
+    payload_command_status = Signal(str)
     last_middleware_status = Signal(str)
     backend_error = Signal(str)
 
@@ -118,6 +119,7 @@ class RosBackend(QObject):
         self._node: Optional[Node] = None
         self._tf_pub = None
         self._vacuum_pub = None
+        self._payload_command_pub = None
         self._middleware_target_pub = None
         self._middleware_run_pub = None
         self._payload_sub = None
@@ -130,6 +132,7 @@ class RosBackend(QObject):
         self._last_sent: Optional[TargetState] = None
         self._pending_send: Optional[Tuple[TargetState, bool]] = None
         self._pending_vacuum: Optional[bool] = None
+        self._pending_payload_active: Optional[bool] = None
         self._pending_middleware_command: Optional[Tuple[TargetState, int]] = None
         self._pending_reachability: Optional[TargetState] = None
         self._last_actual_emit = 0.0
@@ -142,6 +145,7 @@ class RosBackend(QObject):
         self._node = Node("rc_arm_tf_target_gui_publisher")
         self._tf_pub = self._node.create_publisher(TFMessage, self._args.tf_topic, 10)
         self._vacuum_pub = self._node.create_publisher(Bool, self._args.vacuum_topic, 10)
+        self._payload_command_pub = self._node.create_publisher(Bool, self._args.payload_command_topic, 10)
         self._middleware_target_pub = self._node.create_publisher(
             Arm2TargetPoint, self._args.middleware_target_topic, 10
         )
@@ -179,6 +183,11 @@ class RosBackend(QObject):
         with self._lock:
             self._pending_vacuum = enabled
 
+    @Slot(bool)
+    def queue_payload_active(self, enabled: bool) -> None:
+        with self._lock:
+            self._pending_payload_active = enabled
+
     @Slot(object)
     def queue_reachability(self, state: object) -> None:
         with self._lock:
@@ -208,6 +217,7 @@ class RosBackend(QObject):
                 self._refresh_actual_pose()
                 self._flush_send_request()
                 self._flush_vacuum_request()
+                self._flush_payload_request()
                 self._flush_middleware_request()
                 self._flush_reachability_request()
             except Exception as exc:  # pragma: no cover
@@ -290,6 +300,17 @@ class RosBackend(QObject):
         msg.data = bool(pending)
         self._vacuum_pub.publish(msg)
         self.last_vacuum_status.emit("ON" if pending else "OFF")
+
+    def _flush_payload_request(self) -> None:
+        with self._lock:
+            pending = self._pending_payload_active
+            self._pending_payload_active = None
+        if pending is None or self._payload_command_pub is None:
+            return
+        msg = Bool()
+        msg.data = bool(pending)
+        self._payload_command_pub.publish(msg)
+        self.payload_command_status.emit("payload command: " + ("ON" if pending else "OFF"))
 
     def _flush_middleware_request(self) -> None:
         with self._lock:
@@ -531,6 +552,7 @@ class TargetPublisherWindow(QMainWindow):
         self._backend.last_sent_updated.connect(self._on_last_sent)
         self._backend.last_send_status.connect(self._set_send_status)
         self._backend.last_vacuum_status.connect(self._set_vacuum_status)
+        self._backend.payload_command_status.connect(self._append_log)
         self._backend.last_middleware_status.connect(self._set_middleware_status)
         self._backend.backend_error.connect(self._append_log)
 
@@ -662,6 +684,8 @@ class TargetPublisherWindow(QMainWindow):
         self._run_action_set_btn = QPushButton("Run Action Set")
         vacuum_on = QPushButton("Vacuum ON")
         vacuum_off = QPushButton("Vacuum OFF")
+        payload_on = QPushButton("Payload ON")
+        payload_off = QPushButton("Payload OFF")
 
         self._start_mujoco_btn.clicked.connect(self._start_mujoco)
         self._stop_mujoco_btn.clicked.connect(self._stop_mujoco)
@@ -672,6 +696,8 @@ class TargetPublisherWindow(QMainWindow):
         self._run_action_set_btn.clicked.connect(self._run_action_set)
         vacuum_on.clicked.connect(lambda: self._backend.queue_vacuum(True))
         vacuum_off.clicked.connect(lambda: self._backend.queue_vacuum(False))
+        payload_on.clicked.connect(lambda: self._backend.queue_payload_active(True))
+        payload_off.clicked.connect(lambda: self._backend.queue_payload_active(False))
 
         for widget in (
             self._start_mujoco_btn,
@@ -682,6 +708,8 @@ class TargetPublisherWindow(QMainWindow):
             self._stop_middleware_btn,
             vacuum_on,
             vacuum_off,
+            payload_on,
+            payload_off,
         ):
             layout.addWidget(widget)
         action_row = QHBoxLayout()
@@ -1017,6 +1045,7 @@ def parse_args():
     parser.add_argument("--current-pose-parent-frame", default="world")
     parser.add_argument("--current-pose-child-frame", default="end_effector")
     parser.add_argument("--vacuum-topic", default="/rc_arm_2/vacuum_activate")
+    parser.add_argument("--payload-command-topic", default="/rc_arm_2/payload_active_command")
     parser.add_argument("--payload-active-topic", default="/rc_arm_2/payload_active")
     parser.add_argument("--joint-state-topic", default="/joint_states")
     parser.add_argument("--middleware-target-topic", default="/arm2/middleware/target_point")
