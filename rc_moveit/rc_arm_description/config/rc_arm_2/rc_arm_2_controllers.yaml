@@ -38,7 +38,7 @@ arm_controller:
       stopped_velocity_tolerance: 0.1
 
       # 允许目标完成的额外时间裕量，单位秒
-      goal_time: 0.0
+      goal_time: 1.0
 
       # j1 到目标点的允许误差，单位 rad
       j1_joint:

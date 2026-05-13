@@ -16,7 +16,6 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, Int32
 from tf2_msgs.msg import TFMessage
-import tf2_ros
 import yaml
 
 from arm_msgs.msg import Arm2TargetPoint
@@ -34,7 +33,6 @@ class MiddlewareState(str, Enum):
     STARTING_SET = "STARTING_SET"
     EXECUTING_STEP = "EXECUTING_STEP"
     WAITING_MOTION_TERMINAL = "WAITING_MOTION_TERMINAL"
-    WAITING_MOTION_CONVERGENCE = "WAITING_MOTION_CONVERGENCE"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
@@ -80,10 +78,6 @@ class ActiveRun:
     waiting_goal_id: Optional[Tuple[int, ...]] = None
     waiting_known_goal_ids: set[Tuple[int, ...]] = field(default_factory=set)
     waiting_started_ns: Optional[int] = None
-    convergence_started_ns: Optional[int] = None
-    expected_xyz: Optional[Tuple[float, float, float]] = None
-    expected_quat_xyzw: Optional[Tuple[float, float, float, float]] = None
-    motion_terminal_status: Optional[int] = None
     had_failures: bool = False
     results: List[StepResult] = field(default_factory=list)
 
@@ -117,21 +111,6 @@ def _quaternion_from_world_pitch(axis: str, pitch_deg: float) -> Tuple[float, fl
     return (0.0, 0.0, s, c)
 
 
-def _normalize_quat_xyzw(quat: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
-    norm = math.sqrt(sum(v * v for v in quat))
-    if norm < 1.0e-9:
-        return (0.0, 0.0, 0.0, 1.0)
-    return tuple(v / norm for v in quat)
-
-
-def _quat_angle(q0: Tuple[float, float, float, float], q1: Tuple[float, float, float, float]) -> float:
-    a = _normalize_quat_xyzw(q0)
-    b = _normalize_quat_xyzw(q1)
-    dot = abs(sum(x * y for x, y in zip(a, b)))
-    dot = max(-1.0, min(1.0, dot))
-    return 2.0 * math.acos(dot)
-
-
 def _status_name(status: int) -> str:
     mapping = {
         GoalStatus.STATUS_UNKNOWN: "UNKNOWN",
@@ -159,17 +138,12 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("vacuum_topic", "/rc_arm_2/vacuum_activate")
         self.declare_parameter("payload_command_topic", "/rc_arm_2/payload_active_command")
         self.declare_parameter("payload_active_topic", "/rc_arm_2/payload_active")
-        self.declare_parameter("completion_base_frame", "world")
-        self.declare_parameter("completion_eef_frame", "end_effector")
-        self.declare_parameter("completion_pos_tolerance_m", 0.003)
-        self.declare_parameter("completion_rot_tolerance_rad", 0.03)
         self.declare_parameter(
             "controller_status_topic",
             "/arm_controller/follow_joint_trajectory/_action/status",
         )
         self.declare_parameter("j4_axis", "x")
         self.declare_parameter("motion_wait_timeout_sec", 30.0)
-        self.declare_parameter("completion_wait_timeout_sec", 3.0)
 
         self._action_sets_file = Path(self.get_parameter("action_sets_file").value)
         self._target_point_topic = str(self.get_parameter("target_point_topic").value)
@@ -180,28 +154,15 @@ class Arm2MiddlewareNode(Node):
         self._vacuum_topic = str(self.get_parameter("vacuum_topic").value)
         self._payload_command_topic = str(self.get_parameter("payload_command_topic").value)
         self._payload_active_topic = str(self.get_parameter("payload_active_topic").value)
-        self._completion_base_frame = str(self.get_parameter("completion_base_frame").value)
-        self._completion_eef_frame = str(self.get_parameter("completion_eef_frame").value)
-        self._completion_pos_tolerance_m = max(
-            0.0, float(self.get_parameter("completion_pos_tolerance_m").value)
-        )
-        self._completion_rot_tolerance_rad = max(
-            0.0, float(self.get_parameter("completion_rot_tolerance_rad").value)
-        )
         self._controller_status_topic = str(self.get_parameter("controller_status_topic").value)
         self._j4_axis = _normalize_axis(str(self.get_parameter("j4_axis").value))
         self._motion_wait_timeout = max(0.0, float(self.get_parameter("motion_wait_timeout_sec").value))
-        self._completion_wait_timeout = max(
-            0.0, float(self.get_parameter("completion_wait_timeout_sec").value)
-        )
 
         self._state = MiddlewareState.IDLE
         self._cached_target_point: Optional[TargetPoint] = None
         self._payload_active = False
         self._active_run: Optional[ActiveRun] = None
         self._latest_goal_statuses: Dict[Tuple[int, ...], Tuple[int, int]] = {}
-        self._tf_buffer = tf2_ros.Buffer()
-        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
         self._action_sets = self._load_action_sets(self._action_sets_file)
 
@@ -220,7 +181,7 @@ class Arm2MiddlewareNode(Node):
         self.create_timer(0.1, self._on_timer)
 
         self.get_logger().info(
-            "arm2_middleware ready: action_sets=%s target_point=%s run_action_set=%s tf=%s vacuum=%s payload_command=%s status=%s completion_tf=%s->%s completion_tol=(%.4f m, %.4f rad)"
+            "arm2_middleware ready: action_sets=%s target_point=%s run_action_set=%s tf=%s vacuum=%s payload_command=%s status=%s"
             % (
                 sorted(self._action_sets.keys()),
                 self._target_point_topic,
@@ -229,10 +190,6 @@ class Arm2MiddlewareNode(Node):
                 self._vacuum_topic,
                 self._payload_command_topic,
                 self._controller_status_topic,
-                self._completion_base_frame,
-                self._completion_eef_frame,
-                self._completion_pos_tolerance_m,
-                self._completion_rot_tolerance_rad,
             )
         )
 
@@ -372,37 +329,20 @@ class Arm2MiddlewareNode(Node):
         self._maybe_finish_motion_from_status()
 
     def _on_timer(self) -> None:
-        if self._active_run is None:
+        if self._state != MiddlewareState.WAITING_MOTION_TERMINAL or self._active_run is None:
+            return
+        if self._motion_wait_timeout <= 0.0 or self._active_run.waiting_started_ns is None:
             return
 
-        if self._state == MiddlewareState.WAITING_MOTION_TERMINAL:
-            if self._motion_wait_timeout <= 0.0 or self._active_run.waiting_started_ns is None:
-                return
-
-            elapsed = self.get_clock().now().nanoseconds - self._active_run.waiting_started_ns
-            if elapsed < int(self._motion_wait_timeout * 1_000_000_000):
-                return
-
-            self.get_logger().warn(f"motion wait timeout after {self._motion_wait_timeout:.2f} sec")
-            self._finish_motion_step(
-                success=False,
-                detail=f"motion wait timeout after {self._motion_wait_timeout:.2f} sec",
-            )
+        elapsed = self.get_clock().now().nanoseconds - self._active_run.waiting_started_ns
+        if elapsed < int(self._motion_wait_timeout * 1_000_000_000):
             return
 
-        if self._state != MiddlewareState.WAITING_MOTION_CONVERGENCE:
-            return
-        self._maybe_finish_motion_from_convergence()
-        if self._state != MiddlewareState.WAITING_MOTION_CONVERGENCE:
-            return
-        if self._completion_wait_timeout <= 0.0 or self._active_run.convergence_started_ns is None:
-            return
-        elapsed = self.get_clock().now().nanoseconds - self._active_run.convergence_started_ns
-        if elapsed < int(self._completion_wait_timeout * 1_000_000_000):
-            return
-        detail = self._build_convergence_detail(prefix="completion wait timeout")
-        self.get_logger().warn(detail)
-        self._finish_motion_step(success=False, detail=detail)
+        self.get_logger().warn(f"motion wait timeout after {self._motion_wait_timeout:.2f} sec")
+        self._finish_motion_step(
+            success=False,
+            detail=f"motion wait timeout after {self._motion_wait_timeout:.2f} sec",
+        )
 
     def _start_next_step(self) -> None:
         run = self._active_run
@@ -460,7 +400,6 @@ class Arm2MiddlewareNode(Node):
             x = self._cached_target_point.x + float(step.offset_xyz[0])
             y = self._cached_target_point.y + float(step.offset_xyz[1])
             z = self._cached_target_point.z + float(step.offset_xyz[2])
-            self._set_expected_motion_target(x, y, z, step.target_spin_deg)
             self._publish_target_tf(x, y, z, step.target_spin_deg)
             self._enter_motion_wait(
                 f"waiting on target_offset x={x:.4f} y={y:.4f} z={z:.4f} spin={step.target_spin_deg:.2f}",
@@ -469,7 +408,6 @@ class Arm2MiddlewareNode(Node):
 
         if step.step_type == "move_fixed_pose":
             x, y, z = step.xyz
-            self._set_expected_motion_target(x, y, z, step.target_spin_deg)
             self._publish_target_tf(x, y, z, step.target_spin_deg)
             self._enter_motion_wait(
                 f"waiting on fixed_pose x={x:.4f} y={y:.4f} z={z:.4f} spin={step.target_spin_deg:.2f}",
@@ -487,8 +425,6 @@ class Arm2MiddlewareNode(Node):
         run.waiting_goal_id = None
         run.waiting_known_goal_ids = set(self._latest_goal_statuses.keys())
         run.waiting_started_ns = self.get_clock().now().nanoseconds
-        run.convergence_started_ns = None
-        run.motion_terminal_status = None
         self._set_state(MiddlewareState.WAITING_MOTION_TERMINAL, detail)
         self._maybe_finish_motion_from_status()
 
@@ -532,105 +468,6 @@ class Arm2MiddlewareNode(Node):
             f"published payload_active={enabled} on {self._payload_command_topic}"
         )
 
-    def _set_expected_motion_target(
-        self,
-        x: float,
-        y: float,
-        z: float,
-        target_spin_deg: float,
-    ) -> None:
-        run = self._active_run
-        if run is None:
-            return
-        run.expected_xyz = (float(x), float(y), float(z))
-        run.expected_quat_xyzw = _quaternion_from_world_pitch(self._j4_axis, target_spin_deg)
-
-    def _get_current_eef_pose(
-        self,
-    ) -> Optional[Tuple[Tuple[float, float, float], Tuple[float, float, float, float]]]:
-        try:
-            trans = self._tf_buffer.lookup_transform(
-                self._completion_base_frame,
-                self._completion_eef_frame,
-                rclpy.time.Time(),
-            )
-        except Exception:
-            return None
-
-        t = trans.transform.translation
-        r = trans.transform.rotation
-        return (
-            (float(t.x), float(t.y), float(t.z)),
-            _normalize_quat_xyzw((float(r.x), float(r.y), float(r.z), float(r.w))),
-        )
-
-    def _current_completion_errors(self) -> Optional[Tuple[float, float]]:
-        run = self._active_run
-        if run is None or run.expected_xyz is None or run.expected_quat_xyzw is None:
-            return None
-        actual_pose = self._get_current_eef_pose()
-        if actual_pose is None:
-            return None
-        actual_xyz, actual_quat = actual_pose
-        expected_xyz = run.expected_xyz
-        pos_err = math.sqrt(
-            (expected_xyz[0] - actual_xyz[0]) ** 2
-            + (expected_xyz[1] - actual_xyz[1]) ** 2
-            + (expected_xyz[2] - actual_xyz[2]) ** 2
-        )
-        rot_err = _quat_angle(run.expected_quat_xyzw, actual_quat)
-        return (pos_err, rot_err)
-
-    def _build_convergence_detail(self, prefix: str) -> str:
-        run = self._active_run
-        terminal = (
-            _status_name(run.motion_terminal_status)
-            if run is not None and run.motion_terminal_status is not None
-            else "UNKNOWN"
-        )
-        errors = self._current_completion_errors()
-        if errors is None:
-            return (
-                f"{prefix}: controller status={terminal} tf unavailable for "
-                f"{self._completion_base_frame}->{self._completion_eef_frame}"
-            )
-        pos_err, rot_err = errors
-        return (
-            f"{prefix}: controller status={terminal} pos_err={pos_err:.6f} m "
-            f"rot_err={rot_err:.6f} rad thresholds=({self._completion_pos_tolerance_m:.6f} m, "
-            f"{self._completion_rot_tolerance_rad:.6f} rad)"
-        )
-
-    def _enter_motion_convergence(self, status: int) -> None:
-        run = self._active_run
-        if run is None:
-            self._fail_action_set("internal error: missing active run when entering convergence wait")
-            return
-        run.motion_terminal_status = int(status)
-        run.convergence_started_ns = self.get_clock().now().nanoseconds
-        self._set_state(
-            MiddlewareState.WAITING_MOTION_CONVERGENCE,
-            self._build_convergence_detail(prefix="waiting for end-effector convergence"),
-        )
-        self._maybe_finish_motion_from_convergence()
-
-    def _maybe_finish_motion_from_convergence(self) -> None:
-        run = self._active_run
-        if run is None or self._state != MiddlewareState.WAITING_MOTION_CONVERGENCE:
-            return
-        errors = self._current_completion_errors()
-        if errors is None:
-            return
-        pos_err, rot_err = errors
-        if (
-            pos_err <= self._completion_pos_tolerance_m
-            and rot_err <= self._completion_rot_tolerance_rad
-        ):
-            detail = self._build_convergence_detail(
-                prefix="motion converged after controller success"
-            )
-            self._finish_motion_step(success=True, detail=detail)
-
     def _maybe_finish_motion_from_status(self) -> None:
         run = self._active_run
         if run is None or self._state != MiddlewareState.WAITING_MOTION_TERMINAL:
@@ -652,13 +489,10 @@ class Arm2MiddlewareNode(Node):
                 % (list(goal_id), _status_name(status), stamp_ns)
             )
             if status in TERMINAL_STATUSES:
-                if status == GoalStatus.STATUS_SUCCEEDED:
-                    self._enter_motion_convergence(status)
-                else:
-                    self._finish_motion_step(
-                        success=False,
-                        detail=f"controller goal terminal status={_status_name(status)}",
-                    )
+                self._finish_motion_step(
+                    success=(status == GoalStatus.STATUS_SUCCEEDED),
+                    detail=f"controller goal terminal status={_status_name(status)}",
+                )
             return
 
         snapshot = self._latest_goal_statuses.get(run.waiting_goal_id)
@@ -666,31 +500,18 @@ class Arm2MiddlewareNode(Node):
             return
         status, _stamp_ns = snapshot
         if status in TERMINAL_STATUSES:
-            if status == GoalStatus.STATUS_SUCCEEDED:
-                self._enter_motion_convergence(status)
-            else:
-                self._finish_motion_step(
-                    success=False,
-                    detail=f"controller goal terminal status={_status_name(status)}",
-                )
+            self._finish_motion_step(
+                success=(status == GoalStatus.STATUS_SUCCEEDED),
+                detail=f"controller goal terminal status={_status_name(status)}",
+            )
 
-    def _clear_motion_wait_state(self) -> None:
+    def _finish_motion_step(self, success: bool, detail: str) -> None:
         run = self._active_run
         if run is None:
             return
         run.waiting_goal_id = None
         run.waiting_known_goal_ids.clear()
         run.waiting_started_ns = None
-        run.convergence_started_ns = None
-        run.expected_xyz = None
-        run.expected_quat_xyzw = None
-        run.motion_terminal_status = None
-
-    def _finish_motion_step(self, success: bool, detail: str) -> None:
-        run = self._active_run
-        if run is None:
-            return
-        self._clear_motion_wait_state()
         self._record_step_result(success, detail)
         run.step_index += 1
         self._start_next_step()
@@ -729,7 +550,6 @@ class Arm2MiddlewareNode(Node):
 
         if run.current_step is not None:
             self._record_step_result(False, detail)
-        self._clear_motion_wait_state()
         self._set_state(
             MiddlewareState.FAILED,
             f"action_set id={run.action_set.action_id} name={run.action_set.name} detail={detail}",
