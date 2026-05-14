@@ -20,7 +20,7 @@ setup(
     zip_safe=True,
     maintainer="Codex",
     maintainer_email="codex@openai.com",
-    description="Task middleware for TF-driven arm execution",
+    description="Sequential task middleware for high-level arm execution",
     license="Apache-2.0",
     entry_points={
         "console_scripts": [

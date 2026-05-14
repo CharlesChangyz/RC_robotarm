@@ -13,7 +13,12 @@ action_sets:
      
       - type: move_fixed_pose
         label: move_to_staging_pose
-        xyz: [0.55, 0.0, 0.16]
+        xyz: [0.55, 0.0, 0.30]
+        target_spin: 0.0
+
+      - type: move_fixed_pose
+        label: move_to_staging_pose
+        xyz: [0.55, 0.0, 0.18]
         target_spin: 0.0
 
       - type: set_payload_active
@@ -56,9 +61,19 @@ action_sets:
   - id: 2
     name: place_sequence
     steps:
+      - type: move_fixed_pose
+        label: move_to_staging_pose
+        xyz: [-0.02, 0.35, 0.22]
+        target_spin: 90.0
+
       - type: set_vacuum
         label: vacuum_on
         enabled: true
+      
+      - type: move_fixed_pose
+        label: move_to_staging_pose
+        xyz: [-0.02, 0.75, 0.22]
+        target_spin: 90.0
 
       - type: set_payload_active
         label: payload_on
@@ -66,20 +81,30 @@ action_sets:
 
       - type: move_fixed_pose
         label: move_to_staging_pose
-        xyz: [0.30, -0.10, 0.20]
-        target_spin: 0.0
+        xyz: [-0.02, 0.35, 0.7]
+        target_spin: 90.0
 
+      - type: move_fixed_pose
+        label: move_to_staging_pose
+        xyz: [-0.02, -0.35, 0.7]
+        target_spin: 90.0
+
+      - type: move_fixed_pose
+        label: move_to_staging_pose
+        xyz: [-0.02, -0.65, 0.05]
+        target_spin: 90.0  
+
+      - type: set_payload_active
+        label: payload_off
+        enabled: false  
+        
       - type: set_vacuum
         label: vacuum_off
         enabled: false
 
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.24]
+        xyz: [0.19, 0.0, 0.24]
         target_spin: 0.0
 
   - id: 3

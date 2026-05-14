@@ -1,38 +1,28 @@
 #!/usr/bin/env python3
-"""Sequential middleware for TF-driven rc_arm_2 tasks."""
+"""Sequential middleware for rc_arm_2 task execution."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-import math
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from ament_index_python.packages import get_package_share_directory
-from action_msgs.msg import GoalStatus, GoalStatusArray
-from geometry_msgs.msg import TransformStamped
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, Int32
-from tf2_msgs.msg import TFMessage
 import yaml
 
-from arm_msgs.msg import Arm2TargetPoint
-
-
-TERMINAL_STATUSES = {
-    GoalStatus.STATUS_SUCCEEDED,
-    GoalStatus.STATUS_ABORTED,
-    GoalStatus.STATUS_CANCELED,
-}
+from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPoint
 
 
 class MiddlewareState(str, Enum):
     IDLE = "IDLE"
     STARTING_SET = "STARTING_SET"
     EXECUTING_STEP = "EXECUTING_STEP"
-    WAITING_MOTION_TERMINAL = "WAITING_MOTION_TERMINAL"
+    WAITING_MOTION_RESULT = "WAITING_MOTION_RESULT"
+    WAITING_PAYLOAD_ACTIVE = "WAITING_PAYLOAD_ACTIVE"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
@@ -75,9 +65,10 @@ class ActiveRun:
     action_set: ActionSet
     step_index: int = 0
     current_step: Optional[ActionStep] = None
-    waiting_goal_id: Optional[Tuple[int, ...]] = None
-    waiting_known_goal_ids: set[Tuple[int, ...]] = field(default_factory=set)
     waiting_started_ns: Optional[int] = None
+    waiting_execution_baseline_id: int = 0
+    waiting_execution_id: Optional[int] = None
+    desired_payload_active: Optional[bool] = None
     had_failures: bool = False
     results: List[StepResult] = field(default_factory=list)
 
@@ -86,42 +77,13 @@ def _share_path(package_name: str, *parts: str) -> Path:
     return Path(get_package_share_directory(package_name)).joinpath(*parts)
 
 
-def _goal_key(uuid_values: Sequence[int]) -> Tuple[int, ...]:
-    return tuple(int(v) for v in uuid_values)
-
-
-def _stamp_to_ns(sec: int, nanosec: int) -> int:
-    return int(sec) * 1_000_000_000 + int(nanosec)
-
-
-def _normalize_axis(axis: str) -> str:
-    axis = (axis or "x").strip().lower()
-    return axis if axis in {"x", "y", "z"} else "x"
-
-
-def _quaternion_from_world_pitch(axis: str, pitch_deg: float) -> Tuple[float, float, float, float]:
-    angle = math.radians(float(pitch_deg))
-    half = 0.5 * angle
-    s = math.sin(half)
-    c = math.cos(half)
-    if axis == "x":
-        return (s, 0.0, 0.0, c)
-    if axis == "y":
-        return (0.0, s, 0.0, c)
-    return (0.0, 0.0, s, c)
-
-
-def _status_name(status: int) -> str:
+def _motion_status_name(status: int) -> str:
     mapping = {
-        GoalStatus.STATUS_UNKNOWN: "UNKNOWN",
-        GoalStatus.STATUS_ACCEPTED: "ACCEPTED",
-        GoalStatus.STATUS_EXECUTING: "EXECUTING",
-        GoalStatus.STATUS_CANCELING: "CANCELING",
-        GoalStatus.STATUS_SUCCEEDED: "SUCCEEDED",
-        GoalStatus.STATUS_CANCELED: "CANCELED",
-        GoalStatus.STATUS_ABORTED: "ABORTED",
+        Arm2MotionExecution.STATUS_ACCEPTED: "ACCEPTED",
+        Arm2MotionExecution.STATUS_SUCCEEDED: "SUCCEEDED",
+        Arm2MotionExecution.STATUS_FAILED: "FAILED",
     }
-    return mapping.get(status, f"STATUS_{status}")
+    return mapping.get(int(status), f"STATUS_{status}")
 
 
 class Arm2MiddlewareNode(Node):
@@ -132,64 +94,59 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("action_sets_file", default_config)
         self.declare_parameter("target_point_topic", "/arm2/middleware/target_point")
         self.declare_parameter("run_action_set_topic", "/arm2/middleware/run_action_set")
-        self.declare_parameter("tf_topic", "/tf")
-        self.declare_parameter("parent_frame", "world")
-        self.declare_parameter("child_frame", "rc_arm_2_target")
+        self.declare_parameter("motion_target_topic", "/arm2/middleware/motion_target")
+        self.declare_parameter("motion_execution_topic", "/arm2/middleware/motion_execution")
         self.declare_parameter("vacuum_topic", "/rc_arm_2/vacuum_activate")
         self.declare_parameter("payload_command_topic", "/rc_arm_2/payload_active_command")
         self.declare_parameter("payload_active_topic", "/rc_arm_2/payload_active")
-        self.declare_parameter(
-            "controller_status_topic",
-            "/arm_controller/follow_joint_trajectory/_action/status",
-        )
-        self.declare_parameter("j4_axis", "x")
         self.declare_parameter("motion_wait_timeout_sec", 30.0)
+        self.declare_parameter("payload_wait_timeout_sec", 5.0)
 
         self._action_sets_file = Path(self.get_parameter("action_sets_file").value)
         self._target_point_topic = str(self.get_parameter("target_point_topic").value)
         self._run_action_set_topic = str(self.get_parameter("run_action_set_topic").value)
-        self._tf_topic = str(self.get_parameter("tf_topic").value)
-        self._parent_frame = str(self.get_parameter("parent_frame").value)
-        self._child_frame = str(self.get_parameter("child_frame").value)
+        self._motion_target_topic = str(self.get_parameter("motion_target_topic").value)
+        self._motion_execution_topic = str(self.get_parameter("motion_execution_topic").value)
         self._vacuum_topic = str(self.get_parameter("vacuum_topic").value)
         self._payload_command_topic = str(self.get_parameter("payload_command_topic").value)
         self._payload_active_topic = str(self.get_parameter("payload_active_topic").value)
-        self._controller_status_topic = str(self.get_parameter("controller_status_topic").value)
-        self._j4_axis = _normalize_axis(str(self.get_parameter("j4_axis").value))
         self._motion_wait_timeout = max(0.0, float(self.get_parameter("motion_wait_timeout_sec").value))
+        self._payload_wait_timeout = max(0.0, float(self.get_parameter("payload_wait_timeout_sec").value))
 
         self._state = MiddlewareState.IDLE
         self._cached_target_point: Optional[TargetPoint] = None
         self._payload_active = False
         self._active_run: Optional[ActiveRun] = None
-        self._latest_goal_statuses: Dict[Tuple[int, ...], Tuple[int, int]] = {}
+        self._latest_motion_execution_id = 0
 
         self._action_sets = self._load_action_sets(self._action_sets_file)
 
-        self._tf_pub = self.create_publisher(TFMessage, self._tf_topic, 10)
+        self._motion_target_pub = self.create_publisher(Arm2TargetPoint, self._motion_target_topic, 10)
         self._vacuum_pub = self.create_publisher(Bool, self._vacuum_topic, 10)
         self._payload_command_pub = self.create_publisher(Bool, self._payload_command_topic, 10)
         self.create_subscription(Arm2TargetPoint, self._target_point_topic, self._on_target_point, 20)
         self.create_subscription(Int32, self._run_action_set_topic, self._on_run_action_set, 10)
         self.create_subscription(Bool, self._payload_active_topic, self._on_payload_active, 10)
         self.create_subscription(
-            GoalStatusArray,
-            self._controller_status_topic,
-            self._on_controller_status,
+            Arm2MotionExecution,
+            self._motion_execution_topic,
+            self._on_motion_execution,
             20,
         )
         self.create_timer(0.1, self._on_timer)
 
         self.get_logger().info(
-            "arm2_middleware ready: action_sets=%s target_point=%s run_action_set=%s tf=%s vacuum=%s payload_command=%s status=%s"
+            "arm2_middleware ready: action_sets=%s target_point=%s run_action_set=%s motion_target=%s "
+            "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s"
             % (
                 sorted(self._action_sets.keys()),
                 self._target_point_topic,
                 self._run_action_set_topic,
-                self._tf_topic,
+                self._motion_target_topic,
+                self._motion_execution_topic,
                 self._vacuum_topic,
                 self._payload_command_topic,
-                self._controller_status_topic,
+                self._payload_active_topic,
             )
         )
 
@@ -316,33 +273,77 @@ class Arm2MiddlewareNode(Node):
             self._payload_active = new_value
             self.get_logger().info(f"payload_active={self._payload_active}")
 
-    def _on_controller_status(self, msg: GoalStatusArray) -> None:
-        latest: Dict[Tuple[int, ...], Tuple[int, int]] = {}
-        for status_entry in msg.status_list:
-            goal_id = _goal_key(status_entry.goal_info.goal_id.uuid)
-            stamp_ns = _stamp_to_ns(
-                status_entry.goal_info.stamp.sec,
-                status_entry.goal_info.stamp.nanosec,
+        run = self._active_run
+        if (
+            run is not None
+            and self._state == MiddlewareState.WAITING_PAYLOAD_ACTIVE
+            and run.desired_payload_active is not None
+            and self._payload_active == run.desired_payload_active
+        ):
+            self._complete_current_step(
+                f"payload_active matched {self._payload_active}",
             )
-            latest[goal_id] = (int(status_entry.status), stamp_ns)
-        self._latest_goal_statuses = latest
-        self._maybe_finish_motion_from_status()
+
+    def _on_motion_execution(self, msg: Arm2MotionExecution) -> None:
+        execution_id = int(msg.execution_id)
+        if execution_id > self._latest_motion_execution_id:
+            self._latest_motion_execution_id = execution_id
+
+        run = self._active_run
+        if run is None or self._state != MiddlewareState.WAITING_MOTION_RESULT:
+            return
+
+        if run.waiting_execution_id is None:
+            if execution_id <= run.waiting_execution_baseline_id:
+                return
+            run.waiting_execution_id = execution_id
+            self.get_logger().info(
+                "tracking motion execution_id=%d status=%s"
+                % (execution_id, _motion_status_name(msg.status))
+            )
+
+        if execution_id != run.waiting_execution_id:
+            return
+
+        if msg.status == Arm2MotionExecution.STATUS_ACCEPTED:
+            return
+
+        if msg.status == Arm2MotionExecution.STATUS_SUCCEEDED:
+            self._complete_current_step(
+                f"motion execution_id={execution_id} succeeded detail={msg.detail}",
+            )
+            return
+
+        if msg.status == Arm2MotionExecution.STATUS_FAILED:
+            self._fail_action_set(
+                f"motion execution_id={execution_id} failed error_code={msg.error_code} detail={msg.detail}",
+            )
 
     def _on_timer(self) -> None:
-        if self._state != MiddlewareState.WAITING_MOTION_TERMINAL or self._active_run is None:
-            return
-        if self._motion_wait_timeout <= 0.0 or self._active_run.waiting_started_ns is None:
-            return
-
-        elapsed = self.get_clock().now().nanoseconds - self._active_run.waiting_started_ns
-        if elapsed < int(self._motion_wait_timeout * 1_000_000_000):
+        run = self._active_run
+        if run is None or run.waiting_started_ns is None:
             return
 
-        self.get_logger().warn(f"motion wait timeout after {self._motion_wait_timeout:.2f} sec")
-        self._finish_motion_step(
-            success=False,
-            detail=f"motion wait timeout after {self._motion_wait_timeout:.2f} sec",
-        )
+        if self._state == MiddlewareState.WAITING_MOTION_RESULT:
+            timeout_sec = self._motion_wait_timeout
+            timeout_detail = f"motion wait timeout after {timeout_sec:.2f} sec"
+        elif self._state == MiddlewareState.WAITING_PAYLOAD_ACTIVE:
+            timeout_sec = self._payload_wait_timeout
+            desired = run.desired_payload_active
+            timeout_detail = (
+                f"payload wait timeout after {timeout_sec:.2f} sec waiting for payload_active={desired}"
+            )
+        else:
+            return
+
+        if timeout_sec <= 0.0:
+            return
+
+        elapsed = self.get_clock().now().nanoseconds - run.waiting_started_ns
+        if elapsed < int(timeout_sec * 1_000_000_000):
+            return
+
+        self._fail_action_set(timeout_detail)
 
     def _start_next_step(self) -> None:
         run = self._active_run
@@ -381,16 +382,19 @@ class Arm2MiddlewareNode(Node):
 
         if step.step_type == "set_vacuum":
             self._publish_vacuum(bool(step.enabled))
-            self._record_step_result(True, f"vacuum set to {bool(step.enabled)}")
-            run.step_index += 1
-            self._start_next_step()
+            self._complete_current_step(f"vacuum set to {bool(step.enabled)}")
             return
 
         if step.step_type == "set_payload_active":
-            self._publish_payload_active(bool(step.enabled))
-            self._record_step_result(True, f"payload_active set to {bool(step.enabled)}")
-            run.step_index += 1
-            self._start_next_step()
+            desired = bool(step.enabled)
+            self._publish_payload_active(desired)
+            if self._payload_active == desired:
+                self._complete_current_step(f"payload_active already {desired}")
+                return
+            self._enter_payload_wait(
+                detail=f"waiting for payload_active={desired}",
+                desired=desired,
+            )
             return
 
         if step.step_type == "move_target_offset":
@@ -400,18 +404,18 @@ class Arm2MiddlewareNode(Node):
             x = self._cached_target_point.x + float(step.offset_xyz[0])
             y = self._cached_target_point.y + float(step.offset_xyz[1])
             z = self._cached_target_point.z + float(step.offset_xyz[2])
-            self._publish_target_tf(x, y, z, step.target_spin_deg)
             self._enter_motion_wait(
                 f"waiting on target_offset x={x:.4f} y={y:.4f} z={z:.4f} spin={step.target_spin_deg:.2f}",
             )
+            self._publish_motion_target(x, y, z, step.target_spin_deg)
             return
 
         if step.step_type == "move_fixed_pose":
             x, y, z = step.xyz
-            self._publish_target_tf(x, y, z, step.target_spin_deg)
             self._enter_motion_wait(
                 f"waiting on fixed_pose x={x:.4f} y={y:.4f} z={z:.4f} spin={step.target_spin_deg:.2f}",
             )
+            self._publish_motion_target(x, y, z, step.target_spin_deg)
             return
 
         self._fail_action_set(f"unsupported step type at runtime: {step.step_type}")
@@ -422,36 +426,33 @@ class Arm2MiddlewareNode(Node):
             self._fail_action_set("internal error: missing active run when entering motion wait")
             return
 
-        run.waiting_goal_id = None
-        run.waiting_known_goal_ids = set(self._latest_goal_statuses.keys())
         run.waiting_started_ns = self.get_clock().now().nanoseconds
-        self._set_state(MiddlewareState.WAITING_MOTION_TERMINAL, detail)
-        self._maybe_finish_motion_from_status()
+        run.waiting_execution_baseline_id = self._latest_motion_execution_id
+        run.waiting_execution_id = None
+        run.desired_payload_active = None
+        self._set_state(MiddlewareState.WAITING_MOTION_RESULT, detail)
 
-    def _publish_target_tf(self, x: float, y: float, z: float, target_spin_deg: float) -> None:
-        qx, qy, qz, qw = _quaternion_from_world_pitch(self._j4_axis, target_spin_deg)
-        transform = TransformStamped()
-        transform.header.stamp = self.get_clock().now().to_msg()
-        transform.header.frame_id = self._parent_frame
-        transform.child_frame_id = self._child_frame
-        transform.transform.translation.x = float(x)
-        transform.transform.translation.y = float(y)
-        transform.transform.translation.z = float(z)
-        transform.transform.rotation.x = qx
-        transform.transform.rotation.y = qy
-        transform.transform.rotation.z = qz
-        transform.transform.rotation.w = qw
-        self._tf_pub.publish(TFMessage(transforms=[transform]))
+    def _enter_payload_wait(self, detail: str, desired: bool) -> None:
+        run = self._active_run
+        if run is None:
+            self._fail_action_set("internal error: missing active run when entering payload wait")
+            return
+
+        run.waiting_started_ns = self.get_clock().now().nanoseconds
+        run.waiting_execution_id = None
+        run.desired_payload_active = bool(desired)
+        self._set_state(MiddlewareState.WAITING_PAYLOAD_ACTIVE, detail)
+
+    def _publish_motion_target(self, x: float, y: float, z: float, target_spin_deg: float) -> None:
+        msg = Arm2TargetPoint()
+        msg.xyz.x = float(x)
+        msg.xyz.y = float(y)
+        msg.xyz.z = float(z)
+        msg.target_spin_deg = float(target_spin_deg)
+        self._motion_target_pub.publish(msg)
         self.get_logger().info(
-            "published TF target %s -> %s x=%.4f y=%.4f z=%.4f spin=%.2f deg"
-            % (
-                self._parent_frame,
-                self._child_frame,
-                x,
-                y,
-                z,
-                target_spin_deg,
-            )
+            "published motion target x=%.4f y=%.4f z=%.4f spin=%.2f deg on %s"
+            % (x, y, z, target_spin_deg, self._motion_target_topic)
         )
 
     def _publish_vacuum(self, enabled: bool) -> None:
@@ -468,51 +469,15 @@ class Arm2MiddlewareNode(Node):
             f"published payload_active={enabled} on {self._payload_command_topic}"
         )
 
-    def _maybe_finish_motion_from_status(self) -> None:
-        run = self._active_run
-        if run is None or self._state != MiddlewareState.WAITING_MOTION_TERMINAL:
-            return
-
-        if run.waiting_goal_id is None:
-            candidates = [
-                (stamp_ns, goal_id, status)
-                for goal_id, (status, stamp_ns) in self._latest_goal_statuses.items()
-                if goal_id not in run.waiting_known_goal_ids
-            ]
-            if not candidates:
-                return
-
-            stamp_ns, goal_id, status = max(candidates, key=lambda item: item[0])
-            run.waiting_goal_id = goal_id
-            self.get_logger().info(
-                "tracking controller goal=%s status=%s stamp_ns=%d"
-                % (list(goal_id), _status_name(status), stamp_ns)
-            )
-            if status in TERMINAL_STATUSES:
-                self._finish_motion_step(
-                    success=(status == GoalStatus.STATUS_SUCCEEDED),
-                    detail=f"controller goal terminal status={_status_name(status)}",
-                )
-            return
-
-        snapshot = self._latest_goal_statuses.get(run.waiting_goal_id)
-        if snapshot is None:
-            return
-        status, _stamp_ns = snapshot
-        if status in TERMINAL_STATUSES:
-            self._finish_motion_step(
-                success=(status == GoalStatus.STATUS_SUCCEEDED),
-                detail=f"controller goal terminal status={_status_name(status)}",
-            )
-
-    def _finish_motion_step(self, success: bool, detail: str) -> None:
+    def _complete_current_step(self, detail: str) -> None:
         run = self._active_run
         if run is None:
             return
-        run.waiting_goal_id = None
-        run.waiting_known_goal_ids.clear()
         run.waiting_started_ns = None
-        self._record_step_result(success, detail)
+        run.waiting_execution_baseline_id = self._latest_motion_execution_id
+        run.waiting_execution_id = None
+        run.desired_payload_active = None
+        self._record_step_result(True, detail)
         run.step_index += 1
         self._start_next_step()
 
@@ -548,6 +513,9 @@ class Arm2MiddlewareNode(Node):
             self._set_state(MiddlewareState.IDLE, "ready for next action set")
             return
 
+        run.waiting_started_ns = None
+        run.waiting_execution_id = None
+        run.desired_payload_active = None
         if run.current_step is not None:
             self._record_step_result(False, detail)
         self._set_state(

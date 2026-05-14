@@ -18,6 +18,7 @@
   <exec_depend>moveit_planners_ompl</exec_depend>
   <exec_depend>moveit_kinematics</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>arm_msgs</exec_depend>
   <exec_depend>moveit_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>

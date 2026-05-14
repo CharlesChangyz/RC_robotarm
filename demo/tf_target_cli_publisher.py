@@ -2,8 +2,10 @@
 """PySide6 GUI TF target publisher for rc_arm_2."""
 
 import argparse
+import collections
 import math
 import shlex
+import subprocess
 import sys
 import threading
 import time
@@ -54,6 +56,18 @@ SCRIPT_RUN_MUJOCO_BRIDGE = ROOT_DIR / "scripts" / "run_rc_arm_mujoco_bridge.sh"
 SCRIPT_RUN_REAL = ROOT_DIR / "scripts" / "run_rc_arm_real.sh"
 J4_WORLD_MIN_DEG = 0.0
 J4_WORLD_MAX_DEG = 120.0
+AUTO_CLEANUP_WAIT_SEC = 1.0
+PROJECT_ROS_CLEANUP_PATTERNS = (
+    ("middleware", "arm2_middleware"),
+    ("executor", "target_pose_moveit_executor.py"),
+    ("tf bridge", "tf_target_pose_bridge.py"),
+    ("payload sync", "payload_scene_sync.py"),
+    ("move_group", "move_group"),
+    ("robot_state_publisher", "robot_state_publisher"),
+    ("static_transform_publisher", "static_transform_publisher"),
+    ("ros2_control_node", "ros2_control_node"),
+    ("real launch", "ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py"),
+)
 
 
 def middleware_command() -> List[str]:
@@ -136,6 +150,8 @@ class RosBackend(QObject):
         self._pending_middleware_command: Optional[Tuple[TargetState, int]] = None
         self._pending_reachability: Optional[TargetState] = None
         self._last_actual_emit = 0.0
+        self._last_middleware_sent: Optional[Tuple[TargetState, int]] = None
+        self._last_middleware_sent_time = 0.0
         self._latest_joint_map: Dict[str, float] = {}
         self._last_solver_solution: Optional[Dict[str, float]] = None
 
@@ -320,6 +336,20 @@ class RosBackend(QObject):
             return
 
         state, action_set_id = pending
+        now = time.monotonic()
+        if (
+            self._last_middleware_sent is not None
+            and self._last_middleware_sent[1] == action_set_id
+            and self._last_middleware_sent[0].almost_equal(state)
+            and now - self._last_middleware_sent_time < 0.75
+        ):
+            self.last_middleware_status.emit(
+                "skipped duplicate middleware command action_set={} within 0.75s".format(
+                    action_set_id
+                )
+            )
+            return
+
         target_msg = Arm2TargetPoint()
         target_msg.xyz.x = float(state.x)
         target_msg.xyz.y = float(state.y)
@@ -330,6 +360,17 @@ class RosBackend(QObject):
         run_msg = Int32()
         run_msg.data = int(action_set_id)
         self._middleware_run_pub.publish(run_msg)
+        self._last_middleware_sent = (
+            TargetState(state.x, state.y, state.z, state.j4_rad),
+            action_set_id,
+        )
+        self._last_middleware_sent_time = now
+
+        # A middleware run can leave the manual ghost target unchanged but still
+        # semantically "new" from the user's perspective. Clearing the manual
+        # dedupe allows the next manual send to re-publish the same ghost pose.
+        self._last_sent = None
+        self.last_sent_updated.emit(None)
 
         self.last_middleware_status.emit(
             "published middleware target + action_set={} to {} / {}".format(
@@ -575,6 +616,166 @@ class TargetPublisherWindow(QMainWindow):
         self._update_status_labels()
         self._backend.start()
         self._request_reachability()
+
+    def _ros2_env_command(self, ros2_args: List[str]) -> List[str]:
+        command = (
+            "source /opt/ros/humble/setup.bash && "
+            f"source {shlex.quote(str(RC_MOVEIT_DIR / 'install' / 'setup.bash'))} && "
+            + " ".join(shlex.quote(part) for part in ros2_args)
+        )
+        return ["bash", "-lc", command]
+
+    def _list_ros_nodes(self) -> Optional[List[str]]:
+        try:
+            completed = subprocess.run(
+                self._ros2_env_command(["ros2", "node", "list"]),
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5.0,
+            )
+        except Exception as exc:
+            self._append_log(f"ros2 node list failed: {exc}")
+            return None
+
+        if completed.returncode != 0:
+            stderr = completed.stderr.strip() or completed.stdout.strip() or "unknown error"
+            self._append_log(f"ros2 node list failed: {stderr}")
+            return None
+
+        return [line.strip() for line in completed.stdout.splitlines() if line.strip().startswith("/")]
+
+    def _get_node_counts(self) -> Optional[collections.Counter]:
+        nodes = self._list_ros_nodes()
+        if nodes is None:
+            return None
+        return collections.Counter(nodes)
+
+    def _find_duplicate_nodes(self, node_names: List[str]) -> Optional[List[Tuple[str, int]]]:
+        counts = self._get_node_counts()
+        if counts is None:
+            return None
+        return [(name, counts[name]) for name in node_names if counts[name] > 1]
+
+    def _show_duplicate_nodes_warning(
+        self,
+        title: str,
+        duplicates: List[Tuple[str, int]],
+        auto_cleanup_attempted: bool,
+    ) -> None:
+        lines = ["Detected duplicate ROS nodes:"]
+        for name, count in sorted(duplicates):
+            lines.append(f"{name} x{count}")
+        if auto_cleanup_attempted:
+            lines.append("Auto cleanup ran, but duplicate ROS nodes remain.")
+        else:
+            lines.append("Stop old stacks before starting or running a new one.")
+        message = "\n".join(lines)
+        QMessageBox.warning(self, title, message)
+        self._append_log(message)
+
+    def _check_required_single_nodes(
+        self,
+        node_names: List[str],
+        title: str,
+        blocked_status: Optional[QLabel] = None,
+    ) -> bool:
+        counts = self._get_node_counts()
+        if counts is None:
+            if blocked_status is not None:
+                blocked_status.setText("blocked: unable to inspect ROS nodes")
+            return False
+
+        missing = [name for name in node_names if counts[name] != 1]
+        if not missing:
+            return True
+
+        message = "Required ROS nodes are not ready:\n" + "\n".join(missing)
+        QMessageBox.warning(self, title, message)
+        self._append_log(message)
+        if blocked_status is not None:
+            blocked_status.setText("blocked: required ROS nodes not ready")
+        return False
+
+    def _cleanup_project_ros_processes(self) -> bool:
+        self._append_log("auto cleanup: duplicate ROS nodes detected")
+        overall_ok = True
+        for label, pattern in PROJECT_ROS_CLEANUP_PATTERNS:
+            try:
+                completed = subprocess.run(
+                    ["pkill", "-f", pattern],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=5.0,
+                )
+            except Exception as exc:
+                self._append_log(f"auto cleanup: failed to stop {label}: {exc}")
+                overall_ok = False
+                continue
+
+            if completed.returncode == 0:
+                self._append_log(f"auto cleanup: stopped {label}")
+            elif completed.returncode == 1:
+                continue
+            else:
+                stderr = completed.stderr.strip() or completed.stdout.strip() or "unknown error"
+                self._append_log(
+                    f"auto cleanup: failed to stop {label} (code={completed.returncode}): {stderr}"
+                )
+                overall_ok = False
+
+        time.sleep(AUTO_CLEANUP_WAIT_SEC)
+        return overall_ok
+
+    def _auto_cleanup_ros_duplicates(
+        self,
+        node_names: List[str],
+        title: str,
+        blocked_status: Optional[QLabel] = None,
+        required_nodes: Optional[List[str]] = None,
+    ) -> bool:
+        duplicates = self._find_duplicate_nodes(node_names)
+        if duplicates is None:
+            if blocked_status is not None:
+                blocked_status.setText("blocked: unable to inspect ROS nodes")
+            return False
+        if not duplicates:
+            return True
+
+        self._cleanup_project_ros_processes()
+        duplicates_after = self._find_duplicate_nodes(node_names)
+        if duplicates_after is None:
+            if blocked_status is not None:
+                blocked_status.setText("blocked: unable to inspect ROS nodes after cleanup")
+            return False
+        if duplicates_after:
+            if blocked_status is not None:
+                blocked_status.setText("blocked: duplicate ROS nodes remain after cleanup")
+            self._append_log("auto cleanup: duplicate ROS nodes remain")
+            self._show_duplicate_nodes_warning(title, duplicates_after, auto_cleanup_attempted=True)
+            return False
+
+        if required_nodes:
+            counts = self._get_node_counts()
+            if counts is None:
+                if blocked_status is not None:
+                    blocked_status.setText("blocked: unable to inspect ROS nodes after cleanup")
+                return False
+            missing = [name for name in required_nodes if counts[name] != 1]
+            if missing:
+                message = (
+                    "Auto cleanup cleared duplicate nodes, but required ROS nodes are not ready:\n"
+                    + "\n".join(missing)
+                )
+                QMessageBox.warning(self, title, message)
+                self._append_log(message)
+                if blocked_status is not None:
+                    blocked_status.setText("blocked: required ROS nodes not ready after cleanup")
+                return False
+
+        self._append_log("auto cleanup: cleared project ROS processes")
+        return True
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -839,6 +1040,26 @@ class TargetPublisherWindow(QMainWindow):
         self._editing_target = self._read_editing_target()
         if not self._validate_motion_target("Last middleware command"):
             return
+        duplicates = self._find_duplicate_nodes(
+            ["/arm2_middleware", "/rc_arm_target_pose_moveit_executor"]
+        )
+        if duplicates is None:
+            self._middleware_status_label.setText("blocked: unable to inspect ROS nodes")
+            return
+        if duplicates:
+            self._middleware_status_label.setText("blocked: duplicate ROS nodes detected")
+            self._show_duplicate_nodes_warning(
+                "Duplicate ROS Nodes",
+                duplicates,
+                auto_cleanup_attempted=False,
+            )
+            return
+        if not self._check_required_single_nodes(
+            ["/arm2_middleware", "/rc_arm_target_pose_moveit_executor"],
+            "ROS Nodes Not Ready",
+            blocked_status=self._middleware_status_label,
+        ):
+            return
         action_set_id = self._action_set_spin.value()
         self._backend.queue_run_action_set(self._editing_target, action_set_id)
 
@@ -983,6 +1204,18 @@ class TargetPublisherWindow(QMainWindow):
         if self._mujoco_stack.is_running() or self._mujoco_bridge.is_running():
             QMessageBox.warning(self, "Mode Busy", "MuJoCo mode is running. Stop it first.")
             return
+        if not self._auto_cleanup_ros_duplicates(
+            [
+                "/move_group",
+                "/rc_arm_target_pose_moveit_executor",
+                "/rc_arm_tf_target_pose_bridge",
+                "/rc_arm_payload_scene_sync",
+                "/robot_state_publisher",
+            ],
+            "Duplicate ROS Nodes",
+            blocked_status=self._process_status_label,
+        ):
+            return
         self._real_stack.start()
         self._refresh_process_buttons()
 
@@ -991,6 +1224,12 @@ class TargetPublisherWindow(QMainWindow):
         self._refresh_process_buttons()
 
     def _start_middleware(self) -> None:
+        if not self._auto_cleanup_ros_duplicates(
+            ["/arm2_middleware"],
+            "Duplicate Middleware Nodes",
+            blocked_status=self._process_status_label,
+        ):
+            return
         self._middleware_stack.start()
         self._refresh_process_buttons()
 
