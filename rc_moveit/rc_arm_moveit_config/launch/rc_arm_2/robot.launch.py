@@ -5,7 +5,7 @@ rc_arm_2 MoveIt real-hardware launch
 import os
 import yaml
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler, TimerAction
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
@@ -205,6 +205,12 @@ def generate_launch_description():
         )
     )
 
+    delay_rviz = TimerAction(
+        period=5.0,
+        actions=[rviz_node],
+        condition=IfCondition(use_rviz),
+    )
+
     return LaunchDescription(
         declared_arguments
         + [
@@ -214,6 +220,6 @@ def generate_launch_description():
             joint_state_broadcaster_spawner,
             delay_arm_controller,
             delay_move_group,
-            rviz_node,
+            delay_rviz,
         ]
     )

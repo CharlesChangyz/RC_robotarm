@@ -78,6 +78,9 @@ private:
     const rclcpp::Time & time,
     const TrajectoryPoint & desired,
     const std::shared_ptr<GoalHandle> & goal_handle);
+  bool goal_reached(
+    const TrajectoryPoint & desired,
+    std::string & detail) const;
   void finish_goal(
     const std::shared_ptr<GoalHandle> & goal_handle,
     int32_t error_code,
@@ -87,6 +90,9 @@ private:
   std::vector<std::string> joint_names_;
   bool allow_topic_commands_{true};
   double feedback_publish_rate_{20.0};
+  double stopped_velocity_tolerance_{0.0};
+  double goal_time_tolerance_{0.0};
+  std::vector<double> goal_position_tolerances_;
 
   std::shared_ptr<rclcpp_action::Server<FollowJointTrajectory>> action_server_;
   rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr topic_subscription_;

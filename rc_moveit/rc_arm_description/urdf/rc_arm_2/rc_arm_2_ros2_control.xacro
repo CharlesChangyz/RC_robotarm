@@ -23,6 +23,7 @@
           <param name="external_feedback_timeout">${hardware_config.external_feedback_timeout}</param>
           <param name="mujoco_command_topic">${hardware_config.mujoco_command_topic}</param>
           <param name="vacuum_activate_topic">${hardware_config.vacuum_activate_topic}</param>
+          <param name="payload_command_topic">${hardware_config.payload_command_topic}</param>
           <param name="payload_active_topic">${hardware_config.payload_active_topic}</param>
           <param name="payload_frame">${hardware_config.payload_frame}</param>
           <param name="payload_mass">${hardware_config.payload_mass}</param>

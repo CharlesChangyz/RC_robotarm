@@ -25,6 +25,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RobotMitCmdTau.msg"
   "msg/PointCommand.msg"
   "msg/PathCommand.msg"
+  "msg/Arm2TargetPoint.msg"
+  "msg/Arm2MotionExecution.msg"
   DEPENDENCIES geometry_msgs
 )
 

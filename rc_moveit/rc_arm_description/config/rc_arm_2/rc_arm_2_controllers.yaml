@@ -35,23 +35,23 @@ arm_controller:
 
     constraints:
       # 判断“机械臂已停止”的速度容差，单位 rad/s
-      stopped_velocity_tolerance: 0.1
+      stopped_velocity_tolerance: 0.25
 
       # 允许目标完成的额外时间裕量，单位秒
-      goal_time: 0.0
+      goal_time: 1.0
 
       # j1 到目标点的允许误差，单位 rad
       j1_joint:
-        goal: 0.03
+        goal: 0.1
 
       # j2 到目标点的允许误差，单位 rad
       j2_joint:
-        goal: 0.03
+        goal: 0.1
 
       # j3 到目标点的允许误差，单位 rad
       j3_joint:
-        goal: 0.03
+        goal: 0.1
 
       # j4 到目标点的允许误差，单位 rad
       j4_joint:
-        goal: 0.03
+        goal: 0.5

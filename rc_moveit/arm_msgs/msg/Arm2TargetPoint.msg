@@ -1,0 +1,2 @@
+geometry_msgs/Vector3 xyz
+float64 target_spin_deg

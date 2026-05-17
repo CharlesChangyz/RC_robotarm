@@ -25,6 +25,8 @@ controller_interface::CallbackReturn RcArmController::on_init()
   auto_declare<std::vector<std::string>>("joints", {});
   auto_declare<bool>("allow_topic_commands", false);
   auto_declare<double>("feedback_publish_rate", 20.0);
+  auto_declare<double>("constraints.stopped_velocity_tolerance", 0.0);
+  auto_declare<double>("constraints.goal_time", 0.0);
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -59,10 +61,23 @@ controller_interface::CallbackReturn RcArmController::on_configure(
   joint_names_ = get_node()->get_parameter("joints").as_string_array();
   allow_topic_commands_ = get_node()->get_parameter("allow_topic_commands").as_bool();
   feedback_publish_rate_ = get_node()->get_parameter("feedback_publish_rate").as_double();
+  stopped_velocity_tolerance_ = std::max(
+    0.0, get_node()->get_parameter("constraints.stopped_velocity_tolerance").as_double());
+  goal_time_tolerance_ = std::max(
+    0.0, get_node()->get_parameter("constraints.goal_time").as_double());
 
   if (joint_names_.empty()) {
     RCLCPP_ERROR(get_node()->get_logger(), "parameter 'joints' cannot be empty");
     return controller_interface::CallbackReturn::ERROR;
+  }
+
+  goal_position_tolerances_.clear();
+  goal_position_tolerances_.reserve(joint_names_.size());
+  for (const auto & joint_name : joint_names_) {
+    const auto parameter_name = "constraints." + joint_name + ".goal";
+    auto_declare<double>(parameter_name, 0.0);
+    goal_position_tolerances_.push_back(
+      std::max(0.0, get_node()->get_parameter(parameter_name).as_double()));
   }
 
   action_server_ = rclcpp_action::create_server<FollowJointTrajectory>(
@@ -179,15 +194,32 @@ controller_interface::return_type RcArmController::update(
   }
 
   if (finished) {
-    if (trajectory->goal_handle) {
-      finish_goal(
-        trajectory->goal_handle,
-        FollowJointTrajectory::Result::SUCCESSFUL,
-        "");
-    }
-    std::lock_guard<std::mutex> lock(trajectory_mutex_);
-    if (active_trajectory_ == trajectory) {
-      active_trajectory_.reset();
+    std::string detail;
+    if (goal_reached(sampled, detail)) {
+      if (trajectory->goal_handle) {
+        finish_goal(
+          trajectory->goal_handle,
+          FollowJointTrajectory::Result::SUCCESSFUL,
+          "");
+      }
+      std::lock_guard<std::mutex> lock(trajectory_mutex_);
+      if (active_trajectory_ == trajectory) {
+        active_trajectory_.reset();
+      }
+    } else if (
+      goal_time_tolerance_ > 0.0 &&
+      elapsed_sec > trajectory->points.back().time_from_start + goal_time_tolerance_)
+    {
+      if (trajectory->goal_handle) {
+        finish_goal(
+          trajectory->goal_handle,
+          FollowJointTrajectory::Result::GOAL_TOLERANCE_VIOLATED,
+          detail.empty() ? "goal tolerance violated" : detail);
+      }
+      std::lock_guard<std::mutex> lock(trajectory_mutex_);
+      if (active_trajectory_ == trajectory) {
+        active_trajectory_.reset();
+      }
     }
   }
 
@@ -488,6 +520,41 @@ void RcArmController::publish_feedback(
   }
 
   goal_handle->publish_feedback(feedback);
+}
+
+bool RcArmController::goal_reached(
+  const TrajectoryPoint & desired,
+  std::string & detail) const
+{
+  if (goal_position_tolerances_.size() != joint_names_.size()) {
+    detail = "goal tolerances are not configured";
+    return false;
+  }
+
+  for (size_t i = 0; i < joint_names_.size(); ++i) {
+    const double actual_position = state_interfaces_[3 * i].get_value();
+    const double actual_velocity = state_interfaces_[3 * i + 1].get_value();
+    const double position_error = std::abs(desired.position[i] - actual_position);
+    const double position_tolerance = goal_position_tolerances_[i];
+    if (position_error > position_tolerance) {
+      detail =
+        "joint '" + joint_names_[i] + "' position error " + std::to_string(position_error) +
+        " exceeds tolerance " + std::to_string(position_tolerance);
+      return false;
+    }
+    if (
+      stopped_velocity_tolerance_ > 0.0 &&
+      std::abs(actual_velocity) > stopped_velocity_tolerance_)
+    {
+      detail =
+        "joint '" + joint_names_[i] + "' velocity " + std::to_string(std::abs(actual_velocity)) +
+        " exceeds stopped tolerance " + std::to_string(stopped_velocity_tolerance_);
+      return false;
+    }
+  }
+
+  detail.clear();
+  return true;
 }
 
 void RcArmController::finish_goal(

@@ -23,6 +23,7 @@ external_feedback_timeout: 0.2
 # MuJoCo 接收命令 JointState 的话题
 mujoco_command_topic: /rc_arm_2/mujoco_joint_command
 vacuum_activate_topic: /rc_arm_2/vacuum_activate
+payload_command_topic: /rc_arm_2/payload_active_command
 payload_active_topic: /rc_arm_2/payload_active
 payload_frame: end_effector
 
@@ -77,9 +78,9 @@ payload_mass: 0.63
 payload_diaginertia_x: 0.02
 payload_diaginertia_y: 0.02
 payload_diaginertia_z: 0.02
-payload_com_offset_x: 0.0
-payload_com_offset_y: 0.0
-payload_com_offset_z: 0.0
+payload_com_offset_x: 0.01
+payload_com_offset_y: -0.07
+payload_com_offset_z: 0.020
 payload_box_size_x: 0.05
 payload_box_size_y: 0.05
 payload_box_size_z: 0.05
@@ -124,9 +125,9 @@ payload_low_stiffness_kd_j3: 2.0
 unloaded_low_stiffness_kp_j4: 5.0
 
 # j4 空载低刚度 Kd 覆盖值
-unloaded_low_stiffness_kd_j4: 1.0
+unloaded_low_stiffness_kd_j4: 0.03
 payload_low_stiffness_kp_j4: 5.0
-payload_low_stiffness_kd_j4: 1.0
+payload_low_stiffness_kd_j4: 0.03
 
 # 是否启用 Pinocchio 重力补偿项
 use_pinocchio_gravity: false

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Subscribe PoseStamped targets and drive MoveIt planning/execution."""
+"""Subscribe manual and middleware targets and drive MoveIt planning/execution."""
 
 import argparse
+from dataclasses import dataclass
 import json
 import math
 import threading
 from typing import Dict, List, Optional, Tuple
 
+from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPoint
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit_msgs.action import MoveGroup
@@ -19,6 +21,14 @@ from shape_msgs.msg import SolidPrimitive
 import tf2_ros
 
 from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics
+
+
+EXECUTION_ERROR_BUSY = -1
+EXECUTION_ERROR_NOT_READY = -2
+EXECUTION_ERROR_IK_FAILED = -3
+EXECUTION_ERROR_GOAL_SEND_EXCEPTION = -4
+EXECUTION_ERROR_GOAL_REJECTED = -5
+EXECUTION_ERROR_RESULT_EXCEPTION = -6
 
 
 def _normalize_frame_id(frame_id: str) -> str:
@@ -38,6 +48,18 @@ def _quat_angle(q0: Tuple[float, float, float, float], q1: Tuple[float, float, f
     dot = abs(sum(x * y for x, y in zip(a, b)))
     dot = max(-1.0, min(1.0, dot))
     return 2.0 * math.acos(dot)
+
+
+def _quaternion_from_world_pitch(axis: str, pitch_deg: float) -> Tuple[float, float, float, float]:
+    angle = math.radians(float(pitch_deg))
+    half = 0.5 * angle
+    s = math.sin(half)
+    c = math.cos(half)
+    if axis == "x":
+        return (s, 0.0, 0.0, c)
+    if axis == "y":
+        return (0.0, s, 0.0, c)
+    return (0.0, 0.0, s, c)
 
 
 def _copy_pose_stamped(msg: PoseStamped) -> PoseStamped:
@@ -77,10 +99,19 @@ def _json_preview(text: str, limit: int = 160) -> str:
     return one_line[:limit] + "..."
 
 
+@dataclass
+class ExecutionRequest:
+    source: str
+    target: PoseStamped
+    execution_id: Optional[int] = None
+
+
 class TargetPoseMoveItExecutor(Node):
     def __init__(
         self,
         target_topic: str,
+        middleware_target_topic: str,
+        middleware_result_topic: str,
         planning_group: str,
         joint_names: List[str],
         default_frame: str,
@@ -106,6 +137,9 @@ class TargetPoseMoveItExecutor(Node):
     ) -> None:
         super().__init__("rc_arm_target_pose_moveit_executor")
 
+        self._manual_target_topic = target_topic
+        self._middleware_target_topic = middleware_target_topic
+        self._middleware_result_topic = middleware_result_topic
         self._planning_group = planning_group
         self._joint_names = list(joint_names)
         self._default_frame = _normalize_frame_id(default_frame)
@@ -128,15 +162,17 @@ class TargetPoseMoveItExecutor(Node):
         self._scene_publish_retries_left = max(1, int(scene_publish_retries))
         self._world_box_configs = self._parse_world_boxes_json(world_boxes_json)
 
-        self._target_lock = threading.Lock()
-        self._latest_target: Optional[PoseStamped] = None
-        self._last_sent_target: Optional[PoseStamped] = None
+        self._manual_target_lock = threading.Lock()
+        self._latest_manual_target: Optional[PoseStamped] = None
+        self._last_sent_manual_target: Optional[PoseStamped] = None
 
         self._busy = False
+        self._active_request: Optional[ExecutionRequest] = None
         self._ready_move_action = False
         self._ready_solver = False
         self._last_ready_tuple = None
         self._latest_joint_map: Dict[str, float] = {}
+        self._next_execution_id = 0
 
         self._last_event = "init"
         self._last_event_time_sec = self._now_sec()
@@ -153,11 +189,17 @@ class TargetPoseMoveItExecutor(Node):
             reliability=ReliabilityPolicy.RELIABLE,
         )
         self._planning_scene_pub = self.create_publisher(PlanningScene, planning_scene_topic, scene_qos)
+        self._middleware_result_pub = self.create_publisher(
+            Arm2MotionExecution,
+            middleware_result_topic,
+            20,
+        )
 
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
-        self.create_subscription(PoseStamped, target_topic, self._on_target, 20)
+        self.create_subscription(PoseStamped, target_topic, self._on_manual_target, 20)
+        self.create_subscription(Arm2TargetPoint, middleware_target_topic, self._on_middleware_target, 20)
         self.create_subscription(JointState, joint_state_topic, self._on_joint_state, 20)
         self._timer = self.create_timer(max(0.02, float(check_period)), self._on_timer)
         self._scene_timer = self.create_timer(1.0, self._publish_static_world_scene)
@@ -165,10 +207,12 @@ class TargetPoseMoveItExecutor(Node):
             self._status_timer = self.create_timer(self._status_log_period, self._log_status)
 
         self.get_logger().info(
-            "TargetPose->MoveIt executor started: topic=%s group=%s avoid_collisions=%d "
-            "world_boxes=%d planning_scene_topic=%s status_tf=%s->%s"
+            "TargetPose->MoveIt executor started: manual_topic=%s middleware_target=%s middleware_result=%s "
+            "group=%s avoid_collisions=%d world_boxes=%d planning_scene_topic=%s status_tf=%s->%s"
             % (
-                target_topic,
+                self._manual_target_topic,
+                self._middleware_target_topic,
+                self._middleware_result_topic,
                 self._planning_group,
                 1 if self._avoid_collisions else 0,
                 len(self._world_box_configs),
@@ -333,12 +377,6 @@ class TargetPoseMoveItExecutor(Node):
         if self._scene_publish_retries_left <= 0:
             self._scene_timer.cancel()
 
-    def _remove_world_object(self, obj_id: str) -> CollisionObject:
-        obj = CollisionObject()
-        obj.id = obj_id
-        obj.operation = CollisionObject.REMOVE
-        return obj
-
     def _event(self, name: str, target: Optional[PoseStamped] = None, extra: str = "") -> None:
         self._last_event = name
         self._last_event_time_sec = self._now_sec()
@@ -377,17 +415,23 @@ class TargetPoseMoveItExecutor(Node):
             )
             self._last_ready_tuple = ready_tuple
 
+    def _executor_ready(self) -> bool:
+        self._update_ready()
+        return self._ready_move_action and self._ready_solver
+
     def _log_status(self) -> None:
         event_age = max(0.0, self._now_sec() - self._last_event_time_sec)
-        with self._target_lock:
-            has_target = self._latest_target is not None
+        with self._manual_target_lock:
+            has_manual_target = self._latest_manual_target is not None
+        active_source = self._active_request.source if self._active_request is not None else "idle"
         self.get_logger().info(
-            "[STATE] busy=%d ready(move_action=%d,solver=%d) target=%d event=%s(%.2fs) %s"
+            "[STATE] busy=%d ready(move_action=%d,solver=%d) manual_target=%d active=%s event=%s(%.2fs) %s"
             % (
                 1 if self._busy else 0,
                 1 if self._ready_move_action else 0,
                 1 if self._ready_solver else 0,
-                1 if has_target else 0,
+                1 if has_manual_target else 0,
+                active_source,
                 self._last_event,
                 event_age,
                 self._format_eef(),
@@ -405,11 +449,74 @@ class TargetPoseMoveItExecutor(Node):
         pose_msg.pose.orientation.w = qw
         return pose_msg
 
-    def _on_target(self, msg: PoseStamped) -> None:
+    def _motion_target_to_pose(self, msg: Arm2TargetPoint) -> PoseStamped:
+        pose_msg = PoseStamped()
+        pose_msg.header.frame_id = self._default_frame
+        pose_msg.header.stamp = self.get_clock().now().to_msg()
+        pose_msg.pose.position.x = float(msg.xyz.x)
+        pose_msg.pose.position.y = float(msg.xyz.y)
+        pose_msg.pose.position.z = float(msg.xyz.z)
+        qx, qy, qz, qw = _quaternion_from_world_pitch(self._j4_axis, float(msg.target_spin_deg))
+        pose_msg.pose.orientation.x = qx
+        pose_msg.pose.orientation.y = qy
+        pose_msg.pose.orientation.z = qz
+        pose_msg.pose.orientation.w = qw
+        return pose_msg
+
+    def _allocate_execution_id(self) -> int:
+        self._next_execution_id += 1
+        return self._next_execution_id
+
+    def _publish_motion_execution(self, execution_id: int, status: int, error_code: int, detail: str) -> None:
+        msg = Arm2MotionExecution()
+        msg.execution_id = int(execution_id)
+        msg.status = int(status)
+        msg.error_code = int(error_code)
+        msg.detail = str(detail)
+        self._middleware_result_pub.publish(msg)
+
+    def _on_manual_target(self, msg: PoseStamped) -> None:
         pose_msg = self._resolve_target_pose(msg)
-        with self._target_lock:
-            self._latest_target = pose_msg
-        self._event("target_rx", pose_msg)
+        with self._manual_target_lock:
+            self._latest_manual_target = pose_msg
+        self._event("manual_target_rx", pose_msg)
+
+    def _on_middleware_target(self, msg: Arm2TargetPoint) -> None:
+        pose_msg = self._motion_target_to_pose(msg)
+        execution_id = self._allocate_execution_id()
+        self._event("middleware_target_rx", pose_msg, extra="execution_id=%d" % execution_id)
+
+        if self._busy:
+            self._publish_motion_execution(
+                execution_id,
+                Arm2MotionExecution.STATUS_FAILED,
+                EXECUTION_ERROR_BUSY,
+                "executor busy",
+            )
+            return
+
+        if not self._executor_ready():
+            self._publish_motion_execution(
+                execution_id,
+                Arm2MotionExecution.STATUS_FAILED,
+                EXECUTION_ERROR_NOT_READY,
+                "executor not ready",
+            )
+            return
+
+        self._publish_motion_execution(
+            execution_id,
+            Arm2MotionExecution.STATUS_ACCEPTED,
+            0,
+            "accepted",
+        )
+        self._start_execution(
+            ExecutionRequest(
+                source="middleware",
+                target=pose_msg,
+                execution_id=execution_id,
+            )
+        )
 
     def _target_changed(self, prev: PoseStamped, cur: PoseStamped) -> bool:
         if _normalize_frame_id(prev.header.frame_id) != _normalize_frame_id(cur.header.frame_id):
@@ -431,28 +538,23 @@ class TargetPoseMoveItExecutor(Node):
         return pos_delta > self._pos_threshold or rot_delta > self._rot_threshold
 
     def _on_timer(self) -> None:
-        self._update_ready()
-
-        if self._busy:
-            return
-        if not (self._ready_move_action and self._ready_solver):
+        if self._busy or not self._executor_ready():
             return
 
-        with self._target_lock:
-            target = _copy_pose_stamped(self._latest_target) if self._latest_target is not None else None
+        with self._manual_target_lock:
+            target = _copy_pose_stamped(self._latest_manual_target) if self._latest_manual_target is not None else None
 
         if target is None:
             return
-        if self._last_sent_target is not None and not self._target_changed(self._last_sent_target, target):
+        if self._last_sent_manual_target is not None and not self._target_changed(self._last_sent_manual_target, target):
             return
 
-        self._set_busy(True, "solve_target")
-        self._event("solve_request", target)
-        self._solve_target(target)
-
-    def _extract_target_pitch_rad(self, target: PoseStamped) -> float:
-        q = target.pose.orientation
-        return self._kinematics.world_pitch_from_quaternion((float(q.x), float(q.y), float(q.z), float(q.w)))
+        self._start_execution(
+            ExecutionRequest(
+                source="manual",
+                target=target,
+            )
+        )
 
     def _current_seed_joints(self) -> Optional[Dict[str, float]]:
         if not self._latest_joint_map:
@@ -462,9 +564,26 @@ class TargetPoseMoveItExecutor(Node):
             return None
         return {name: self._latest_joint_map[name] for name in self._joint_names}
 
-    def _solve_target(self, target: PoseStamped) -> None:
-        pose = self._resolve_target_pose(target)
-        pitch_rad = self._extract_target_pitch_rad(pose)
+    def _start_execution(self, request: ExecutionRequest) -> None:
+        if self._busy:
+            return
+        request.target = self._resolve_target_pose(request.target)
+        if request.source == "manual":
+            self._last_sent_manual_target = _copy_pose_stamped(request.target)
+        self._active_request = request
+        self._set_busy(True, "execute_%s" % request.source)
+        extra = "source=%s" % request.source
+        if request.execution_id is not None:
+            extra += " execution_id=%d" % request.execution_id
+        self._event("solve_request", request.target, extra=extra)
+        self._solve_target(request)
+
+    def _solve_target(self, request: ExecutionRequest) -> None:
+        pose = request.target
+        q = pose.pose.orientation
+        pitch_rad = self._kinematics.world_pitch_from_quaternion(
+            (float(q.x), float(q.y), float(q.z), float(q.w))
+        )
         seed = self._current_seed_joints()
         q_target = self._kinematics.solve_xyz_pitch(
             float(pose.pose.position.x),
@@ -474,24 +593,31 @@ class TargetPoseMoveItExecutor(Node):
             seed_joints=seed,
         )
         if q_target is None:
-            self._event("solve_fail", target)
+            self._event("solve_fail", pose, extra="source=%s" % request.source)
             self.get_logger().warn(
-                "4DOF solve failed target_xyz=(%.3f, %.3f, %.3f) target_pitch=%.3f %s"
+                "4DOF solve failed target_xyz=(%.3f, %.3f, %.3f) target_pitch=%.3f source=%s %s"
                 % (
                     float(pose.pose.position.x),
                     float(pose.pose.position.y),
                     float(pose.pose.position.z),
                     pitch_rad,
+                    request.source,
                     self._format_eef(),
                 )
             )
-            self._set_busy(False, "solve_fail")
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_IK_FAILED,
+                detail="ik solve failed",
+                reason="solve_fail",
+            )
             return
 
-        self._event("solve_ok", target, extra="pitch=%.3f" % pitch_rad)
-        self._send_goal(target, q_target)
+        self._event("solve_ok", pose, extra="source=%s pitch=%.3f" % (request.source, pitch_rad))
+        self._send_goal(request, q_target)
 
-    def _send_goal(self, target: PoseStamped, q_target: Dict[str, float]) -> None:
+    def _send_goal(self, request: ExecutionRequest, q_target: Dict[str, float]) -> None:
         goal = MoveGroup.Goal()
         goal.request.group_name = self._planning_group
         goal.request.num_planning_attempts = self._planning_attempts
@@ -515,56 +641,123 @@ class TargetPoseMoveItExecutor(Node):
         goal.planning_options.replan = True
         goal.planning_options.replan_attempts = 1
 
-        self._event("goal_send", target)
+        self._event("goal_send", request.target, extra="source=%s" % request.source)
         send_future = self._move_group_client.send_goal_async(goal)
         send_future.add_done_callback(
-            lambda f, target=target, q_target=dict(q_target): self._on_goal_response(f, target, q_target)
+            lambda future, request=request: self._on_goal_response(future, request)
         )
 
-    def _on_goal_response(self, future, target: PoseStamped, q_target: Dict[str, float]) -> None:
+    def _on_goal_response(self, future, request: ExecutionRequest) -> None:
+        if self._active_request is not request:
+            return
+
         try:
             goal_handle = future.result()
         except Exception as exc:
-            self._event("goal_send_exception", target)
+            self._event("goal_send_exception", request.target, extra="source=%s" % request.source)
             self.get_logger().warn(f"MoveGroup send exception: {exc}")
-            self._set_busy(False, "goal_send_exception")
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_GOAL_SEND_EXCEPTION,
+                detail=f"MoveGroup send exception: {exc}",
+                reason="goal_send_exception",
+            )
             return
 
         if goal_handle is None or not goal_handle.accepted:
-            self._event("goal_rejected", target)
+            self._event("goal_rejected", request.target, extra="source=%s" % request.source)
             self.get_logger().warn("MoveGroup goal rejected")
-            self._set_busy(False, "goal_rejected")
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_GOAL_REJECTED,
+                detail="MoveGroup goal rejected",
+                reason="goal_rejected",
+            )
             return
 
-        self._event("goal_accepted", target)
+        self._event("goal_accepted", request.target, extra="source=%s" % request.source)
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(
-            lambda f, target=target, q_target=dict(q_target): self._on_goal_result(f, target, q_target)
+            lambda future, request=request: self._on_goal_result(future, request)
         )
 
-    def _on_goal_result(self, future, target: PoseStamped, q_target: Dict[str, float]) -> None:
+    def _on_goal_result(self, future, request: ExecutionRequest) -> None:
+        if self._active_request is not request:
+            return
+
         try:
             wrapped = future.result()
             result = wrapped.result
         except Exception as exc:
-            self._event("exec_result_exception", target)
+            self._event("exec_result_exception", request.target, extra="source=%s" % request.source)
             self.get_logger().warn(f"MoveGroup result exception: {exc}")
-            self._set_busy(False, "exec_result_exception")
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_RESULT_EXCEPTION,
+                detail=f"MoveGroup result exception: {exc}",
+                reason="exec_result_exception",
+            )
             return
 
         if result.error_code.val == result.error_code.SUCCESS:
-            self._last_sent_target = _copy_pose_stamped(target)
-            self._event("exec_ok", target)
-        else:
-            self._event("exec_fail", target)
-            self.get_logger().warn(f"MoveGroup execute failed, error_code={result.error_code.val}")
+            self._event("exec_ok", request.target, extra="source=%s" % request.source)
+            self._complete_execution(
+                request,
+                success=True,
+                error_code=result.error_code.val,
+                detail="execution succeeded",
+                reason="goal_done",
+            )
+            return
 
-        self._set_busy(False, "goal_done")
+        detail = "MoveGroup execute failed, error_code=%d" % result.error_code.val
+        self._event("exec_fail", request.target, extra="source=%s" % request.source)
+        self.get_logger().warn(detail)
+        self._complete_execution(
+            request,
+            success=False,
+            error_code=result.error_code.val,
+            detail=detail,
+            reason="goal_done",
+        )
+
+    def _complete_execution(
+        self,
+        request: ExecutionRequest,
+        success: bool,
+        error_code: int,
+        detail: str,
+        reason: str,
+    ) -> None:
+        if self._active_request is not request:
+            return
+
+        status = (
+            Arm2MotionExecution.STATUS_SUCCEEDED
+            if success
+            else Arm2MotionExecution.STATUS_FAILED
+        )
+
+        self._active_request = None
+        self._set_busy(False, reason)
+
+        if request.execution_id is not None:
+            self._publish_motion_execution(
+                request.execution_id,
+                status,
+                error_code,
+                detail,
+            )
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Target Pose to MoveIt executor")
     parser.add_argument("--target-topic", default="/rc_arm_2/target_pose")
+    parser.add_argument("--middleware-target-topic", default="/arm2/middleware/motion_target")
+    parser.add_argument("--middleware-result-topic", default="/arm2/middleware/motion_execution")
     parser.add_argument("--planning-group", default="arm")
     parser.add_argument("--joint-names", default="j1_joint,j2_joint,j3_joint,j4_joint")
     parser.add_argument("--default-frame", default="world")
@@ -604,6 +797,8 @@ def main() -> None:
     rclpy.init()
     node = TargetPoseMoveItExecutor(
         target_topic=args.target_topic,
+        middleware_target_topic=args.middleware_target_topic,
+        middleware_result_topic=args.middleware_result_topic,
         planning_group=args.planning_group,
         joint_names=joints,
         default_frame=args.default_frame,

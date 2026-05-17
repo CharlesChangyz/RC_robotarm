@@ -1,6 +1,6 @@
 /**
  * @file rc_arm_hardware.cpp
- * @brief EL-A3 机械臂 ROS2 Control 硬件接口实现
+ * @brief 
  */
 
 #include "rc_arm_hardware/rc_arm_hardware.hpp"
@@ -62,6 +62,7 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , mujoco_command_topic_("/rc_arm_2/mujoco_joint_command")
   , velocity_limit_(10.0)
   , vacuum_activate_topic_("/rc_arm_2/vacuum_activate")
+  , payload_command_topic_("/rc_arm_2/payload_active_command")
   , payload_active_topic_("/rc_arm_2/payload_active")
   , payload_frame_("end_effector")
   , payload_mass_(0.63)
@@ -131,6 +132,9 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   }
   if (info_.hardware_parameters.count("vacuum_activate_topic")) {
     vacuum_activate_topic_ = info_.hardware_parameters.at("vacuum_activate_topic");
+  }
+  if (info_.hardware_parameters.count("payload_command_topic")) {
+    payload_command_topic_ = info_.hardware_parameters.at("payload_command_topic");
   }
   if (info_.hardware_parameters.count("payload_active_topic")) {
     payload_active_topic_ = info_.hardware_parameters.at("payload_active_topic");
@@ -358,9 +362,10 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
               payload_gains_.low_stiffness_torque_bias,
               gravity_feedforward_ratio_ * 100.0);
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "  低刚度模式：%s，vacuum_topic=%s，payload_topic=%s",
+              "  低刚度模式：%s，vacuum_topic=%s，payload_command_topic=%s，payload_topic=%s",
               low_stiffness_mode_ ? "启用" : "禁用",
               vacuum_activate_topic_.c_str(),
+              payload_command_topic_.c_str(),
               payload_active_topic_.c_str());
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "  Pinocchio：gravity=%s, inverse_dynamics=%s",
@@ -396,6 +401,10 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
     vacuum_activate_topic_,
     10,
     std::bind(&RsA3HardwareInterface::vacuumActivateCallback, this, std::placeholders::_1));
+  payload_command_sub_ = debug_node_->create_subscription<std_msgs::msg::Bool>(
+    payload_command_topic_,
+    10,
+    std::bind(&RsA3HardwareInterface::payloadActiveCommandCallback, this, std::placeholders::_1));
 
   if (external_feedback_enabled_) {
     external_feedback_sub_ = debug_node_->create_subscription<sensor_msgs::msg::JointState>(
@@ -1429,7 +1438,6 @@ void RsA3HardwareInterface::vacuumActivateCallback(const std_msgs::msg::Bool::Sh
     return;
   }
 
-  const bool previous = payload_active_.exchange(msg->data);
   if (backend_mode_ == BackendMode::REAL && dm_driver_) {
     const bool ok = msg->data ? dm_driver_->enableVacuum() : dm_driver_->disableVacuum();
     if (!ok) {
@@ -1438,14 +1446,27 @@ void RsA3HardwareInterface::vacuumActivateCallback(const std_msgs::msg::Bool::Sh
         "真空命令已接收，但当前 dmbot_serial 后端未就绪");
     }
   }
+  RCLCPP_INFO(
+    rclcpp::get_logger("RsA3HardwareInterface"),
+    "vacuum -> %s (vacuum topic=%s)",
+    msg->data ? "true" : "false",
+    vacuum_activate_topic_.c_str());
+}
 
+void RsA3HardwareInterface::payloadActiveCommandCallback(const std_msgs::msg::Bool::SharedPtr msg)
+{
+  if (!msg) {
+    return;
+  }
+
+  const bool previous = payload_active_.exchange(msg->data);
   publishPayloadActiveState();
   if (previous != msg->data) {
     RCLCPP_INFO(
       rclcpp::get_logger("RsA3HardwareInterface"),
-      "payload_active -> %s (vacuum topic=%s)",
+      "payload_active -> %s (payload command topic=%s)",
       msg->data ? "true" : "false",
-      vacuum_activate_topic_.c_str());
+      payload_command_topic_.c_str());
   }
 }
 
@@ -1678,13 +1699,55 @@ bool RsA3HardwareInterface::buildPinocchioJointMapping()
 
 void RsA3HardwareInterface::configureLoadedPinocchioModel()
 {
-  if (!pinocchio_loaded_initialized_) {
+  if (!pinocchio_initialized_) {
     return;
   }
 
-  // Keep the same kinematic structure and a separate data/model instance for the payload case.
-  // Payload geometry and gain switching are driven explicitly by payload_* config values.
+  pinocchio_loaded_model_ = pinocchio_model_;
+
+  if (payload_mass_ <= 0.0) {
+    pinocchio_loaded_data_ = pinocchio::Data(pinocchio_loaded_model_);
+    pinocchio_loaded_initialized_ = true;
+    return;
+  }
+
+  if (!pinocchio_loaded_model_.existFrame(payload_frame_)) {
+    RCLCPP_WARN(
+      rclcpp::get_logger("RsA3HardwareInterface"),
+      "Pinocchio 带载模型未找到 frame=%s，将回退到基础模型",
+      payload_frame_.c_str());
+    pinocchio_loaded_data_ = pinocchio::Data(pinocchio_loaded_model_);
+    pinocchio_loaded_initialized_ = false;
+    return;
+  }
+
+  const pinocchio::FrameIndex payload_frame_id = pinocchio_loaded_model_.getFrameId(payload_frame_);
+  const auto & payload_frame = pinocchio_loaded_model_.frames[payload_frame_id];
+
+  Eigen::Matrix3d payload_inertia_matrix = Eigen::Matrix3d::Zero();
+  payload_inertia_matrix.diagonal() << payload_diaginertia_[0], payload_diaginertia_[1], payload_diaginertia_[2];
+
+  const Eigen::Vector3d payload_com_offset(
+    payload_com_offset_[0], payload_com_offset_[1], payload_com_offset_[2]);
+  const pinocchio::Inertia payload_inertia(
+    payload_mass_, payload_com_offset, payload_inertia_matrix);
+
+  // The payload frame placement is expressed in the supporting joint frame.
+  // Appending the inertia at that placement makes the payload follow the end effector rigidly.
+  pinocchio_loaded_model_.appendBodyToJoint(
+    payload_frame.parentJoint,
+    payload_inertia,
+    payload_frame.placement);
   pinocchio_loaded_data_ = pinocchio::Data(pinocchio_loaded_model_);
+  pinocchio_loaded_initialized_ = true;
+
+  RCLCPP_INFO(
+    rclcpp::get_logger("RsA3HardwareInterface"),
+    "Pinocchio 带载模型已配置：frame=%s mass=%.3f com=[%.4f %.4f %.4f] inertia=[%.4f %.4f %.4f]",
+    payload_frame_.c_str(),
+    payload_mass_,
+    payload_com_offset_[0], payload_com_offset_[1], payload_com_offset_[2],
+    payload_diaginertia_[0], payload_diaginertia_[1], payload_diaginertia_[2]);
 }
 
 std::vector<double> RsA3HardwareInterface::computePinocchioGravity(
@@ -1976,9 +2039,7 @@ void RsA3HardwareInterface::applyCalibratedInertiaToModel()
   
   // Recreate Pinocchio Data object to apply changes
   pinocchio_data_ = pinocchio::Data(pinocchio_model_);
-  pinocchio_loaded_model_ = pinocchio_model_;
-  pinocchio_loaded_data_ = pinocchio::Data(pinocchio_loaded_model_);
-  pinocchio_loaded_initialized_ = true;
+  configureLoadedPinocchioModel();
   
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "Pinocchio 模型已更新（已应用标定惯量参数）");
