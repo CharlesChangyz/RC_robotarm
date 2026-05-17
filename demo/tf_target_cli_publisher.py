@@ -614,6 +614,7 @@ class TargetPublisherWindow(QMainWindow):
         self._install_shortcuts()
         self._sync_editing_widgets()
         self._update_status_labels()
+        self._startup_cleanup_project_ros_processes()
         self._backend.start()
         self._request_reachability()
 
@@ -697,8 +698,13 @@ class TargetPublisherWindow(QMainWindow):
             blocked_status.setText("blocked: required ROS nodes not ready")
         return False
 
-    def _cleanup_project_ros_processes(self) -> bool:
-        self._append_log("auto cleanup: duplicate ROS nodes detected")
+    def _cleanup_project_ros_processes(
+        self,
+        prefix: str = "auto cleanup",
+        announce: Optional[str] = "duplicate ROS nodes detected",
+    ) -> bool:
+        if announce:
+            self._append_log(f"{prefix}: {announce}")
         overall_ok = True
         for label, pattern in PROJECT_ROS_CLEANUP_PATTERNS:
             try:
@@ -710,23 +716,29 @@ class TargetPublisherWindow(QMainWindow):
                     timeout=5.0,
                 )
             except Exception as exc:
-                self._append_log(f"auto cleanup: failed to stop {label}: {exc}")
+                self._append_log(f"{prefix}: failed to stop {label}: {exc}")
                 overall_ok = False
                 continue
 
             if completed.returncode == 0:
-                self._append_log(f"auto cleanup: stopped {label}")
+                self._append_log(f"{prefix}: stopped {label}")
             elif completed.returncode == 1:
                 continue
             else:
                 stderr = completed.stderr.strip() or completed.stdout.strip() or "unknown error"
                 self._append_log(
-                    f"auto cleanup: failed to stop {label} (code={completed.returncode}): {stderr}"
+                    f"{prefix}: failed to stop {label} (code={completed.returncode}): {stderr}"
                 )
                 overall_ok = False
 
         time.sleep(AUTO_CLEANUP_WAIT_SEC)
         return overall_ok
+
+    def _startup_cleanup_project_ros_processes(self) -> None:
+        self._cleanup_project_ros_processes(
+            prefix="startup cleanup",
+            announce="clearing project ROS processes",
+        )
 
     def _auto_cleanup_ros_duplicates(
         self,
