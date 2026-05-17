@@ -1,7 +1,11 @@
-mujoco>=2.3.3
+# Core simulation dependencies
 dm-control
+mujoco>=2.3.3
 numpy<2.0.0
 scipy
+
+# Utility / GUI helpers used by local demos and tooling
+empy==3.3.4
 PySide6
 PyYAML
 empy<4
