@@ -76,7 +76,7 @@
       <joint name="j1_joint">
         <param name="motor_id">${hardware_config.motor_id_j1}</param>
         <param name="motor_type">RS00</param>
-        <param name="position_offset">-1.5707963267948966</param>
+        <param name="position_offset">0</param>
         <param name="direction">1.0</param>
         <param name="unloaded_low_stiffness_kp">${hardware_config.unloaded_low_stiffness_kp_j1}</param>
         <param name="unloaded_low_stiffness_kd">${hardware_config.unloaded_low_stiffness_kd_j1}</param>
