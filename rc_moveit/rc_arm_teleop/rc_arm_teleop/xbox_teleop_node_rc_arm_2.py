@@ -716,9 +716,9 @@ class XboxTeleopNode(Node):
         goal_msg.request.goal_constraints = []
         
         # Use joint constraints to define home position
-        # Home position: L1=0, L2=45°, L3=-45°, L4=0, L5=0, L6=0
+        # Home position: keep the same physical pose after the j1 zero shift.
         joint_names = list(self.joint_names)
-        joint_values = [0.0, 0.785, -0.785, 0.0]  # Radians
+        joint_values = [1.5707963267948966, 0.785, -0.785, 0.0]  # Radians
         
         constraints = Constraints()
         for name, value in zip(joint_names, joint_values):
@@ -765,7 +765,7 @@ class XboxTeleopNode(Node):
         if result.error_code.val == result.error_code.SUCCESS:
             self.get_logger().info('已回到 home 位置！')
             # [Improvement] Use home as start to avoid TF drift
-            home_joint_positions = [0.0, 0.785, -0.785, 0.0]
+            home_joint_positions = [1.5707963267948966, 0.785, -0.785, 0.0]
             self.last_ik_joint_positions = home_joint_positions
             self.smoothed_joint_positions = list(home_joint_positions)
             self.last_joint_velocities = [0.0] * len(self.joint_names)

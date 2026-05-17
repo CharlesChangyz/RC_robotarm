@@ -48,6 +48,8 @@ python3 -m pip install -r requirements.txt
 python3 -m pip install -e .
 ```
 
+如果你在激活的虚拟环境里构建 `rc_moveit`，也要确保该环境安装了 `empy`。ROS 2 Humble 的 `rosidl_adapter` 会通过当前 Python 解释器导入 `em` 模块；缺少它时，`arm_msgs` 这类消息包会在 `colcon build` 阶段失败。
+
 ## 构建 ROS 2 工作空间
 
 ```bash
@@ -58,6 +60,13 @@ source install/setup.bash
 ```
 
 如果后续修改了 `rc_moveit` 下的包，请重新执行 `colcon build --symlink-install` 并重新 source。
+
+如果你切换过 Python 解释器，例如之前在 `.venv` 中配置过、之后又改回系统 Python，先清理 CMake 缓存再重建，避免 `Python3_EXECUTABLE` 继续指向旧解释器：
+
+```bash
+cd rc_moveit
+colcon build --symlink-install --cmake-clean-cache --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+```
 
 ## MuJoCo 仿真运行
 
@@ -347,6 +356,8 @@ python3 -m pip install -r requirements.txt
 python3 -m pip install -e .
 ```
 
+If you build `rc_moveit` from an activated virtualenv, make sure that environment also has `empy` installed. On ROS 2 Humble, `rosidl_adapter` imports the `em` module from the active Python interpreter, and interface packages such as `arm_msgs` will fail during `colcon build` if it is missing.
+
 ## Build the ROS 2 Workspace
 
 ```bash
@@ -357,6 +368,13 @@ source install/setup.bash
 ```
 
 Rebuild and source again after changing packages under `rc_moveit`.
+
+If you previously configured the workspace with a different Python interpreter, clear the CMake cache before rebuilding so `Python3_EXECUTABLE` does not keep pointing at the old interpreter:
+
+```bash
+cd rc_moveit
+colcon build --symlink-install --cmake-clean-cache --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+```
 
 ## Run MuJoCo Simulation
 

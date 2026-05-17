@@ -315,15 +315,22 @@ class RcArmWorldPitchKinematics:
     def _raw_world_pitch(self, joints_vec: np.ndarray) -> float:
         transform = self.forward_transform(joints_vec)
         tool_direction_world = transform[:3, :3] @ np.array([1.0, 0.0, 0.0], dtype=float)
-        q1 = float(joints_vec[0])
-        tool_direction_plane = _rotation_z(q1) @ tool_direction_world
+        tool_direction_plane = self._j1_cancel_rotation(float(joints_vec[0])) @ tool_direction_world
         return math.atan2(float(tool_direction_plane[2]), float(tool_direction_plane[0]))
 
     def _position_in_j1_frame(self, joints_vec: np.ndarray, world_position: Sequence[float]) -> np.ndarray:
         spec = self._joint_specs[self._joint_names[0]]
         origin = np.array(spec.origin_xyz, dtype=float)
         relative = np.array(world_position, dtype=float) - origin
-        return _rotation_z(float(joints_vec[0])) @ relative
+        return self._j1_cancel_rotation(float(joints_vec[0])) @ relative
+
+    def _j1_cancel_rotation(self, q1: float) -> np.ndarray:
+        spec = self._joint_specs[self._joint_names[0]]
+        axis_z = float(spec.axis_xyz[2])
+        if abs(axis_z) <= 1.0e-9:
+            return np.eye(3, dtype=float)
+        origin_yaw = float(spec.origin_rpy[2])
+        return _rotation_z(-(origin_yaw + axis_z * q1))
 
     def _residual(self, joints_vec: np.ndarray, target_xyz: np.ndarray, target_pitch: float) -> np.ndarray:
         position = np.array(self.forward_position(joints_vec), dtype=float)
@@ -383,7 +390,11 @@ class RcArmWorldPitchKinematics:
         planar_x = math.sqrt(max(0.0, rho * rho - const_y * const_y))
         alpha = math.atan2(const_y, planar_x)
         beta = math.atan2(rel_y, rel_x)
-        guess = normalize_angle_rad(alpha - beta)
+        axis_z = float(spec.axis_xyz[2])
+        if abs(axis_z) <= 1.0e-9:
+            return None
+        origin_yaw = float(spec.origin_rpy[2])
+        guess = normalize_angle_rad((beta - alpha - origin_yaw) / axis_z)
         return float(np.clip(guess, self.lower_limits[0], self.upper_limits[0]))
 
     def _load_joint_specs(

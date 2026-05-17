@@ -5,7 +5,7 @@
   </group>
 
   <group_state name="home" group="arm">
-    <joint name="j1_joint" value="0.0"/>
+    <joint name="j1_joint" value="1.5707963267948966"/>
     <joint name="j2_joint" value="0.785"/>
     <joint name="j3_joint" value="-0.785"/>
     <joint name="j4_joint" value="0.0"/>
