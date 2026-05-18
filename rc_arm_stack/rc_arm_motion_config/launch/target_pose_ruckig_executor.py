@@ -1,34 +1,51 @@
 #!/usr/bin/env python3
-"""Subscribe manual and middleware targets and drive MoveIt planning/execution."""
+"""Subscribe manual and middleware targets and execute IK + Ruckig trajectories."""
+
+from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-import json
 import math
 import threading
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPoint
+from builtin_interfaces.msg import Duration
+from control_msgs.action import FollowJointTrajectory
+from geometry_msgs.msg import PoseStamped
 import rclpy
-from geometry_msgs.msg import Pose, PoseStamped
-from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import CollisionObject, Constraints, JointConstraint, PlanningScene
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import JointState
-from shape_msgs.msg import SolidPrimitive
 import tf2_ros
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+import yaml
 
 from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics
+
+try:
+    from ruckig import InputParameter, OutputParameter, Result, Ruckig
+except ImportError as exc:  # pragma: no cover - explicit startup failure path
+    InputParameter = None
+    OutputParameter = None
+    Result = None
+    Ruckig = None
+    RUCKIG_IMPORT_ERROR = exc
+else:
+    RUCKIG_IMPORT_ERROR = None
 
 
 EXECUTION_ERROR_BUSY = -1
 EXECUTION_ERROR_NOT_READY = -2
 EXECUTION_ERROR_IK_FAILED = -3
-EXECUTION_ERROR_GOAL_SEND_EXCEPTION = -4
-EXECUTION_ERROR_GOAL_REJECTED = -5
-EXECUTION_ERROR_RESULT_EXCEPTION = -6
+EXECUTION_ERROR_JOINT_STATE_UNAVAILABLE = -4
+EXECUTION_ERROR_LIMITS_LOAD_FAILED = -5
+EXECUTION_ERROR_TARGET_OUT_OF_LIMITS = -6
+EXECUTION_ERROR_TRAJECTORY_GENERATION_FAILED = -7
+EXECUTION_ERROR_GOAL_SEND_EXCEPTION = -8
+EXECUTION_ERROR_GOAL_REJECTED = -9
+EXECUTION_ERROR_RESULT_EXCEPTION = -10
+EXECUTION_ERROR_RESULT_FAILED = -11
 
 
 def _normalize_frame_id(frame_id: str) -> str:
@@ -69,34 +86,17 @@ def _copy_pose_stamped(msg: PoseStamped) -> PoseStamped:
     return copied
 
 
-def _parse_bool(text: str) -> bool:
-    v = (text or "").strip().lower()
-    return v in {"1", "true", "yes", "y", "on"}
-
-
-def _as_xyz(values) -> Optional[Tuple[float, float, float]]:
-    if not isinstance(values, (list, tuple)) or len(values) != 3:
-        return None
-    try:
-        return float(values[0]), float(values[1]), float(values[2])
-    except (TypeError, ValueError):
-        return None
-
-
-def _as_xyzw(values) -> Optional[Tuple[float, float, float, float]]:
-    if not isinstance(values, (list, tuple)) or len(values) != 4:
-        return None
-    try:
-        return float(values[0]), float(values[1]), float(values[2]), float(values[3])
-    except (TypeError, ValueError):
-        return None
-
-
-def _json_preview(text: str, limit: int = 160) -> str:
-    one_line = (text or "").replace("\n", " ").strip()
-    if len(one_line) <= limit:
-        return one_line
-    return one_line[:limit] + "..."
+def _duration_from_seconds(seconds: float) -> Duration:
+    clamped = max(0.0, float(seconds))
+    sec = int(math.floor(clamped))
+    nanosec = int(round((clamped - float(sec)) * 1.0e9))
+    if nanosec >= 1_000_000_000:
+        sec += 1
+        nanosec -= 1_000_000_000
+    msg = Duration()
+    msg.sec = sec
+    msg.nanosec = nanosec
+    return msg
 
 
 @dataclass
@@ -106,61 +106,56 @@ class ExecutionRequest:
     execution_id: Optional[int] = None
 
 
-class TargetPoseMoveItExecutor(Node):
+@dataclass(frozen=True)
+class JointLimit:
+    min_position: float
+    max_position: float
+    max_velocity: float
+    max_acceleration: float
+    max_jerk: float
+
+
+class TargetPoseRuckigExecutor(Node):
     def __init__(
         self,
         target_topic: str,
         middleware_target_topic: str,
         middleware_result_topic: str,
-        planning_group: str,
         joint_names: List[str],
         default_frame: str,
-        move_action_name: str,
+        follow_joint_trajectory_action: str,
+        joint_limits_file: str,
+        trajectory_sampling_period: float,
         pos_threshold: float,
         rot_threshold: float,
-        planning_time: float,
-        planning_attempts: int,
-        vel_scale: float,
-        acc_scale: float,
-        joint_tolerance: float,
         check_period: float,
-        avoid_collisions: bool,
         j4_axis: str,
         joint_state_topic: str,
         urdf_path: str,
         status_log_period: float,
         status_base_frame: str,
         status_eef_frame: str,
-        world_boxes_json: str,
-        planning_scene_topic: str,
-        scene_publish_retries: int,
     ) -> None:
-        super().__init__("rc_arm_target_pose_moveit_executor")
+        super().__init__("rc_arm_target_pose_executor")
+
+        if RUCKIG_IMPORT_ERROR is not None:
+            raise RuntimeError(f"ruckig import failed: {RUCKIG_IMPORT_ERROR}")
 
         self._manual_target_topic = target_topic
         self._middleware_target_topic = middleware_target_topic
         self._middleware_result_topic = middleware_result_topic
-        self._planning_group = planning_group
         self._joint_names = list(joint_names)
         self._default_frame = _normalize_frame_id(default_frame)
+        self._follow_joint_trajectory_action = follow_joint_trajectory_action
+        self._trajectory_sampling_period = max(0.001, float(trajectory_sampling_period))
         self._pos_threshold = max(0.0, float(pos_threshold))
         self._rot_threshold = max(0.0, float(rot_threshold))
-        self._planning_time = max(0.1, float(planning_time))
-        self._planning_attempts = max(1, int(planning_attempts))
-        self._vel_scale = max(0.01, min(1.0, float(vel_scale)))
-        self._acc_scale = max(0.01, min(1.0, float(acc_scale)))
-        self._joint_tolerance = max(1.0e-4, float(joint_tolerance))
-        self._avoid_collisions = bool(avoid_collisions)
         self._j4_axis = str(j4_axis).strip().lower() if str(j4_axis).strip() else "x"
         if self._j4_axis not in {"x", "y", "z"}:
             self._j4_axis = "x"
         self._status_log_period = max(0.0, float(status_log_period))
-
         self._status_base_frame = _normalize_frame_id(status_base_frame)
         self._status_eef_frame = _normalize_frame_id(status_eef_frame)
-        self._planning_scene_topic = planning_scene_topic
-        self._scene_publish_retries_left = max(1, int(scene_publish_retries))
-        self._world_box_configs = self._parse_world_boxes_json(world_boxes_json)
 
         self._manual_target_lock = threading.Lock()
         self._latest_manual_target: Optional[PoseStamped] = None
@@ -168,27 +163,26 @@ class TargetPoseMoveItExecutor(Node):
 
         self._busy = False
         self._active_request: Optional[ExecutionRequest] = None
-        self._ready_move_action = False
+        self._ready_controller_action = False
         self._ready_solver = False
         self._last_ready_tuple = None
-        self._latest_joint_map: Dict[str, float] = {}
+        self._joint_state_map: Dict[str, Tuple[float, float]] = {}
         self._next_execution_id = 0
-
         self._last_event = "init"
         self._last_event_time_sec = self._now_sec()
+
+        self._joint_limits = self._load_joint_limits(joint_limits_file, self._joint_names)
 
         self._kinematics = RcArmWorldPitchKinematics(
             urdf_path=urdf_path or None,
             joint_names=self._joint_names,
             j4_axis=self._j4_axis,
         )
-        self._move_group_client = ActionClient(self, MoveGroup, move_action_name)
-        scene_qos = QoSProfile(
-            depth=1,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL,
-            reliability=ReliabilityPolicy.RELIABLE,
+        self._trajectory_client = ActionClient(
+            self,
+            FollowJointTrajectory,
+            follow_joint_trajectory_action,
         )
-        self._planning_scene_pub = self.create_publisher(PlanningScene, planning_scene_topic, scene_qos)
         self._middleware_result_pub = self.create_publisher(
             Arm2MotionExecution,
             middleware_result_topic,
@@ -202,34 +196,80 @@ class TargetPoseMoveItExecutor(Node):
         self.create_subscription(Arm2TargetPoint, middleware_target_topic, self._on_middleware_target, 20)
         self.create_subscription(JointState, joint_state_topic, self._on_joint_state, 20)
         self._timer = self.create_timer(max(0.02, float(check_period)), self._on_timer)
-        self._scene_timer = self.create_timer(1.0, self._publish_static_world_scene)
         if self._status_log_period > 0.0:
             self._status_timer = self.create_timer(self._status_log_period, self._log_status)
 
         self.get_logger().info(
-            "TargetPose->MoveIt executor started: manual_topic=%s middleware_target=%s middleware_result=%s "
-            "group=%s avoid_collisions=%d world_boxes=%d planning_scene_topic=%s status_tf=%s->%s"
+            "TargetPose executor started: manual_topic=%s middleware_target=%s middleware_result=%s "
+            "trajectory_action=%s joint_limits=%s status_tf=%s->%s"
             % (
                 self._manual_target_topic,
                 self._middleware_target_topic,
                 self._middleware_result_topic,
-                self._planning_group,
-                1 if self._avoid_collisions else 0,
-                len(self._world_box_configs),
-                self._planning_scene_topic,
+                self._follow_joint_trajectory_action,
+                joint_limits_file,
                 self._status_base_frame,
                 self._status_eef_frame,
             )
         )
 
+    def _load_joint_limits(
+        self,
+        path: str,
+        joint_names: Sequence[str],
+    ) -> Dict[str, JointLimit]:
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                loaded = yaml.safe_load(handle) or {}
+        except Exception as exc:
+            raise RuntimeError(f"failed to load joint limits file '{path}': {exc}") from exc
+
+        raw_limits = loaded.get("joint_limits")
+        if not isinstance(raw_limits, dict):
+            raise RuntimeError(f"joint_limits mapping missing in '{path}'")
+
+        limits: Dict[str, JointLimit] = {}
+        for joint_name in joint_names:
+            entry = raw_limits.get(joint_name)
+            if not isinstance(entry, dict):
+                raise RuntimeError(f"joint '{joint_name}' missing in '{path}'")
+            try:
+                limits[joint_name] = JointLimit(
+                    min_position=float(entry["min_position"]),
+                    max_position=float(entry["max_position"]),
+                    max_velocity=float(entry["max_velocity"]),
+                    max_acceleration=float(entry["max_acceleration"]),
+                    max_jerk=float(entry["max_jerk"]),
+                )
+            except Exception as exc:
+                raise RuntimeError(f"joint '{joint_name}' has invalid limits in '{path}': {exc}") from exc
+        return limits
+
     def _on_joint_state(self, msg: JointState) -> None:
         if not msg.name or not msg.position:
             return
-        mapping = self._latest_joint_map.copy()
+        mapping = self._joint_state_map.copy()
         for idx, name in enumerate(msg.name):
-            if idx < len(msg.position):
-                mapping[name] = float(msg.position[idx])
-        self._latest_joint_map = mapping
+            if idx >= len(msg.position):
+                continue
+            velocity = 0.0
+            if idx < len(msg.velocity):
+                velocity = float(msg.velocity[idx])
+            mapping[name] = (float(msg.position[idx]), velocity)
+        self._joint_state_map = mapping
+
+    def _ordered_joint_state(self) -> Optional[Tuple[List[float], List[float]]]:
+        if not self._joint_state_map:
+            return None
+        positions: List[float] = []
+        velocities: List[float] = []
+        for joint_name in self._joint_names:
+            if joint_name not in self._joint_state_map:
+                return None
+            position, velocity = self._joint_state_map[joint_name]
+            positions.append(position)
+            velocities.append(velocity)
+        return positions, velocities
 
     def _now_sec(self) -> float:
         return self.get_clock().now().nanoseconds * 1.0e-9
@@ -268,115 +308,6 @@ class TargetPoseMoveItExecutor(Node):
         pos = target.pose.position
         return "target_xyz=(%.3f, %.3f, %.3f)" % (pos.x, pos.y, pos.z)
 
-    def _parse_world_boxes_json(self, text: str) -> List[dict]:
-        try:
-            loaded = json.loads(text or "[]")
-        except json.JSONDecodeError as exc:
-            self.get_logger().warn(
-                "world_boxes_json parse failed at char %d: %s preview='%s'"
-                % (exc.pos, exc.msg, _json_preview(text))
-            )
-            return []
-
-        if not isinstance(loaded, list):
-            self.get_logger().warn("world_boxes_json must be a JSON list, got %s" % type(loaded).__name__)
-            return []
-
-        boxes = []
-        for idx, item in enumerate(loaded, start=1):
-            if isinstance(item, dict):
-                boxes.append(item)
-            else:
-                self.get_logger().warn(
-                    "world box %d skipped: expected object, got %s" % (idx, type(item).__name__)
-                )
-        return boxes
-
-    def _build_box_collision_object(
-        self,
-        box_cfg: dict,
-        default_id: str,
-        default_frame: str,
-        operation: int = CollisionObject.ADD,
-    ) -> Optional[CollisionObject]:
-        sx_sy_sz = _as_xyz(box_cfg.get("size"))
-        if sx_sy_sz is None:
-            self.get_logger().warn("box '%s' skipped: size must be [x, y, z]" % default_id)
-            return None
-
-        sx, sy, sz = (abs(v) for v in sx_sy_sz)
-        if sx <= 1.0e-6 or sy <= 1.0e-6 or sz <= 1.0e-6:
-            self.get_logger().warn("box '%s' skipped: size must be non-zero" % default_id)
-            return None
-
-        position = _as_xyz(box_cfg.get("position"))
-        if position is None:
-            if "position" in box_cfg:
-                self.get_logger().warn("box '%s': invalid position, using [0, 0, 0]" % default_id)
-            position = (0.0, 0.0, 0.0)
-        px, py, pz = position
-
-        q = _as_xyzw(box_cfg.get("orientation"))
-        if q is None:
-            if "orientation" in box_cfg:
-                self.get_logger().warn("box '%s': invalid orientation, using identity" % default_id)
-            q = (0.0, 0.0, 0.0, 1.0)
-        qx, qy, qz, qw = _normalize_quat_xyzw(q)
-
-        obj = CollisionObject()
-        obj.id = str(box_cfg.get("id", default_id)).strip() or default_id
-        obj.header.frame_id = _normalize_frame_id(str(box_cfg.get("frame_id", ""))) or default_frame
-        obj.operation = operation
-
-        primitive = SolidPrimitive()
-        primitive.type = SolidPrimitive.BOX
-        primitive.dimensions = [sx, sy, sz]
-
-        pose = Pose()
-        pose.position.x = px
-        pose.position.y = py
-        pose.position.z = pz
-        pose.orientation.x = qx
-        pose.orientation.y = qy
-        pose.orientation.z = qz
-        pose.orientation.w = qw
-
-        obj.primitives = [primitive]
-        obj.primitive_poses = [pose]
-        return obj
-
-    def _publish_scene_diff(
-        self,
-        world_objects: Optional[List[CollisionObject]] = None,
-    ) -> None:
-        scene = PlanningScene()
-        scene.is_diff = True
-        if world_objects:
-            scene.world.collision_objects = world_objects
-        self._planning_scene_pub.publish(scene)
-
-    def _publish_static_world_scene(self) -> None:
-        objects: List[CollisionObject] = []
-        for idx, box_cfg in enumerate(self._world_box_configs, start=1):
-            obj = self._build_box_collision_object(
-                box_cfg,
-                default_id="world_box_%d" % idx,
-                default_frame=self._default_frame,
-            )
-            if obj is not None:
-                objects.append(obj)
-
-        if objects:
-            self._publish_scene_diff(world_objects=objects)
-            self.get_logger().info(
-                "Published world collision boxes: count=%d retries_left=%d"
-                % (len(objects), self._scene_publish_retries_left)
-            )
-
-        self._scene_publish_retries_left -= 1
-        if self._scene_publish_retries_left <= 0:
-            self._scene_timer.cancel()
-
     def _event(self, name: str, target: Optional[PoseStamped] = None, extra: str = "") -> None:
         self._last_event = name
         self._last_event_time_sec = self._now_sec()
@@ -401,23 +332,23 @@ class TargetPoseMoveItExecutor(Node):
             self._busy = new_state
 
     def _update_ready(self) -> None:
-        mg_ready = self._move_group_client.server_is_ready()
+        controller_ready = self._trajectory_client.server_is_ready()
         solver_ready = self._kinematics is not None
 
-        self._ready_move_action = mg_ready
+        self._ready_controller_action = controller_ready
         self._ready_solver = solver_ready
 
-        ready_tuple = (mg_ready, solver_ready)
+        ready_tuple = (controller_ready, solver_ready)
         if ready_tuple != self._last_ready_tuple:
             self.get_logger().info(
-                "[STATE] ready move_action=%d solver=%d %s"
-                % (1 if mg_ready else 0, 1 if solver_ready else 0, self._format_eef())
+                "[STATE] ready trajectory_action=%d solver=%d %s"
+                % (1 if controller_ready else 0, 1 if solver_ready else 0, self._format_eef())
             )
             self._last_ready_tuple = ready_tuple
 
     def _executor_ready(self) -> bool:
         self._update_ready()
-        return self._ready_move_action and self._ready_solver
+        return self._ready_controller_action and self._ready_solver
 
     def _log_status(self) -> None:
         event_age = max(0.0, self._now_sec() - self._last_event_time_sec)
@@ -425,10 +356,10 @@ class TargetPoseMoveItExecutor(Node):
             has_manual_target = self._latest_manual_target is not None
         active_source = self._active_request.source if self._active_request is not None else "idle"
         self.get_logger().info(
-            "[STATE] busy=%d ready(move_action=%d,solver=%d) manual_target=%d active=%s event=%s(%.2fs) %s"
+            "[STATE] busy=%d ready(trajectory_action=%d,solver=%d) manual_target=%d active=%s event=%s(%.2fs) %s"
             % (
                 1 if self._busy else 0,
-                1 if self._ready_move_action else 0,
+                1 if self._ready_controller_action else 0,
                 1 if self._ready_solver else 0,
                 1 if has_manual_target else 0,
                 active_source,
@@ -504,12 +435,6 @@ class TargetPoseMoveItExecutor(Node):
             )
             return
 
-        self._publish_motion_execution(
-            execution_id,
-            Arm2MotionExecution.STATUS_ACCEPTED,
-            0,
-            "accepted",
-        )
         self._start_execution(
             ExecutionRequest(
                 source="middleware",
@@ -556,14 +481,6 @@ class TargetPoseMoveItExecutor(Node):
             )
         )
 
-    def _current_seed_joints(self) -> Optional[Dict[str, float]]:
-        if not self._latest_joint_map:
-            return None
-        missing = [name for name in self._joint_names if name not in self._latest_joint_map]
-        if missing:
-            return None
-        return {name: self._latest_joint_map[name] for name in self._joint_names}
-
     def _start_execution(self, request: ExecutionRequest) -> None:
         if self._busy:
             return
@@ -584,7 +501,7 @@ class TargetPoseMoveItExecutor(Node):
         pitch_rad = self._kinematics.world_pitch_from_quaternion(
             (float(q.x), float(q.y), float(q.z), float(q.w))
         )
-        seed = self._current_seed_joints()
+        seed = self._seed_joint_map()
         q_target = self._kinematics.solve_xyz_pitch(
             float(pose.pose.position.x),
             float(pose.pose.position.y),
@@ -594,17 +511,6 @@ class TargetPoseMoveItExecutor(Node):
         )
         if q_target is None:
             self._event("solve_fail", pose, extra="source=%s" % request.source)
-            self.get_logger().warn(
-                "4DOF solve failed target_xyz=(%.3f, %.3f, %.3f) target_pitch=%.3f source=%s %s"
-                % (
-                    float(pose.pose.position.x),
-                    float(pose.pose.position.y),
-                    float(pose.pose.position.z),
-                    pitch_rad,
-                    request.source,
-                    self._format_eef(),
-                )
-            )
             self._complete_execution(
                 request,
                 success=False,
@@ -614,35 +520,147 @@ class TargetPoseMoveItExecutor(Node):
             )
             return
 
+        ordered_joint_state = self._ordered_joint_state()
+        if ordered_joint_state is None:
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_JOINT_STATE_UNAVAILABLE,
+                detail="joint state unavailable",
+                reason="joint_state_unavailable",
+            )
+            return
+
+        current_positions, current_velocities = ordered_joint_state
+        target_positions = [float(q_target[joint_name]) for joint_name in self._joint_names]
+        out_of_limits = self._first_joint_out_of_limits(target_positions)
+        if out_of_limits is not None:
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_TARGET_OUT_OF_LIMITS,
+                detail=out_of_limits,
+                reason="target_out_of_limits",
+            )
+            return
+
         self._event("solve_ok", pose, extra="source=%s pitch=%.3f" % (request.source, pitch_rad))
-        self._send_goal(request, q_target)
+        trajectory = self._build_trajectory(
+            current_positions=current_positions,
+            current_velocities=current_velocities,
+            target_positions=target_positions,
+        )
+        if trajectory is None:
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_TRAJECTORY_GENERATION_FAILED,
+                detail="ruckig trajectory generation failed",
+                reason="trajectory_generation_failed",
+            )
+            return
 
-    def _send_goal(self, request: ExecutionRequest, q_target: Dict[str, float]) -> None:
-        goal = MoveGroup.Goal()
-        goal.request.group_name = self._planning_group
-        goal.request.num_planning_attempts = self._planning_attempts
-        goal.request.allowed_planning_time = self._planning_time
-        goal.request.max_velocity_scaling_factor = self._vel_scale
-        goal.request.max_acceleration_scaling_factor = self._acc_scale
+        self._send_trajectory_goal(request, trajectory)
 
-        constraints = Constraints()
-        for joint in self._joint_names:
-            jc = JointConstraint()
-            jc.joint_name = joint
-            jc.position = q_target[joint]
-            jc.tolerance_above = self._joint_tolerance
-            jc.tolerance_below = self._joint_tolerance
-            jc.weight = 1.0
-            constraints.joint_constraints.append(jc)
+    def _seed_joint_map(self) -> Optional[Dict[str, float]]:
+        ordered_joint_state = self._ordered_joint_state()
+        if ordered_joint_state is None:
+            return None
+        positions, _ = ordered_joint_state
+        return {
+            joint_name: positions[index]
+            for index, joint_name in enumerate(self._joint_names)
+        }
 
-        goal.request.goal_constraints = [constraints]
-        goal.planning_options.plan_only = False
-        goal.planning_options.look_around = False
-        goal.planning_options.replan = True
-        goal.planning_options.replan_attempts = 1
+    def _first_joint_out_of_limits(self, target_positions: Sequence[float]) -> Optional[str]:
+        for index, joint_name in enumerate(self._joint_names):
+            limit = self._joint_limits[joint_name]
+            position = float(target_positions[index])
+            if position < limit.min_position or position > limit.max_position:
+                return (
+                    f"joint '{joint_name}' target {position:.6f} outside "
+                    f"[{limit.min_position:.6f}, {limit.max_position:.6f}]"
+                )
+        return None
+
+    def _build_trajectory(
+        self,
+        current_positions: Sequence[float],
+        current_velocities: Sequence[float],
+        target_positions: Sequence[float],
+    ) -> Optional[JointTrajectory]:
+        dofs = len(self._joint_names)
+        otg = Ruckig(dofs, self._trajectory_sampling_period)
+        inp = InputParameter(dofs)
+        out = OutputParameter(dofs)
+
+        inp.current_position = list(current_positions)
+        inp.current_velocity = list(current_velocities)
+        inp.current_acceleration = [0.0] * dofs
+        inp.target_position = list(target_positions)
+        inp.target_velocity = [0.0] * dofs
+        inp.target_acceleration = [0.0] * dofs
+        inp.max_velocity = [self._joint_limits[name].max_velocity for name in self._joint_names]
+        inp.max_acceleration = [self._joint_limits[name].max_acceleration for name in self._joint_names]
+        inp.max_jerk = [self._joint_limits[name].max_jerk for name in self._joint_names]
+
+        message = JointTrajectory()
+        message.joint_names = list(self._joint_names)
+
+        initial = JointTrajectoryPoint()
+        initial.positions = list(current_positions)
+        initial.velocities = list(current_velocities)
+        initial.accelerations = [0.0] * dofs
+        initial.time_from_start = _duration_from_seconds(0.0)
+        message.points.append(initial)
+
+        elapsed = 0.0
+        max_steps = 100000
+        result = Result.Working
+        for _ in range(max_steps):
+            result = otg.update(inp, out)
+            if result not in (Result.Working, Result.Finished):
+                return None
+
+            elapsed += self._trajectory_sampling_period
+            point = JointTrajectoryPoint()
+            point.positions = list(out.new_position)
+            point.velocities = list(out.new_velocity)
+            point.accelerations = list(out.new_acceleration)
+            point.time_from_start = _duration_from_seconds(elapsed)
+            message.points.append(point)
+
+            if result == Result.Finished:
+                break
+            out.pass_to_input(inp)
+        else:
+            return None
+
+        if not message.points:
+            return None
+        return message
+
+    def _send_trajectory_goal(
+        self,
+        request: ExecutionRequest,
+        trajectory: JointTrajectory,
+    ) -> None:
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory = trajectory
 
         self._event("goal_send", request.target, extra="source=%s" % request.source)
-        send_future = self._move_group_client.send_goal_async(goal)
+        try:
+            send_future = self._trajectory_client.send_goal_async(goal)
+        except Exception as exc:
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_GOAL_SEND_EXCEPTION,
+                detail=f"trajectory goal send exception: {exc}",
+                reason="goal_send_exception",
+            )
+            return
+
         send_future.add_done_callback(
             lambda future, request=request: self._on_goal_response(future, request)
         )
@@ -654,29 +672,32 @@ class TargetPoseMoveItExecutor(Node):
         try:
             goal_handle = future.result()
         except Exception as exc:
-            self._event("goal_send_exception", request.target, extra="source=%s" % request.source)
-            self.get_logger().warn(f"MoveGroup send exception: {exc}")
             self._complete_execution(
                 request,
                 success=False,
                 error_code=EXECUTION_ERROR_GOAL_SEND_EXCEPTION,
-                detail=f"MoveGroup send exception: {exc}",
+                detail=f"trajectory goal send exception: {exc}",
                 reason="goal_send_exception",
             )
             return
 
         if goal_handle is None or not goal_handle.accepted:
-            self._event("goal_rejected", request.target, extra="source=%s" % request.source)
-            self.get_logger().warn("MoveGroup goal rejected")
             self._complete_execution(
                 request,
                 success=False,
                 error_code=EXECUTION_ERROR_GOAL_REJECTED,
-                detail="MoveGroup goal rejected",
+                detail="trajectory goal rejected",
                 reason="goal_rejected",
             )
             return
 
+        if request.execution_id is not None:
+            self._publish_motion_execution(
+                request.execution_id,
+                Arm2MotionExecution.STATUS_ACCEPTED,
+                0,
+                "accepted",
+            )
         self._event("goal_accepted", request.target, extra="source=%s" % request.source)
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(
@@ -691,35 +712,32 @@ class TargetPoseMoveItExecutor(Node):
             wrapped = future.result()
             result = wrapped.result
         except Exception as exc:
-            self._event("exec_result_exception", request.target, extra="source=%s" % request.source)
-            self.get_logger().warn(f"MoveGroup result exception: {exc}")
             self._complete_execution(
                 request,
                 success=False,
                 error_code=EXECUTION_ERROR_RESULT_EXCEPTION,
-                detail=f"MoveGroup result exception: {exc}",
-                reason="exec_result_exception",
+                detail=f"trajectory result exception: {exc}",
+                reason="result_exception",
             )
             return
 
-        if result.error_code.val == result.error_code.SUCCESS:
+        if result.error_code == FollowJointTrajectory.Result.SUCCESSFUL:
             self._event("exec_ok", request.target, extra="source=%s" % request.source)
             self._complete_execution(
                 request,
                 success=True,
-                error_code=result.error_code.val,
-                detail="execution succeeded",
+                error_code=result.error_code,
+                detail=result.error_string or "execution succeeded",
                 reason="goal_done",
             )
             return
 
-        detail = "MoveGroup execute failed, error_code=%d" % result.error_code.val
+        detail = result.error_string or f"trajectory execution failed, error_code={result.error_code}"
         self._event("exec_fail", request.target, extra="source=%s" % request.source)
-        self.get_logger().warn(detail)
         self._complete_execution(
             request,
             success=False,
-            error_code=result.error_code.val,
+            error_code=EXECUTION_ERROR_RESULT_FAILED,
             detail=detail,
             reason="goal_done",
         )
@@ -754,37 +772,24 @@ class TargetPoseMoveItExecutor(Node):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Target Pose to MoveIt executor")
+    parser = argparse.ArgumentParser(description="Target pose executor using IK + Ruckig + FJT")
     parser.add_argument("--target-topic", default="/rc_arm_2/target_pose")
     parser.add_argument("--middleware-target-topic", default="/arm2/middleware/motion_target")
     parser.add_argument("--middleware-result-topic", default="/arm2/middleware/motion_execution")
-    parser.add_argument("--planning-group", default="arm")
     parser.add_argument("--joint-names", default="j1_joint,j2_joint,j3_joint,j4_joint")
     parser.add_argument("--default-frame", default="world")
-    parser.add_argument("--move-action-name", default="/move_action")
+    parser.add_argument("--follow-joint-trajectory-action", default="/arm_controller/follow_joint_trajectory")
+    parser.add_argument("--joint-limits-file", required=True)
+    parser.add_argument("--trajectory-sampling-period", type=float, default=0.01)
     parser.add_argument("--joint-state-topic", default="/joint_states")
     parser.add_argument("--urdf-path", default="")
     parser.add_argument("--pos-threshold", type=float, default=0.003)
     parser.add_argument("--rot-threshold", type=float, default=0.03)
-    parser.add_argument("--planning-time", type=float, default=2.0)
-    parser.add_argument("--planning-attempts", type=int, default=5)
-    parser.add_argument("--vel-scale", type=float, default=0.5)
-    parser.add_argument("--acc-scale", type=float, default=0.5)
-    parser.add_argument("--joint-tolerance", type=float, default=0.02)
     parser.add_argument("--check-period", type=float, default=0.05)
-    parser.add_argument("--avoid-collisions", action="store_true")
-    parser.add_argument("--avoid-collisions-enabled", default="true")
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--status-log-period", type=float, default=1.0, help="state log period, <=0 to disable")
     parser.add_argument("--status-base-frame", default="world")
     parser.add_argument("--status-eef-frame", default="end_effector")
-    parser.add_argument(
-        "--world-boxes-json",
-        default="[]",
-        help='world collision boxes JSON list, e.g. [{"id":"keep_out","frame_id":"world","size":[0.2,0.2,0.2],"position":[0.3,0,0.3]}]',
-    )
-    parser.add_argument("--planning-scene-topic", default="/planning_scene")
-    parser.add_argument("--scene-publish-retries", type=int, default=5)
     return parser.parse_args()
 
 
@@ -795,33 +800,30 @@ def main() -> None:
         raise SystemExit("joint-names cannot be empty")
 
     rclpy.init()
-    node = TargetPoseMoveItExecutor(
-        target_topic=args.target_topic,
-        middleware_target_topic=args.middleware_target_topic,
-        middleware_result_topic=args.middleware_result_topic,
-        planning_group=args.planning_group,
-        joint_names=joints,
-        default_frame=args.default_frame,
-        move_action_name=args.move_action_name,
-        pos_threshold=args.pos_threshold,
-        rot_threshold=args.rot_threshold,
-        planning_time=args.planning_time,
-        planning_attempts=args.planning_attempts,
-        vel_scale=args.vel_scale,
-        acc_scale=args.acc_scale,
-        joint_tolerance=args.joint_tolerance,
-        check_period=args.check_period,
-        avoid_collisions=args.avoid_collisions or _parse_bool(args.avoid_collisions_enabled),
-        j4_axis=args.j4_axis,
-        joint_state_topic=args.joint_state_topic,
-        urdf_path=args.urdf_path,
-        status_log_period=args.status_log_period,
-        status_base_frame=args.status_base_frame,
-        status_eef_frame=args.status_eef_frame,
-        world_boxes_json=args.world_boxes_json,
-        planning_scene_topic=args.planning_scene_topic,
-        scene_publish_retries=args.scene_publish_retries,
-    )
+    try:
+        node = TargetPoseRuckigExecutor(
+            target_topic=args.target_topic,
+            middleware_target_topic=args.middleware_target_topic,
+            middleware_result_topic=args.middleware_result_topic,
+            joint_names=joints,
+            default_frame=args.default_frame,
+            follow_joint_trajectory_action=args.follow_joint_trajectory_action,
+            joint_limits_file=args.joint_limits_file,
+            trajectory_sampling_period=args.trajectory_sampling_period,
+            pos_threshold=args.pos_threshold,
+            rot_threshold=args.rot_threshold,
+            check_period=args.check_period,
+            j4_axis=args.j4_axis,
+            joint_state_topic=args.joint_state_topic,
+            urdf_path=args.urdf_path,
+            status_log_period=args.status_log_period,
+            status_base_frame=args.status_base_frame,
+            status_eef_frame=args.status_eef_frame,
+        )
+    except Exception as exc:
+        if rclpy.ok():
+            rclpy.shutdown()
+        raise SystemExit(str(exc)) from exc
 
     try:
         rclpy.spin(node)

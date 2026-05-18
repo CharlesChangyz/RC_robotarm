@@ -4,7 +4,7 @@ set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-WORKSPACE_DIR="${REPO_ROOT}/rc_moveit"
+WORKSPACE_DIR="${REPO_ROOT}/rc_arm_stack"
 
 if [[ ! -f "${WORKSPACE_DIR}/install/setup.bash" ]]; then
   echo "[run_rc_arm_mujoco_bridge] missing workspace setup: ${WORKSPACE_DIR}/install/setup.bash"

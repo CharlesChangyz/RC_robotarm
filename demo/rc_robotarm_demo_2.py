@@ -40,7 +40,7 @@ ARM_BASE_POS = [0.0, 1.8, 0.61]
 ARM_BASE_QUAT = [0.7071068, 0.0, 0.0, -0.7071068]
 HOME_QPOS = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float64)
 DEFAULT_HARDWARE_CONFIG = str(
-    Path(ROOT_DIR) / "rc_moveit" / "rc_arm_description" / "config" / "rc_arm_2" / "rc_arm_2_hardware.mujoco.yaml"
+    Path(ROOT_DIR) / "rc_arm_stack" / "rc_arm_description" / "config" / "rc_arm_2" / "rc_arm_2_hardware.mujoco.yaml"
 )
 
 

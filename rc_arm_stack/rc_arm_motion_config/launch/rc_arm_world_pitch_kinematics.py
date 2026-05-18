@@ -186,7 +186,7 @@ class RcArmWorldPitchKinematics:
             share_dir = Path(get_package_share_directory("rc_arm_description"))
             return share_dir / "urdf" / "rc_arm_2" / "rc_arm_2.urdf.xacro"
         except Exception:
-            return Path(__file__).resolve().parents[3] / "rc_moveit" / "rc_arm_description" / "urdf" / "rc_arm_2" / "rc_arm_2.urdf.xacro"
+            return Path(__file__).resolve().parents[3] / "rc_arm_stack" / "rc_arm_description" / "urdf" / "rc_arm_2" / "rc_arm_2.urdf.xacro"
 
     @property
     def urdf_path(self) -> Path:

@@ -12,14 +12,14 @@ controller_manager:
       type: joint_state_broadcaster/JointStateBroadcaster
 
     # 机械臂唯一正式执行控制器：
-    # MoveIt 通过 FollowJointTrajectory action 调它
+    # 上层执行链通过 FollowJointTrajectory action 调它
     arm_controller:
       type: rc_arm_controller/RcArmController
 
 arm_controller:
   ros__parameters:
     # 控制器管理的关节顺序；
-    # 必须与硬件接口和 MoveIt 使用的关节顺序一致
+    # 必须与硬件接口和上层执行器使用的关节顺序一致
     joints:
       - j1_joint
       - j2_joint

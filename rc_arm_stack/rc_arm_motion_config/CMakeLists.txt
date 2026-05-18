@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(rc_arm_moveit_config)
+project(rc_arm_motion_config)
 
 find_package(ament_cmake REQUIRED)
 
@@ -10,4 +10,3 @@ install(
 )
 
 ament_package()
-

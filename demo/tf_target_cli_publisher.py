@@ -45,8 +45,8 @@ from arm_msgs.msg import Arm2TargetPoint
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-RC_MOVEIT_DIR = ROOT_DIR / "rc_moveit"
-sys.path.insert(0, str(ROOT_DIR / "rc_moveit" / "rc_arm_moveit_config" / "launch"))
+RC_ARM_STACK_DIR = ROOT_DIR / "rc_arm_stack"
+sys.path.insert(0, str(ROOT_DIR / "rc_arm_stack" / "rc_arm_motion_config" / "launch"))
 
 from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E402
 
@@ -59,20 +59,18 @@ J4_WORLD_MAX_DEG = 120.0
 AUTO_CLEANUP_WAIT_SEC = 1.0
 PROJECT_ROS_CLEANUP_PATTERNS = (
     ("middleware", "arm2_middleware"),
-    ("executor", "target_pose_moveit_executor.py"),
+    ("executor", "target_pose_ruckig_executor.py"),
     ("tf bridge", "tf_target_pose_bridge.py"),
-    ("payload sync", "payload_scene_sync.py"),
-    ("move_group", "move_group"),
     ("robot_state_publisher", "robot_state_publisher"),
     ("static_transform_publisher", "static_transform_publisher"),
     ("ros2_control_node", "ros2_control_node"),
-    ("real launch", "ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py"),
+    ("real launch", "ros2 launch rc_arm_motion_config rc_arm_2_robot.launch.py"),
 )
 
 
 def middleware_command() -> List[str]:
     command = (
-        f"cd {shlex.quote(str(RC_MOVEIT_DIR))} && "
+        f"cd {shlex.quote(str(RC_ARM_STACK_DIR))} && "
         "source /opt/ros/humble/setup.bash && "
         "source install/setup.bash && "
         "ros2 run rc_arm2_middleware arm2_middleware"
@@ -1053,7 +1051,7 @@ class TargetPublisherWindow(QMainWindow):
         if not self._validate_motion_target("Last middleware command"):
             return
         duplicates = self._find_duplicate_nodes(
-            ["/arm2_middleware", "/rc_arm_target_pose_moveit_executor"]
+            ["/arm2_middleware", "/rc_arm_target_pose_executor"]
         )
         if duplicates is None:
             self._middleware_status_label.setText("blocked: unable to inspect ROS nodes")
@@ -1067,7 +1065,7 @@ class TargetPublisherWindow(QMainWindow):
             )
             return
         if not self._check_required_single_nodes(
-            ["/arm2_middleware", "/rc_arm_target_pose_moveit_executor"],
+            ["/arm2_middleware", "/rc_arm_target_pose_executor"],
             "ROS Nodes Not Ready",
             blocked_status=self._middleware_status_label,
         ):
@@ -1218,10 +1216,8 @@ class TargetPublisherWindow(QMainWindow):
             return
         if not self._auto_cleanup_ros_duplicates(
             [
-                "/move_group",
-                "/rc_arm_target_pose_moveit_executor",
+                "/rc_arm_target_pose_executor",
                 "/rc_arm_tf_target_pose_bridge",
-                "/rc_arm_payload_scene_sync",
                 "/robot_state_publisher",
             ],
             "Duplicate ROS Nodes",
