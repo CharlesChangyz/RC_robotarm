@@ -404,27 +404,56 @@ RcArmController::TrajectoryPoint RcArmController::sample_trajectory(
     }
 
     const double dt = stop.time_from_start - start.time_from_start;
-    const double alpha = dt > 1e-9 ? (elapsed_sec - start.time_from_start) / dt : 1.0;
+    if (dt <= 1e-9) {
+      return stop;
+    }
+
+    const double sample_time = elapsed_sec - start.time_from_start;
+    const double alpha = sample_time / dt;
 
     TrajectoryPoint sampled;
     sampled.time_from_start = elapsed_sec;
     sampled.position.resize(joint_names_.size(), 0.0);
-    sampled.velocity.resize(joint_names_.size(), std::numeric_limits<double>::quiet_NaN());
-    sampled.acceleration.resize(joint_names_.size(), std::numeric_limits<double>::quiet_NaN());
+    sampled.velocity.resize(joint_names_.size(), 0.0);
+    sampled.acceleration.resize(joint_names_.size(), 0.0);
     sampled.effort.resize(joint_names_.size(), 0.0);
 
     for (size_t joint_index = 0; joint_index < joint_names_.size(); ++joint_index) {
-      sampled.position[joint_index] =
-        start.position[joint_index] + alpha * (stop.position[joint_index] - start.position[joint_index]);
-      if (std::isfinite(start.velocity[joint_index]) && std::isfinite(stop.velocity[joint_index])) {
-        sampled.velocity[joint_index] =
-          start.velocity[joint_index] + alpha * (stop.velocity[joint_index] - start.velocity[joint_index]);
+      const bool has_velocity =
+        std::isfinite(start.velocity[joint_index]) && std::isfinite(stop.velocity[joint_index]);
+      const bool has_acceleration =
+        std::isfinite(start.acceleration[joint_index]) && std::isfinite(stop.acceleration[joint_index]);
+
+      SegmentSample segment_sample;
+      if (has_velocity && has_acceleration) {
+        segment_sample = sample_quintic_segment(
+          start.position[joint_index],
+          start.velocity[joint_index],
+          start.acceleration[joint_index],
+          stop.position[joint_index],
+          stop.velocity[joint_index],
+          stop.acceleration[joint_index],
+          dt,
+          sample_time);
+      } else if (has_velocity) {
+        segment_sample = sample_cubic_segment(
+          start.position[joint_index],
+          start.velocity[joint_index],
+          stop.position[joint_index],
+          stop.velocity[joint_index],
+          dt,
+          sample_time);
+      } else {
+        segment_sample = sample_linear_segment(
+          start.position[joint_index],
+          stop.position[joint_index],
+          dt,
+          sample_time);
       }
-      if (std::isfinite(start.acceleration[joint_index]) && std::isfinite(stop.acceleration[joint_index])) {
-        sampled.acceleration[joint_index] =
-          start.acceleration[joint_index] +
-          alpha * (stop.acceleration[joint_index] - start.acceleration[joint_index]);
-      }
+
+      sampled.position[joint_index] = segment_sample.position;
+      sampled.velocity[joint_index] = segment_sample.velocity;
+      sampled.acceleration[joint_index] = segment_sample.acceleration;
       sampled.effort[joint_index] =
         start.effort[joint_index] + alpha * (stop.effort[joint_index] - start.effort[joint_index]);
     }
@@ -433,6 +462,92 @@ RcArmController::TrajectoryPoint RcArmController::sample_trajectory(
 
   finished = true;
   return last_point;
+}
+
+RcArmController::SegmentSample RcArmController::sample_linear_segment(
+  double start_position,
+  double stop_position,
+  double dt,
+  double sample_time) const
+{
+  const double alpha = sample_time / dt;
+  const double velocity = (stop_position - start_position) / dt;
+
+  SegmentSample sample;
+  sample.position = start_position + alpha * (stop_position - start_position);
+  sample.velocity = velocity;
+  sample.acceleration = 0.0;
+  return sample;
+}
+
+RcArmController::SegmentSample RcArmController::sample_cubic_segment(
+  double start_position,
+  double start_velocity,
+  double stop_position,
+  double stop_velocity,
+  double dt,
+  double sample_time) const
+{
+  const double x = sample_time / dt;
+  const double x2 = x * x;
+  const double x3 = x2 * x;
+  const double scaled_start_velocity = dt * start_velocity;
+  const double scaled_stop_velocity = dt * stop_velocity;
+  const double delta_position = stop_position - start_position - scaled_start_velocity;
+  const double delta_velocity = scaled_stop_velocity - scaled_start_velocity;
+
+  const double b0 = start_position;
+  const double b1 = scaled_start_velocity;
+  const double b2 = 3.0 * delta_position - delta_velocity;
+  const double b3 = delta_velocity - 2.0 * delta_position;
+
+  SegmentSample sample;
+  sample.position = b0 + b1 * x + b2 * x2 + b3 * x3;
+  sample.velocity = (b1 + 2.0 * b2 * x + 3.0 * b3 * x2) / dt;
+  sample.acceleration = (2.0 * b2 + 6.0 * b3 * x) / (dt * dt);
+  return sample;
+}
+
+RcArmController::SegmentSample RcArmController::sample_quintic_segment(
+  double start_position,
+  double start_velocity,
+  double start_acceleration,
+  double stop_position,
+  double stop_velocity,
+  double stop_acceleration,
+  double dt,
+  double sample_time) const
+{
+  const double x = sample_time / dt;
+  const double x2 = x * x;
+  const double x3 = x2 * x;
+  const double x4 = x3 * x;
+  const double x5 = x4 * x;
+
+  const double dt2 = dt * dt;
+  const double scaled_start_velocity = dt * start_velocity;
+  const double scaled_stop_velocity = dt * stop_velocity;
+  const double scaled_start_acceleration = dt2 * start_acceleration;
+  const double scaled_stop_acceleration = dt2 * stop_acceleration;
+
+  const double b0 = start_position;
+  const double b1 = scaled_start_velocity;
+  const double b2 = 0.5 * scaled_start_acceleration;
+
+  const double delta_position = stop_position - (b0 + b1 + b2);
+  const double delta_velocity = scaled_stop_velocity - (b1 + 2.0 * b2);
+  const double delta_acceleration = scaled_stop_acceleration - 2.0 * b2;
+
+  const double b3 = 10.0 * delta_position - 4.0 * delta_velocity + 0.5 * delta_acceleration;
+  const double b4 = -15.0 * delta_position + 7.0 * delta_velocity - delta_acceleration;
+  const double b5 = 6.0 * delta_position - 3.0 * delta_velocity + 0.5 * delta_acceleration;
+
+  SegmentSample sample;
+  sample.position = b0 + b1 * x + b2 * x2 + b3 * x3 + b4 * x4 + b5 * x5;
+  sample.velocity = (b1 + 2.0 * b2 * x + 3.0 * b3 * x2 + 4.0 * b4 * x3 + 5.0 * b5 * x4) / dt;
+  sample.acceleration =
+    (2.0 * b2 + 6.0 * b3 * x + 12.0 * b4 * x2 + 20.0 * b5 * x3) / dt2;
+  return sample;
 }
 
 std::vector<size_t> RcArmController::build_joint_permutation(

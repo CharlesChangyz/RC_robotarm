@@ -45,6 +45,13 @@ private:
     std::vector<double> effort;
   };
 
+  struct SegmentSample
+  {
+    double position{0.0};
+    double velocity{0.0};
+    double acceleration{0.0};
+  };
+
   struct ActiveTrajectory
   {
     std::vector<TrajectoryPoint> points;
@@ -69,6 +76,27 @@ private:
     const std::vector<TrajectoryPoint> & points,
     double elapsed_sec,
     bool & finished) const;
+  SegmentSample sample_linear_segment(
+    double start_position,
+    double stop_position,
+    double dt,
+    double sample_time) const;
+  SegmentSample sample_cubic_segment(
+    double start_position,
+    double start_velocity,
+    double stop_position,
+    double stop_velocity,
+    double dt,
+    double sample_time) const;
+  SegmentSample sample_quintic_segment(
+    double start_position,
+    double start_velocity,
+    double start_acceleration,
+    double stop_position,
+    double stop_velocity,
+    double stop_acceleration,
+    double dt,
+    double sample_time) const;
   std::vector<size_t> build_joint_permutation(
     const std::vector<std::string> & incoming_joint_names,
     std::string & error) const;
