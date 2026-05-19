@@ -3,18 +3,16 @@
 <package format="3">
   <name>rc_arm_controller</name>
   <version>1.0.0</version>
-  <description>FollowJointTrajectory-compatible controller for the rc_arm ros2_control chain.</description>
+  <description>Streaming joint reference controller for the rc_arm ros2_control chain.</description>
   <maintainer email="user@example.com">User</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>controller_interface</depend>
-  <depend>control_msgs</depend>
   <depend>hardware_interface</depend>
   <depend>pluginlib</depend>
   <depend>rclcpp</depend>
-  <depend>rclcpp_action</depend>
   <depend>rclcpp_lifecycle</depend>
   <depend>trajectory_msgs</depend>
 

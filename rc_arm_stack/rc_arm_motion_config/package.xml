@@ -10,11 +10,9 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <exec_depend>arm_msgs</exec_depend>
-  <exec_depend>control_msgs</exec_depend>
   <exec_depend>controller_manager</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>joint_state_broadcaster</exec_depend>
-  <exec_depend>joint_trajectory_controller</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>rc_arm_description</exec_depend>

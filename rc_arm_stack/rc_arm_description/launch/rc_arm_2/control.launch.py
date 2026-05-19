@@ -20,6 +20,9 @@ def generate_launch_description():
     default_controllers_file = PathJoinSubstitution(
         [FindPackageShare("rc_arm_description"), "config", "rc_arm_2", "rc_arm_2_controllers.yaml"]
     )
+    default_rviz_config = PathJoinSubstitution(
+        [FindPackageShare("rc_arm_description"), "config", "rc_arm_2", "rc_arm_2.rviz"]
+    )
 
     declared_arguments = [
         DeclareLaunchArgument(
@@ -42,12 +45,24 @@ def generate_launch_description():
             default_value="true",
             description="Start RViz2",
         ),
+        DeclareLaunchArgument(
+            "rviz_fixed_frame",
+            default_value="world",
+            description="Default RViz fixed frame",
+        ),
+        DeclareLaunchArgument(
+            "rviz_config_file",
+            default_value=default_rviz_config,
+            description="RViz config file",
+        ),
     ]
 
     use_mock_hardware = LaunchConfiguration("use_mock_hardware")
     hardware_config_file = LaunchConfiguration("hardware_config_file")
     controllers_file = LaunchConfiguration("controllers_file")
     use_rviz = LaunchConfiguration("use_rviz")
+    rviz_fixed_frame = LaunchConfiguration("rviz_fixed_frame")
+    rviz_config_file = LaunchConfiguration("rviz_config_file")
 
     robot_description_content = Command(
         [
@@ -85,6 +100,7 @@ def generate_launch_description():
         package="rviz2",
         executable="rviz2",
         name="rviz2",
+        arguments=["-d", rviz_config_file, "-f", rviz_fixed_frame],
         output="log",
         condition=IfCondition(use_rviz),
     )

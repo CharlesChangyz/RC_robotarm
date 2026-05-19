@@ -7,11 +7,9 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(controller_interface REQUIRED)
-find_package(control_msgs REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 
@@ -26,11 +24,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 ament_target_dependencies(${PROJECT_NAME}
   controller_interface
-  control_msgs
   hardware_interface
   pluginlib
   rclcpp
-  rclcpp_action
   rclcpp_lifecycle
   trajectory_msgs
 )

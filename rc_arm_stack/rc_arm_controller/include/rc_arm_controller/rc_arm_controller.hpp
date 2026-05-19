@@ -6,9 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "control_msgs/action/follow_joint_trajectory.hpp"
 #include "controller_interface/controller_interface.hpp"
-#include "rclcpp_action/rclcpp_action.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
 
 namespace rc_arm_controller
@@ -33,9 +31,6 @@ public:
     const rclcpp::Duration & period) override;
 
 private:
-  using FollowJointTrajectory = control_msgs::action::FollowJointTrajectory;
-  using GoalHandle = rclcpp_action::ServerGoalHandle<FollowJointTrajectory>;
-
   struct TrajectoryPoint
   {
     double time_from_start{0.0};
@@ -45,61 +40,26 @@ private:
     std::vector<double> effort;
   };
 
-  struct ActiveTrajectory
-  {
-    std::vector<TrajectoryPoint> points;
-    rclcpp::Time start_time;
-    std::shared_ptr<GoalHandle> goal_handle;
-    bool from_topic{false};
-  };
-
-  rclcpp_action::GoalResponse handle_goal(
-    const rclcpp_action::GoalUUID & uuid,
-    std::shared_ptr<const FollowJointTrajectory::Goal> goal);
-  rclcpp_action::CancelResponse handle_cancel(
-    const std::shared_ptr<GoalHandle> goal_handle);
-  void handle_accepted(const std::shared_ptr<GoalHandle> goal_handle);
   void topic_trajectory_callback(const trajectory_msgs::msg::JointTrajectory::SharedPtr msg);
 
-  bool normalize_trajectory(
+  bool normalize_reference_point(
     const trajectory_msgs::msg::JointTrajectory & msg,
-    std::vector<TrajectoryPoint> & normalized_points,
+    TrajectoryPoint & normalized_point,
     std::string & error) const;
-  TrajectoryPoint sample_trajectory(
-    const std::vector<TrajectoryPoint> & points,
-    double elapsed_sec,
-    bool & finished) const;
   std::vector<size_t> build_joint_permutation(
     const std::vector<std::string> & incoming_joint_names,
     std::string & error) const;
   void set_hold_command_from_current_state();
   void set_command_from_point(const TrajectoryPoint & point);
-  void publish_feedback(
-    const rclcpp::Time & time,
-    const TrajectoryPoint & desired,
-    const std::shared_ptr<GoalHandle> & goal_handle);
-  bool goal_reached(
-    const TrajectoryPoint & desired,
-    std::string & detail) const;
-  void finish_goal(
-    const std::shared_ptr<GoalHandle> & goal_handle,
-    int32_t error_code,
-    const std::string & error_string,
-    bool canceled = false);
 
   std::vector<std::string> joint_names_;
-  bool allow_topic_commands_{true};
-  double feedback_publish_rate_{20.0};
-  double stopped_velocity_tolerance_{0.0};
-  double goal_time_tolerance_{0.0};
-  std::vector<double> goal_position_tolerances_;
-
-  std::shared_ptr<rclcpp_action::Server<FollowJointTrajectory>> action_server_;
+  double reference_timeout_{0.1};
   rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr topic_subscription_;
 
-  mutable std::mutex trajectory_mutex_;
-  std::shared_ptr<ActiveTrajectory> active_trajectory_;
-  rclcpp::Time last_feedback_time_{0, 0, RCL_ROS_TIME};
+  mutable std::mutex reference_mutex_;
+  TrajectoryPoint active_reference_;
+  bool has_active_reference_{false};
+  rclcpp::Time last_reference_time_{0, 0, RCL_ROS_TIME};
 };
 
 }  // namespace rc_arm_controller

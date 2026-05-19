@@ -4,7 +4,7 @@
     type="rc_arm_controller::RcArmController"
     base_class_type="controller_interface::ControllerInterface">
     <description>
-      FollowJointTrajectory-compatible position/velocity/effort controller for rc_arm.
+      Streaming position/velocity/acceleration/effort controller for rc_arm.
     </description>
   </class>
 </library>

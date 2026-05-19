@@ -12,7 +12,7 @@ controller_manager:
       type: joint_state_broadcaster/JointStateBroadcaster
 
     # 机械臂唯一正式执行控制器：
-    # 上层执行链通过 FollowJointTrajectory action 调它
+    # 上层执行链通过 ~/joint_trajectory 流式下发单点参考
     arm_controller:
       type: rc_arm_controller/RcArmController
 
@@ -26,32 +26,5 @@ arm_controller:
       - j3_joint
       - j4_joint
 
-    # 是否允许通过 ~/joint_trajectory 话题直接下发轨迹
-    # 正式主链建议保持 false，只走 FollowJointTrajectory
-    allow_topic_commands: false
-
-    # FollowJointTrajectory feedback 发布频率，单位 Hz
-    feedback_publish_rate: 20.0
-
-    constraints:
-      # 判断“机械臂已停止”的速度容差，单位 rad/s
-      stopped_velocity_tolerance: 0.25
-
-      # 允许目标完成的额外时间裕量，单位秒
-      goal_time: 1.0
-
-      # j1 到目标点的允许误差，单位 rad
-      j1_joint:
-        goal: 0.1
-
-      # j2 到目标点的允许误差，单位 rad
-      j2_joint:
-        goal: 0.1
-
-      # j3 到目标点的允许误差，单位 rad
-      j3_joint:
-        goal: 0.1
-
-      # j4 到目标点的允许误差，单位 rad
-      j4_joint:
-        goal: 0.5
+    # 流式参考在该时间内未刷新则自动进入 hold，单位秒
+    reference_timeout: 0.1

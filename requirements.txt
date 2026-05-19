@@ -9,3 +9,4 @@ empy==3.3.4
 PySide6
 PyYAML
 empy<4
+ruckig

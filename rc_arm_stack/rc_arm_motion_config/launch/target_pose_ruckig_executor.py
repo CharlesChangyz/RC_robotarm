@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Subscribe manual and middleware targets and execute IK + Ruckig trajectories."""
+"""Subscribe visual targets and stream IK + Ruckig joint references."""
 
 from __future__ import annotations
 
@@ -11,10 +11,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPoint
 from builtin_interfaces.msg import Duration
-from control_msgs.action import FollowJointTrajectory
 from geometry_msgs.msg import PoseStamped
 import rclpy
-from rclpy.action import ActionClient
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 import tf2_ros
@@ -42,10 +40,6 @@ EXECUTION_ERROR_JOINT_STATE_UNAVAILABLE = -4
 EXECUTION_ERROR_LIMITS_LOAD_FAILED = -5
 EXECUTION_ERROR_TARGET_OUT_OF_LIMITS = -6
 EXECUTION_ERROR_TRAJECTORY_GENERATION_FAILED = -7
-EXECUTION_ERROR_GOAL_SEND_EXCEPTION = -8
-EXECUTION_ERROR_GOAL_REJECTED = -9
-EXECUTION_ERROR_RESULT_EXCEPTION = -10
-EXECUTION_ERROR_RESULT_FAILED = -11
 
 
 def _normalize_frame_id(frame_id: str) -> str:
@@ -99,6 +93,12 @@ def _duration_from_seconds(seconds: float) -> Duration:
     return msg
 
 
+def _stamp_to_sec(stamp) -> float:
+    if stamp is None:
+        return 0.0
+    return float(getattr(stamp, "sec", 0)) + float(getattr(stamp, "nanosec", 0)) * 1.0e-9
+
+
 @dataclass
 class ExecutionRequest:
     source: str
@@ -123,7 +123,7 @@ class TargetPoseRuckigExecutor(Node):
         middleware_result_topic: str,
         joint_names: List[str],
         default_frame: str,
-        follow_joint_trajectory_action: str,
+        trajectory_topic: str,
         joint_limits_file: str,
         trajectory_sampling_period: float,
         pos_threshold: float,
@@ -146,10 +146,12 @@ class TargetPoseRuckigExecutor(Node):
         self._middleware_result_topic = middleware_result_topic
         self._joint_names = list(joint_names)
         self._default_frame = _normalize_frame_id(default_frame)
-        self._follow_joint_trajectory_action = follow_joint_trajectory_action
+        self._trajectory_topic = trajectory_topic
         self._trajectory_sampling_period = max(0.001, float(trajectory_sampling_period))
+        self._stream_period = max(0.001, float(check_period))
         self._pos_threshold = max(0.0, float(pos_threshold))
         self._rot_threshold = max(0.0, float(rot_threshold))
+        self._success_velocity_tolerance = 0.25
         self._j4_axis = str(j4_axis).strip().lower() if str(j4_axis).strip() else "x"
         if self._j4_axis not in {"x", "y", "z"}:
             self._j4_axis = "x"
@@ -159,29 +161,49 @@ class TargetPoseRuckigExecutor(Node):
 
         self._manual_target_lock = threading.Lock()
         self._latest_manual_target: Optional[PoseStamped] = None
-        self._last_sent_manual_target: Optional[PoseStamped] = None
+        self._latest_manual_target_time_sec = 0.0
+        self._active_manual_target: Optional[PoseStamped] = None
 
-        self._busy = False
-        self._active_request: Optional[ExecutionRequest] = None
-        self._ready_controller_action = False
         self._ready_solver = False
-        self._last_ready_tuple = None
+        self._last_ready = None
         self._joint_state_map: Dict[str, Tuple[float, float]] = {}
+        self._joint_state_time_sec = 0.0
+        self._joint_state_accelerations: Dict[str, float] = {}
         self._next_execution_id = 0
         self._last_event = "init"
         self._last_event_time_sec = self._now_sec()
+        self._active_request: Optional[ExecutionRequest] = None
+        self._last_manual_failure_detail = ""
+        self._last_manual_failure_time_sec = 0.0
+        self._last_feedback_velocities: Optional[List[float]] = None
+        self._last_feedback_time_sec = 0.0
+        self._have_feedback_accel_estimate = False
+        self._last_tracking_error_joint: Optional[str] = None
+        self._last_tracking_error_value = 0.0
+        self._last_tracking_error_log_time_sec = 0.0
 
         self._joint_limits = self._load_joint_limits(joint_limits_file, self._joint_names)
-
         self._kinematics = RcArmWorldPitchKinematics(
             urdf_path=urdf_path or None,
             joint_names=self._joint_names,
             j4_axis=self._j4_axis,
         )
-        self._trajectory_client = ActionClient(
-            self,
-            FollowJointTrajectory,
-            follow_joint_trajectory_action,
+        self._otg = Ruckig(len(self._joint_names), self._trajectory_sampling_period)
+        self._otg_input = InputParameter(len(self._joint_names))
+        self._otg_output = OutputParameter(len(self._joint_names))
+        self._otg_has_state = False
+        self._otg_target_positions: Optional[List[float]] = None
+        self._otg_last_sync_reason = "init"
+        self._otg_plan_feedback_position_reset = 2.5
+        self._otg_plan_feedback_velocity_reset = max(
+            2.0,
+            min(self._joint_limits[name].max_velocity for name in self._joint_names),
+        )
+
+        self._trajectory_pub = self.create_publisher(
+            JointTrajectory,
+            trajectory_topic,
+            20,
         )
         self._middleware_result_pub = self.create_publisher(
             Arm2MotionExecution,
@@ -195,18 +217,18 @@ class TargetPoseRuckigExecutor(Node):
         self.create_subscription(PoseStamped, target_topic, self._on_manual_target, 20)
         self.create_subscription(Arm2TargetPoint, middleware_target_topic, self._on_middleware_target, 20)
         self.create_subscription(JointState, joint_state_topic, self._on_joint_state, 20)
-        self._timer = self.create_timer(max(0.02, float(check_period)), self._on_timer)
+        self._timer = self.create_timer(self._stream_period, self._on_timer)
         if self._status_log_period > 0.0:
             self._status_timer = self.create_timer(self._status_log_period, self._log_status)
 
         self.get_logger().info(
-            "TargetPose executor started: manual_topic=%s middleware_target=%s middleware_result=%s "
-            "trajectory_action=%s joint_limits=%s status_tf=%s->%s"
+            "TargetPose streaming executor started: manual_topic=%s middleware_target=%s "
+            "middleware_result=%s trajectory_topic=%s joint_limits=%s status_tf=%s->%s"
             % (
                 self._manual_target_topic,
                 self._middleware_target_topic,
                 self._middleware_result_topic,
-                self._follow_joint_trajectory_action,
+                self._trajectory_topic,
                 joint_limits_file,
                 self._status_base_frame,
                 self._status_eef_frame,
@@ -257,19 +279,56 @@ class TargetPoseRuckigExecutor(Node):
                 velocity = float(msg.velocity[idx])
             mapping[name] = (float(msg.position[idx]), velocity)
         self._joint_state_map = mapping
+        sample_time_sec = _stamp_to_sec(msg.header.stamp)
+        if sample_time_sec <= 0.0:
+            sample_time_sec = self._now_sec()
+        self._joint_state_time_sec = sample_time_sec
 
-    def _ordered_joint_state(self) -> Optional[Tuple[List[float], List[float]]]:
+        ordered_velocities: List[float] = []
+        for joint_name in self._joint_names:
+            if joint_name not in mapping:
+                self._joint_state_accelerations = {}
+                return
+            _, velocity = mapping[joint_name]
+            ordered_velocities.append(velocity)
+
+        max_feedback_dt = max(5.0 * self._stream_period, 0.1)
+        accelerations: List[float] = [0.0] * len(self._joint_names)
+        dt = sample_time_sec - self._last_feedback_time_sec
+        if (
+            self._last_feedback_velocities is not None
+            and len(self._last_feedback_velocities) == len(self._joint_names)
+            and dt > 1.0e-6
+            and dt <= max_feedback_dt
+        ):
+            for index, joint_name in enumerate(self._joint_names):
+                raw_acceleration = (ordered_velocities[index] - self._last_feedback_velocities[index]) / dt
+                limit = self._joint_limits[joint_name].max_acceleration
+                accelerations[index] = max(-limit, min(limit, raw_acceleration))
+            self._have_feedback_accel_estimate = True
+        else:
+            self._have_feedback_accel_estimate = False
+
+        self._joint_state_accelerations = {
+            joint_name: accelerations[index] for index, joint_name in enumerate(self._joint_names)
+        }
+        self._last_feedback_velocities = list(ordered_velocities)
+        self._last_feedback_time_sec = sample_time_sec
+
+    def _ordered_joint_state(self) -> Optional[Tuple[List[float], List[float], List[float], float]]:
         if not self._joint_state_map:
             return None
         positions: List[float] = []
         velocities: List[float] = []
+        accelerations: List[float] = []
         for joint_name in self._joint_names:
             if joint_name not in self._joint_state_map:
                 return None
             position, velocity = self._joint_state_map[joint_name]
             positions.append(position)
             velocities.append(velocity)
-        return positions, velocities
+            accelerations.append(float(self._joint_state_accelerations.get(joint_name, 0.0)))
+        return positions, velocities, accelerations, self._joint_state_time_sec
 
     def _now_sec(self) -> float:
         return self.get_clock().now().nanoseconds * 1.0e-9
@@ -292,17 +351,12 @@ class TargetPoseRuckigExecutor(Node):
         except Exception:
             return None
 
-    def _get_current_eef_xyz(self) -> Optional[Tuple[float, float, float]]:
-        pose = self._get_current_eef_pose()
-        if pose is None:
-            return None
-        return pose[0]
-
     def _format_eef(self) -> str:
-        eef = self._get_current_eef_xyz()
+        eef = self._get_current_eef_pose()
         if eef is None:
             return "eef_xyz=(NA, NA, NA)"
-        return "eef_xyz=(%.3f, %.3f, %.3f)" % eef
+        xyz = eef[0]
+        return "eef_xyz=(%.3f, %.3f, %.3f)" % xyz
 
     def _format_target(self, target: PoseStamped) -> str:
         pos = target.pose.position
@@ -311,7 +365,6 @@ class TargetPoseRuckigExecutor(Node):
     def _event(self, name: str, target: Optional[PoseStamped] = None, extra: str = "") -> None:
         self._last_event = name
         self._last_event_time_sec = self._now_sec()
-
         suffix = (" " + extra.strip()) if extra.strip() else ""
         if target is None:
             self.get_logger().info("[EVENT] %s %s%s" % (name, self._format_eef(), suffix))
@@ -321,51 +374,43 @@ class TargetPoseRuckigExecutor(Node):
                 % (name, self._format_target(target), self._format_eef(), suffix)
             )
 
-    def _set_busy(self, new_state: bool, reason: str) -> None:
-        if self._busy != new_state:
-            self._busy = new_state
-            self.get_logger().info(
-                "[STATE] busy=%d reason=%s %s"
-                % (1 if new_state else 0, reason, self._format_eef())
-            )
-        else:
-            self._busy = new_state
-
     def _update_ready(self) -> None:
-        controller_ready = self._trajectory_client.server_is_ready()
         solver_ready = self._kinematics is not None
-
-        self._ready_controller_action = controller_ready
         self._ready_solver = solver_ready
-
-        ready_tuple = (controller_ready, solver_ready)
-        if ready_tuple != self._last_ready_tuple:
+        if solver_ready != self._last_ready:
             self.get_logger().info(
-                "[STATE] ready trajectory_action=%d solver=%d %s"
-                % (1 if controller_ready else 0, 1 if solver_ready else 0, self._format_eef())
+                "[STATE] ready solver=%d %s"
+                % (1 if solver_ready else 0, self._format_eef())
             )
-            self._last_ready_tuple = ready_tuple
+            self._last_ready = solver_ready
 
     def _executor_ready(self) -> bool:
         self._update_ready()
-        return self._ready_controller_action and self._ready_solver
+        return self._ready_solver
 
     def _log_status(self) -> None:
         event_age = max(0.0, self._now_sec() - self._last_event_time_sec)
         with self._manual_target_lock:
             has_manual_target = self._latest_manual_target is not None
-        active_source = self._active_request.source if self._active_request is not None else "idle"
+        active_source = self._active_request.source if self._active_request is not None else "manual"
+        tracking_suffix = ""
+        if self._last_tracking_error_joint is not None:
+            tracking_suffix = " qerr_max=%s:%.3f" % (
+                self._last_tracking_error_joint,
+                self._last_tracking_error_value,
+            )
+        otg_suffix = " otg=%s" % ("plan" if self._otg_has_state else "feedback")
         self.get_logger().info(
-            "[STATE] busy=%d ready(trajectory_action=%d,solver=%d) manual_target=%d active=%s event=%s(%.2fs) %s"
+            "[STATE] ready(solver=%d) manual_target=%d active=%s event=%s(%.2fs) %s%s%s"
             % (
-                1 if self._busy else 0,
-                1 if self._ready_controller_action else 0,
                 1 if self._ready_solver else 0,
                 1 if has_manual_target else 0,
                 active_source,
                 self._last_event,
                 event_age,
                 self._format_eef(),
+                tracking_suffix,
+                otg_suffix,
             )
         )
 
@@ -410,19 +455,22 @@ class TargetPoseRuckigExecutor(Node):
         pose_msg = self._resolve_target_pose(msg)
         with self._manual_target_lock:
             self._latest_manual_target = pose_msg
+            self._latest_manual_target_time_sec = self._now_sec()
         self._event("manual_target_rx", pose_msg)
+        self._last_manual_failure_detail = ""
+        self._last_manual_failure_time_sec = 0.0
 
     def _on_middleware_target(self, msg: Arm2TargetPoint) -> None:
         pose_msg = self._motion_target_to_pose(msg)
         execution_id = self._allocate_execution_id()
         self._event("middleware_target_rx", pose_msg, extra="execution_id=%d" % execution_id)
 
-        if self._busy:
+        if self._active_request is not None:
             self._publish_motion_execution(
                 execution_id,
                 Arm2MotionExecution.STATUS_FAILED,
                 EXECUTION_ERROR_BUSY,
-                "executor busy",
+                "middleware target already active",
             )
             return
 
@@ -435,13 +483,18 @@ class TargetPoseRuckigExecutor(Node):
             )
             return
 
-        self._start_execution(
-            ExecutionRequest(
-                source="middleware",
-                target=pose_msg,
-                execution_id=execution_id,
-            )
+        self._active_request = ExecutionRequest(
+            source="middleware",
+            target=pose_msg,
+            execution_id=execution_id,
         )
+        self._publish_motion_execution(
+            execution_id,
+            Arm2MotionExecution.STATUS_ACCEPTED,
+            0,
+            "accepted",
+        )
+        self._event("middleware_track_start", pose_msg, extra="execution_id=%d" % execution_id)
 
     def _target_changed(self, prev: PoseStamped, cur: PoseStamped) -> bool:
         if _normalize_frame_id(prev.header.frame_id) != _normalize_frame_id(cur.header.frame_id):
@@ -462,113 +515,42 @@ class TargetPoseRuckigExecutor(Node):
         )
         return pos_delta > self._pos_threshold or rot_delta > self._rot_threshold
 
-    def _on_timer(self) -> None:
-        if self._busy or not self._executor_ready():
-            return
-
+    def _select_manual_target(self) -> Optional[PoseStamped]:
         with self._manual_target_lock:
-            target = _copy_pose_stamped(self._latest_manual_target) if self._latest_manual_target is not None else None
+            if self._latest_manual_target is None:
+                self._active_manual_target = None
+                return None
+            if (
+                self._active_manual_target is None
+                or self._target_changed(self._active_manual_target, self._latest_manual_target)
+            ):
+                self._active_manual_target = _copy_pose_stamped(self._latest_manual_target)
+            return _copy_pose_stamped(self._active_manual_target)
 
-        if target is None:
+    def _log_manual_target_failure(self, detail: str) -> None:
+        detail = str(detail or "target solve failed")
+        now_sec = self._now_sec()
+        if (
+            detail == self._last_manual_failure_detail
+            and (now_sec - self._last_manual_failure_time_sec) < 1.0
+        ):
             return
-        if self._last_sent_manual_target is not None and not self._target_changed(self._last_sent_manual_target, target):
-            return
+        self._last_manual_failure_detail = detail
+        self._last_manual_failure_time_sec = now_sec
+        self.get_logger().warn("manual target ignored: %s" % detail)
 
-        self._start_execution(
-            ExecutionRequest(
-                source="manual",
-                target=target,
-            )
-        )
+    def _get_tracking_target(self) -> Optional[ExecutionRequest]:
+        if self._active_request is not None:
+            return self._active_request
 
-    def _start_execution(self, request: ExecutionRequest) -> None:
-        if self._busy:
-            return
-        request.target = self._resolve_target_pose(request.target)
-        if request.source == "manual":
-            self._last_sent_manual_target = _copy_pose_stamped(request.target)
-        self._active_request = request
-        self._set_busy(True, "execute_%s" % request.source)
-        extra = "source=%s" % request.source
-        if request.execution_id is not None:
-            extra += " execution_id=%d" % request.execution_id
-        self._event("solve_request", request.target, extra=extra)
-        self._solve_target(request)
-
-    def _solve_target(self, request: ExecutionRequest) -> None:
-        pose = request.target
-        q = pose.pose.orientation
-        pitch_rad = self._kinematics.world_pitch_from_quaternion(
-            (float(q.x), float(q.y), float(q.z), float(q.w))
-        )
-        seed = self._seed_joint_map()
-        q_target = self._kinematics.solve_xyz_pitch(
-            float(pose.pose.position.x),
-            float(pose.pose.position.y),
-            float(pose.pose.position.z),
-            pitch_rad,
-            seed_joints=seed,
-        )
-        if q_target is None:
-            self._event("solve_fail", pose, extra="source=%s" % request.source)
-            self._complete_execution(
-                request,
-                success=False,
-                error_code=EXECUTION_ERROR_IK_FAILED,
-                detail="ik solve failed",
-                reason="solve_fail",
-            )
-            return
-
-        ordered_joint_state = self._ordered_joint_state()
-        if ordered_joint_state is None:
-            self._complete_execution(
-                request,
-                success=False,
-                error_code=EXECUTION_ERROR_JOINT_STATE_UNAVAILABLE,
-                detail="joint state unavailable",
-                reason="joint_state_unavailable",
-            )
-            return
-
-        current_positions, current_velocities = ordered_joint_state
-        target_positions = [float(q_target[joint_name]) for joint_name in self._joint_names]
-        out_of_limits = self._first_joint_out_of_limits(target_positions)
-        if out_of_limits is not None:
-            self._complete_execution(
-                request,
-                success=False,
-                error_code=EXECUTION_ERROR_TARGET_OUT_OF_LIMITS,
-                detail=out_of_limits,
-                reason="target_out_of_limits",
-            )
-            return
-
-        self._event("solve_ok", pose, extra="source=%s pitch=%.3f" % (request.source, pitch_rad))
-        trajectory = self._build_trajectory(
-            current_positions=current_positions,
-            current_velocities=current_velocities,
-            target_positions=target_positions,
-        )
-        if trajectory is None:
-            self._complete_execution(
-                request,
-                success=False,
-                error_code=EXECUTION_ERROR_TRAJECTORY_GENERATION_FAILED,
-                detail="ruckig trajectory generation failed",
-                reason="trajectory_generation_failed",
-            )
-            return
-
-        self._send_trajectory_goal(request, trajectory)
-
-    def _seed_joint_map(self) -> Optional[Dict[str, float]]:
-        ordered_joint_state = self._ordered_joint_state()
-        if ordered_joint_state is None:
+        manual_target = self._select_manual_target()
+        if manual_target is None:
             return None
-        positions, _ = ordered_joint_state
+        return ExecutionRequest(source="manual", target=manual_target)
+
+    def _seed_joint_map(self, current_positions: Sequence[float]) -> Dict[str, float]:
         return {
-            joint_name: positions[index]
+            joint_name: float(current_positions[index])
             for index, joint_name in enumerate(self._joint_names)
         }
 
@@ -583,209 +565,308 @@ class TargetPoseRuckigExecutor(Node):
                 )
         return None
 
-    def _build_trajectory(
+    def _solve_target_positions(
+        self,
+        request: ExecutionRequest,
+        current_positions: Sequence[float],
+    ) -> Tuple[Optional[List[float]], Optional[str]]:
+        pose = request.target
+        q = pose.pose.orientation
+        pitch_rad = self._kinematics.world_pitch_from_quaternion(
+            (float(q.x), float(q.y), float(q.z), float(q.w))
+        )
+        q_target = self._kinematics.solve_xyz_pitch(
+            float(pose.pose.position.x),
+            float(pose.pose.position.y),
+            float(pose.pose.position.z),
+            pitch_rad,
+            seed_joints=self._seed_joint_map(current_positions),
+        )
+        if q_target is None:
+            return None, "ik solve failed"
+
+        target_positions = [float(q_target[joint_name]) for joint_name in self._joint_names]
+        out_of_limits = self._first_joint_out_of_limits(target_positions)
+        if out_of_limits is not None:
+            return None, out_of_limits
+
+        return target_positions, None
+
+    def _publish_stream_reference(
         self,
         current_positions: Sequence[float],
         current_velocities: Sequence[float],
+        current_accelerations: Sequence[float],
         target_positions: Sequence[float],
-    ) -> Optional[JointTrajectory]:
-        dofs = len(self._joint_names)
-        otg = Ruckig(dofs, self._trajectory_sampling_period)
-        inp = InputParameter(dofs)
-        out = OutputParameter(dofs)
+    ) -> Tuple[bool, str]:
+        reset_reason = self._otg_reset_reason(
+            current_positions,
+            current_velocities,
+            current_accelerations,
+            target_positions,
+        )
+        if reset_reason is not None:
+            self._prime_otg_from_feedback(
+                current_positions,
+                current_velocities,
+                current_accelerations,
+                target_positions,
+                reset_reason,
+            )
 
-        inp.current_position = list(current_positions)
-        inp.current_velocity = list(current_velocities)
-        inp.current_acceleration = [0.0] * dofs
-        inp.target_position = list(target_positions)
-        inp.target_velocity = [0.0] * dofs
-        inp.target_acceleration = [0.0] * dofs
-        inp.max_velocity = [self._joint_limits[name].max_velocity for name in self._joint_names]
-        inp.max_acceleration = [self._joint_limits[name].max_acceleration for name in self._joint_names]
-        inp.max_jerk = [self._joint_limits[name].max_jerk for name in self._joint_names]
+        result = self._otg.update(self._otg_input, self._otg_output)
+        if result not in (Result.Working, Result.Finished):
+            return False, f"ruckig update returned {result}"
 
         message = JointTrajectory()
+        message.header.stamp = self.get_clock().now().to_msg()
         message.joint_names = list(self._joint_names)
 
-        initial = JointTrajectoryPoint()
-        initial.positions = list(current_positions)
-        initial.velocities = list(current_velocities)
-        initial.accelerations = [0.0] * dofs
-        initial.time_from_start = _duration_from_seconds(0.0)
-        message.points.append(initial)
+        point = JointTrajectoryPoint()
+        point.positions = list(self._otg_output.new_position)
+        point.velocities = list(self._otg_output.new_velocity)
+        point.accelerations = list(self._otg_output.new_acceleration)
+        point.time_from_start = _duration_from_seconds(self._trajectory_sampling_period)
+        message.points = [point]
+        self._trajectory_pub.publish(message)
+        self._advance_otg_state_from_output(target_positions)
+        return True, ""
 
-        elapsed = 0.0
-        max_steps = 100000
-        result = Result.Working
-        for _ in range(max_steps):
-            result = otg.update(inp, out)
-            if result not in (Result.Working, Result.Finished):
-                return None
+    def _clamped_feedback_velocity(self, current_velocities: Sequence[float]) -> List[float]:
+        return [
+            max(
+                -self._joint_limits[name].max_velocity,
+                min(self._joint_limits[name].max_velocity, float(current_velocities[index])),
+            )
+            for index, name in enumerate(self._joint_names)
+        ]
 
-            elapsed += self._trajectory_sampling_period
-            point = JointTrajectoryPoint()
-            point.positions = list(out.new_position)
-            point.velocities = list(out.new_velocity)
-            point.accelerations = list(out.new_acceleration)
-            point.time_from_start = _duration_from_seconds(elapsed)
-            message.points.append(point)
+    def _clamped_feedback_acceleration(self, current_accelerations: Sequence[float]) -> List[float]:
+        return [
+            max(
+                -self._joint_limits[name].max_acceleration,
+                min(self._joint_limits[name].max_acceleration, float(current_accelerations[index])),
+            )
+            for index, name in enumerate(self._joint_names)
+        ]
 
-            if result == Result.Finished:
-                break
-            out.pass_to_input(inp)
-        else:
-            return None
+    def _target_positions_changed(self, target_positions: Sequence[float]) -> bool:
+        if self._otg_target_positions is None or len(self._otg_target_positions) != len(target_positions):
+            return True
+        return any(
+            abs(float(target_positions[index]) - float(self._otg_target_positions[index])) > 1.0e-3
+            for index in range(len(target_positions))
+        )
 
-        if not message.points:
-            return None
-        return message
-
-    def _send_trajectory_goal(
+    def _otg_reset_reason(
         self,
-        request: ExecutionRequest,
-        trajectory: JointTrajectory,
-    ) -> None:
-        goal = FollowJointTrajectory.Goal()
-        goal.trajectory = trajectory
+        current_positions: Sequence[float],
+        current_velocities: Sequence[float],
+        current_accelerations: Sequence[float],
+        target_positions: Sequence[float],
+    ) -> Optional[str]:
+        if not self._otg_has_state:
+            return "init_feedback"
+        if self._target_positions_changed(target_positions):
+            return "target_change"
 
-        self._event("goal_send", request.target, extra="source=%s" % request.source)
-        try:
-            send_future = self._trajectory_client.send_goal_async(goal)
-        except Exception as exc:
-            self._complete_execution(
-                request,
-                success=False,
-                error_code=EXECUTION_ERROR_GOAL_SEND_EXCEPTION,
-                detail=f"trajectory goal send exception: {exc}",
-                reason="goal_send_exception",
-            )
-            return
-
-        send_future.add_done_callback(
-            lambda future, request=request: self._on_goal_response(future, request)
+        planned_positions = list(self._otg_input.current_position)
+        planned_velocities = list(self._otg_input.current_velocity)
+        max_position_error = max(
+            abs(float(current_positions[index]) - float(planned_positions[index]))
+            for index in range(len(self._joint_names))
         )
-
-    def _on_goal_response(self, future, request: ExecutionRequest) -> None:
-        if self._active_request is not request:
-            return
-
-        try:
-            goal_handle = future.result()
-        except Exception as exc:
-            self._complete_execution(
-                request,
-                success=False,
-                error_code=EXECUTION_ERROR_GOAL_SEND_EXCEPTION,
-                detail=f"trajectory goal send exception: {exc}",
-                reason="goal_send_exception",
-            )
-            return
-
-        if goal_handle is None or not goal_handle.accepted:
-            self._complete_execution(
-                request,
-                success=False,
-                error_code=EXECUTION_ERROR_GOAL_REJECTED,
-                detail="trajectory goal rejected",
-                reason="goal_rejected",
-            )
-            return
-
-        if request.execution_id is not None:
-            self._publish_motion_execution(
-                request.execution_id,
-                Arm2MotionExecution.STATUS_ACCEPTED,
-                0,
-                "accepted",
-            )
-        self._event("goal_accepted", request.target, extra="source=%s" % request.source)
-        result_future = goal_handle.get_result_async()
-        result_future.add_done_callback(
-            lambda future, request=request: self._on_goal_result(future, request)
+        max_velocity_error = max(
+            abs(float(current_velocities[index]) - float(planned_velocities[index]))
+            for index in range(len(self._joint_names))
         )
+        if max_position_error > self._otg_plan_feedback_position_reset:
+            return f"plan_feedback_position_desync:{max_position_error:.3f}"
+        if max_velocity_error > self._otg_plan_feedback_velocity_reset:
+            return f"plan_feedback_velocity_desync:{max_velocity_error:.3f}"
+        return None
 
-    def _on_goal_result(self, future, request: ExecutionRequest) -> None:
-        if self._active_request is not request:
-            return
-
-        try:
-            wrapped = future.result()
-            result = wrapped.result
-        except Exception as exc:
-            self._complete_execution(
-                request,
-                success=False,
-                error_code=EXECUTION_ERROR_RESULT_EXCEPTION,
-                detail=f"trajectory result exception: {exc}",
-                reason="result_exception",
-            )
-            return
-
-        if result.error_code == FollowJointTrajectory.Result.SUCCESSFUL:
-            self._event("exec_ok", request.target, extra="source=%s" % request.source)
-            self._complete_execution(
-                request,
-                success=True,
-                error_code=result.error_code,
-                detail=result.error_string or "execution succeeded",
-                reason="goal_done",
-            )
-            return
-
-        detail = result.error_string or f"trajectory execution failed, error_code={result.error_code}"
-        self._event("exec_fail", request.target, extra="source=%s" % request.source)
-        self._complete_execution(
-            request,
-            success=False,
-            error_code=EXECUTION_ERROR_RESULT_FAILED,
-            detail=detail,
-            reason="goal_done",
-        )
-
-    def _complete_execution(
+    def _prime_otg_from_feedback(
         self,
-        request: ExecutionRequest,
-        success: bool,
-        error_code: int,
-        detail: str,
+        current_positions: Sequence[float],
+        current_velocities: Sequence[float],
+        current_accelerations: Sequence[float],
+        target_positions: Sequence[float],
         reason: str,
     ) -> None:
-        if self._active_request is not request:
-            return
+        self._otg_input.current_position = list(current_positions)
+        self._otg_input.current_velocity = self._clamped_feedback_velocity(current_velocities)
+        self._otg_input.current_acceleration = self._clamped_feedback_acceleration(current_accelerations)
+        self._otg_input.target_position = list(target_positions)
+        self._otg_input.target_velocity = [0.0] * len(self._joint_names)
+        self._otg_input.target_acceleration = [0.0] * len(self._joint_names)
+        self._otg_input.max_velocity = [self._joint_limits[name].max_velocity for name in self._joint_names]
+        self._otg_input.max_acceleration = [self._joint_limits[name].max_acceleration for name in self._joint_names]
+        self._otg_input.max_jerk = [self._joint_limits[name].max_jerk for name in self._joint_names]
+        self._otg_target_positions = list(target_positions)
+        self._otg_has_state = True
+        self._otg_last_sync_reason = reason
+        self.get_logger().info("[OTG] sync_from_feedback reason=%s" % reason)
 
-        status = (
-            Arm2MotionExecution.STATUS_SUCCEEDED
-            if success
-            else Arm2MotionExecution.STATUS_FAILED
+    def _advance_otg_state_from_output(self, target_positions: Sequence[float]) -> None:
+        try:
+            self._otg_output.pass_to_input(self._otg_input)
+        except AttributeError:
+            self._otg_input.current_position = list(self._otg_output.new_position)
+            self._otg_input.current_velocity = list(self._otg_output.new_velocity)
+            self._otg_input.current_acceleration = list(self._otg_output.new_acceleration)
+        self._otg_input.target_position = list(target_positions)
+        self._otg_input.target_velocity = [0.0] * len(self._joint_names)
+        self._otg_input.target_acceleration = [0.0] * len(self._joint_names)
+        self._otg_target_positions = list(target_positions)
+        self._otg_has_state = True
+
+    def _update_tracking_error(
+        self,
+        current_positions: Sequence[float],
+        target_positions: Sequence[float],
+    ) -> None:
+        max_error_joint: Optional[str] = None
+        max_error_value = 0.0
+        for index, joint_name in enumerate(self._joint_names):
+            error = abs(float(target_positions[index]) - float(current_positions[index]))
+            if max_error_joint is None or error > max_error_value:
+                max_error_joint = joint_name
+                max_error_value = error
+        self._last_tracking_error_joint = max_error_joint
+        self._last_tracking_error_value = max_error_value
+
+        now_sec = self._now_sec()
+        if max_error_joint is not None and (now_sec - self._last_tracking_error_log_time_sec) >= 1.0:
+            self.get_logger().info(
+                "[TRACK] qerr_max=%s:%.3f"
+                % (max_error_joint, max_error_value)
+            )
+            self._last_tracking_error_log_time_sec = now_sec
+
+    def _request_reached(
+        self,
+        request: ExecutionRequest,
+        current_velocities: Sequence[float],
+    ) -> bool:
+        current_pose = self._get_current_eef_pose()
+        if current_pose is None:
+            return False
+
+        current_xyz, current_quat = current_pose
+        target = request.target.pose
+        dx = current_xyz[0] - float(target.position.x)
+        dy = current_xyz[1] - float(target.position.y)
+        dz = current_xyz[2] - float(target.position.z)
+        pos_error = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+        target_quat = _normalize_quat_xyzw(
+            (
+                float(target.orientation.x),
+                float(target.orientation.y),
+                float(target.orientation.z),
+                float(target.orientation.w),
+            )
+        )
+        rot_error = _quat_angle(current_quat, target_quat)
+        max_velocity = max((abs(float(v)) for v in current_velocities), default=0.0)
+        return (
+            pos_error <= self._pos_threshold
+            and rot_error <= self._rot_threshold
+            and max_velocity <= self._success_velocity_tolerance
         )
 
-        self._active_request = None
-        self._set_busy(False, reason)
+    def _complete_active_request(self, success: bool, error_code: int, detail: str) -> None:
+        request = self._active_request
+        if request is None or request.execution_id is None:
+            self._active_request = None
+            return
 
-        if request.execution_id is not None:
-            self._publish_motion_execution(
-                request.execution_id,
-                status,
-                error_code,
-                detail,
+        status = Arm2MotionExecution.STATUS_SUCCEEDED if success else Arm2MotionExecution.STATUS_FAILED
+        self._publish_motion_execution(request.execution_id, status, error_code, detail)
+        event_name = "middleware_track_done" if success else "middleware_track_fail"
+        self._event(event_name, request.target, extra="execution_id=%d" % request.execution_id)
+        self._active_request = None
+
+    def _on_timer(self) -> None:
+        if not self._executor_ready():
+            return
+
+        ordered_joint_state = self._ordered_joint_state()
+        if ordered_joint_state is None:
+            if self._active_request is not None:
+                self._complete_active_request(
+                    success=False,
+                    error_code=EXECUTION_ERROR_JOINT_STATE_UNAVAILABLE,
+                    detail="joint state unavailable",
+                )
+            return
+
+        current_positions, current_velocities, current_accelerations, _joint_state_time_sec = ordered_joint_state
+        request = self._get_tracking_target()
+        self._last_tracking_error_joint = None
+        self._last_tracking_error_value = 0.0
+
+        if self._active_request is not None and self._request_reached(self._active_request, current_velocities):
+            self._complete_active_request(
+                success=True,
+                error_code=0,
+                detail="target reached",
             )
+            request = self._get_tracking_target()
+
+        target_positions = list(current_positions)
+        if request is not None:
+            solved_positions, error = self._solve_target_positions(request, current_positions)
+            if solved_positions is None:
+                if request.source == "middleware":
+                    self._complete_active_request(
+                        success=False,
+                        error_code=EXECUTION_ERROR_IK_FAILED if error == "ik solve failed" else EXECUTION_ERROR_TARGET_OUT_OF_LIMITS,
+                        detail=error or "target solve failed",
+                    )
+                    request = self._get_tracking_target()
+                else:
+                    self._log_manual_target_failure(error or "target solve failed")
+            else:
+                if request.source == "manual":
+                    self._last_manual_failure_detail = ""
+                    self._last_manual_failure_time_sec = 0.0
+                target_positions = solved_positions
+                self._update_tracking_error(current_positions, target_positions)
+
+        ok, detail = self._publish_stream_reference(
+            current_positions,
+            current_velocities,
+            current_accelerations,
+            target_positions,
+        )
+        if not ok:
+            if self._active_request is not None:
+                self._complete_active_request(
+                    success=False,
+                    error_code=EXECUTION_ERROR_TRAJECTORY_GENERATION_FAILED,
+                    detail=detail or "ruckig streaming step failed",
+                )
+            else:
+                self.get_logger().warn("%s; skipping publish" % (detail or "ruckig streaming step failed"))
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Target pose executor using IK + Ruckig + FJT")
+    parser = argparse.ArgumentParser(description="Target pose executor using IK + online Ruckig streaming")
     parser.add_argument("--target-topic", default="/rc_arm_2/target_pose")
     parser.add_argument("--middleware-target-topic", default="/arm2/middleware/motion_target")
     parser.add_argument("--middleware-result-topic", default="/arm2/middleware/motion_execution")
     parser.add_argument("--joint-names", default="j1_joint,j2_joint,j3_joint,j4_joint")
     parser.add_argument("--default-frame", default="world")
-    parser.add_argument("--follow-joint-trajectory-action", default="/arm_controller/follow_joint_trajectory")
+    parser.add_argument("--trajectory-topic", default="/arm_controller/joint_trajectory")
     parser.add_argument("--joint-limits-file", required=True)
     parser.add_argument("--trajectory-sampling-period", type=float, default=0.01)
     parser.add_argument("--joint-state-topic", default="/joint_states")
     parser.add_argument("--urdf-path", default="")
     parser.add_argument("--pos-threshold", type=float, default=0.003)
     parser.add_argument("--rot-threshold", type=float, default=0.03)
-    parser.add_argument("--check-period", type=float, default=0.05)
+    parser.add_argument("--check-period", type=float, default=0.01)
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--status-log-period", type=float, default=1.0, help="state log period, <=0 to disable")
     parser.add_argument("--status-base-frame", default="world")
@@ -807,7 +888,7 @@ def main() -> None:
             middleware_result_topic=args.middleware_result_topic,
             joint_names=joints,
             default_frame=args.default_frame,
-            follow_joint_trajectory_action=args.follow_joint_trajectory_action,
+            trajectory_topic=args.trajectory_topic,
             joint_limits_file=args.joint_limits_file,
             trajectory_sampling_period=args.trajectory_sampling_period,
             pos_threshold=args.pos_threshold,
