@@ -48,14 +48,10 @@ double getDoubleParamOr(
 
 RsA3HardwareInterface::RsA3HardwareInterface()
   : backend_mode_(BackendMode::REAL)
-  , can_interface_("can0")
-  , host_can_id_(0xFD)
-  , can_enabled_(true)
   , backend_name_("real")
   , dm_serial_number_("9940F4E149D904A69924737E3DE6629F")
   , dm_nominal_baud_(1000000)
   , dm_data_baud_(2000000)
-  , dm_control_mode_(0)
   , dm_startup_delay_sec_(0.0)
   , dm_enable_retry_count_(3)
   , dm_enable_retry_interval_sec_(1.0)
@@ -68,12 +64,7 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , payload_mass_(0.63)
   , payload_diaginertia_{0.02, 0.02, 0.02}
   , payload_com_offset_{0.0, 0.0, 0.0}
-  , payload_box_size_{0.05, 0.05, 0.05}
-  , mujoco_payload_body_name_("payload_block")
-  , mujoco_payload_site_name_("attachment_site")
-  , mujoco_payload_initial_pos_{0.30, 0.0, 0.20}
   , payload_active_(false)
-  , control_mode_(ControlMode::POSITION)
   , use_mock_hardware_(false)
   , external_feedback_enabled_(false)
   , external_feedback_topic_("/rc_arm_2/feedback_joint_states")
@@ -92,9 +83,6 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , pinocchio_mapping_ready_(false)
   , use_calibrated_inertia_(false)   // 默认不使用标定后的惯量参数
   , spin_thread_running_(false)      // 服务回调线程运行标志初始化
-  , limit_margin_(0.15)          // 约在 ~15° 处开始减速（≈8.6°）
-  , limit_stop_margin_(0.02)     // 约在 ~1° 处硬停止（≈1.1°）
-  , limit_decel_factor_(0.3)     // 减速到 30%
 {
 }
 
@@ -121,12 +109,6 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   if (info_.hardware_parameters.count("backend")) {
     backend_name_ = info_.hardware_parameters.at("backend");
   }
-  if (info_.hardware_parameters.count("can_interface")) {
-    can_interface_ = info_.hardware_parameters.at("can_interface");
-  }
-  if (info_.hardware_parameters.count("host_can_id")) {
-    host_can_id_ = std::stoi(info_.hardware_parameters.at("host_can_id"));
-  }
   if (info_.hardware_parameters.count("velocity_limit")) {
     velocity_limit_ = std::stod(info_.hardware_parameters.at("velocity_limit"));
   }
@@ -150,21 +132,6 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   payload_com_offset_[0] = getDoubleParamOr(info_, "payload_com_offset_x", payload_com_offset_[0]);
   payload_com_offset_[1] = getDoubleParamOr(info_, "payload_com_offset_y", payload_com_offset_[1]);
   payload_com_offset_[2] = getDoubleParamOr(info_, "payload_com_offset_z", payload_com_offset_[2]);
-  payload_box_size_[0] = getDoubleParamOr(info_, "payload_box_size_x", payload_box_size_[0]);
-  payload_box_size_[1] = getDoubleParamOr(info_, "payload_box_size_y", payload_box_size_[1]);
-  payload_box_size_[2] = getDoubleParamOr(info_, "payload_box_size_z", payload_box_size_[2]);
-  if (info_.hardware_parameters.count("mujoco_payload_body_name")) {
-    mujoco_payload_body_name_ = info_.hardware_parameters.at("mujoco_payload_body_name");
-  }
-  if (info_.hardware_parameters.count("mujoco_payload_site_name")) {
-    mujoco_payload_site_name_ = info_.hardware_parameters.at("mujoco_payload_site_name");
-  }
-  mujoco_payload_initial_pos_[0] = getDoubleParamOr(
-    info_, "mujoco_payload_initial_pos_x", mujoco_payload_initial_pos_[0]);
-  mujoco_payload_initial_pos_[1] = getDoubleParamOr(
-    info_, "mujoco_payload_initial_pos_y", mujoco_payload_initial_pos_[1]);
-  mujoco_payload_initial_pos_[2] = getDoubleParamOr(
-    info_, "mujoco_payload_initial_pos_z", mujoco_payload_initial_pos_[2]);
   if (info_.hardware_parameters.count("use_mock_hardware")) {
     use_mock_hardware_ = parseBoolParam(info_.hardware_parameters.at("use_mock_hardware"));
   }
@@ -186,9 +153,6 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   }
   if (info_.hardware_parameters.count("dm_dat_baud")) {
     dm_data_baud_ = static_cast<uint32_t>(std::stoul(info_.hardware_parameters.at("dm_dat_baud")));
-  }
-  if (info_.hardware_parameters.count("dm_control_mode")) {
-    dm_control_mode_ = std::stoi(info_.hardware_parameters.at("dm_control_mode"));
   }
   dm_startup_delay_sec_ = std::max(
     0.0,
@@ -216,7 +180,6 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
     return hardware_interface::CallbackReturn::ERROR;
   }
   external_feedback_enabled_ = backend_mode_ == BackendMode::MUJOCO;
-  can_enabled_ = backend_mode_ == BackendMode::REAL;
 
   if (info_.hardware_parameters.count("low_stiffness_mode")) {
     low_stiffness_mode_ = parseBoolParam(info_.hardware_parameters.at("low_stiffness_mode"));
@@ -291,28 +254,10 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   smoothed_velocities_.resize(num_joints, 0.0);
   smoothed_accelerations_.resize(num_joints, 0.0);
   
-  // 初始化速度前馈相关变量
-  last_cmd_positions_.resize(num_joints, 0.0);         // 上一周期指令位置
-  cmd_velocities_.resize(num_joints, 0.0);             // 计算得到的指令速度
-  filtered_cmd_velocities_.resize(num_joints, 0.0);    // 一阶滤波后的指令速度
-  velocity_ff_stage2_.resize(num_joints, 0.0);         // 二阶滤波中间量
-  
   // 默认参数
-  max_velocity_ = 2.0;          // 最大速度 2 rad/s
-  max_acceleration_ = 8.0;      // 最大加速度 8 rad/s²
   fallback_control_period_ = 0.005;  // 默认 200Hz -> 5ms
   first_command_ = true;
   gravity_feedforward_ratio_ = 0.5;  // 默认 50% 重力补偿前馈
-  
-  // 从参数读取速度上限
-  if (info_.hardware_parameters.count("max_velocity")) {
-    max_velocity_ = std::stod(info_.hardware_parameters.at("max_velocity"));
-  }
-  
-  // 从参数读取加速度上限
-  if (info_.hardware_parameters.count("max_acceleration")) {
-    max_acceleration_ = std::stod(info_.hardware_parameters.at("max_acceleration"));
-  }
 
   if (info_.hardware_parameters.count("fallback_control_period")) {
     fallback_control_period_ = std::stod(info_.hardware_parameters.at("fallback_control_period"));
@@ -324,29 +269,12 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
     gravity_feedforward_ratio_ = std::stod(info_.hardware_parameters.at("gravity_feedforward_ratio"));
     gravity_feedforward_ratio_ = std::clamp(gravity_feedforward_ratio_, 0.0, 1.0);
   }
-  
-  // 从参数读取关节限位保护参数
-  if (info_.hardware_parameters.count("limit_margin")) {
-    limit_margin_ = std::stod(info_.hardware_parameters.at("limit_margin"));
-  }
-  if (info_.hardware_parameters.count("limit_stop_margin")) {
-    limit_stop_margin_ = std::stod(info_.hardware_parameters.at("limit_stop_margin"));
-  }
-  if (info_.hardware_parameters.count("limit_decel_factor")) {
-    limit_decel_factor_ = std::stod(info_.hardware_parameters.at("limit_decel_factor"));
-    limit_decel_factor_ = std::clamp(limit_decel_factor_, 0.0, 1.0);
-  }
-  
-  // 初始化关节限位保护状态
-  joint_at_limit_.resize(num_joints, false);
-  limit_warn_counter_.resize(num_joints, 0);
 
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "已初始化：%zu 个关节，backend=%s",
               num_joints, backend_name_.c_str());
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "  轨迹参考：直接执行上层 position/velocity，max_vel=%.1f rad/s，max_acc=%.1f rad/s²",
-              max_velocity_, max_acceleration_);
+              "  轨迹参考：直接执行上层 position/velocity/acceleration（无硬件层二次滤波与限加速度）");
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "  回退控制周期：%.4f s",
               fallback_control_period_);
@@ -371,10 +299,6 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
               "  Pinocchio：gravity=%s, inverse_dynamics=%s",
               use_pinocchio_gravity_ ? "启用" : "禁用",
               use_pinocchio_inverse_dynamics_ ? "启用" : "禁用");
-
-  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "关节限位保护：margin=%.3f rad，stop_margin=%.3f rad，decel_factor=%.2f",
-              limit_margin_, limit_stop_margin_, limit_decel_factor_);
 
   if (external_feedback_enabled_) {
     RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
@@ -752,11 +676,10 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_configure(
 
   RCLCPP_INFO(
     rclcpp::get_logger("RsA3HardwareInterface"),
-    "实机后端已配置：dmbot_serial(sn=%s, nom=%u, data=%u, control_mode=%d)",
+    "实机后端已配置：dmbot_serial(sn=%s, nom=%u, data=%u)",
     dm_serial_number_.c_str(),
     dm_nominal_baud_,
-    dm_data_baud_,
-    dm_control_mode_);
+    dm_data_baud_);
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -1029,10 +952,6 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       smoothed_positions_[i] = hw_commands_positions_[i];
       smoothed_velocities_[i] = 0.0;
       smoothed_accelerations_[i] = 0.0;
-
-      last_cmd_positions_[i] = hw_commands_positions_[i];
-      filtered_cmd_velocities_[i] = 0.0;
-      velocity_ff_stage2_[i] = 0.0;
     }
 
     first_command_ = false;
@@ -1083,25 +1002,9 @@ hardware_interface::return_type RsA3HardwareInterface::write(
         std::abs(new_velocity),
         config.velocity_limit);
     }
-    if (std::abs(new_acceleration) > max_acceleration_ * 1.10) {
-      RCLCPP_WARN_THROTTLE(
-        rclcpp::get_logger("RsA3HardwareInterface"),
-        *debug_node_->get_clock(),
-        2000,
-        "关节 %s 加速度超限：|a|=%.4f, limit=%.4f",
-        config.name.c_str(),
-        std::abs(new_acceleration),
-        max_acceleration_);
-    }
-
-    const double raw_cmd_velocity = new_velocity;
-
     id_ref_positions[i] = new_position;
     id_ref_velocities[i] = new_velocity;
     id_ref_accelerations[i] = new_acceleration;
-
-    last_cmd_positions_[i] = target_position;
-    cmd_velocities_[i] = new_velocity;
 
     smoothed_positions_[i] = new_position;
     smoothed_velocities_[i] = new_velocity;
@@ -1112,33 +1015,12 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     auto params = getMotorParams(config.motor_type);
     cmd_position = std::clamp(cmd_position, params.p_min, params.p_max);
 
-    double filtered_velocity = 0.0;
     const double velocity_threshold = 0.001;
-    double cmd_velocity = (std::abs(raw_cmd_velocity) < velocity_threshold) ? 0.0 : raw_cmd_velocity;
+    double cmd_velocity = (std::abs(new_velocity) < velocity_threshold) ? 0.0 : new_velocity;
     const double joint_velocity_limit = std::max(0.1, config.velocity_limit);
     cmd_velocity = std::clamp(cmd_velocity, -joint_velocity_limit, joint_velocity_limit);
-
-    const double alpha1 = 0.1;
-    const double first_stage = alpha1 * cmd_velocity + (1.0 - alpha1) * filtered_cmd_velocities_[i];
-    filtered_cmd_velocities_[i] = first_stage;
-
-    const double alpha2 = 0.15;
-    filtered_velocity = alpha2 * first_stage + (1.0 - alpha2) * velocity_ff_stage2_[i];
-
-    const double max_velocity_change = max_acceleration_ * dt;
-    const double velocity_change = filtered_velocity - velocity_ff_stage2_[i];
-    if (std::abs(velocity_change) > max_velocity_change) {
-      filtered_velocity = velocity_ff_stage2_[i] +
-                          max_velocity_change * (velocity_change > 0 ? 1.0 : -1.0);
-    }
-
-    if (std::abs(filtered_velocity) < 0.005) {
-      filtered_velocity = 0.0;
-    }
-
-    velocity_ff_stage2_[i] = filtered_velocity;
     cmd_positions_motor[i] = cmd_position;
-    cmd_velocities_motor[i] = velocity_ff_stage2_[i] * config.direction;
+    cmd_velocities_motor[i] = cmd_velocity * config.direction;
   }
 
   std::vector<double> pinocchio_gravity_torques_actual;
@@ -1327,7 +1209,7 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     for (const auto& config : joint_configs_) {
       velocity_ff_msg.name.push_back(config.name);
     }
-    velocity_ff_msg.velocity = velocity_ff_stage2_;
+    velocity_ff_msg.velocity = final_cmd_velocities_;
     velocity_ff_pub_->publish(velocity_ff_msg);
 
     if (j2_qd_ref_pub_ && j2_qd_actual_pub_) {
@@ -1468,98 +1350,6 @@ void RsA3HardwareInterface::payloadActiveCommandCallback(const std_msgs::msg::Bo
       msg->data ? "true" : "false",
       payload_command_topic_.c_str());
   }
-}
-
-double RsA3HardwareInterface::computeLimitProtectionFactor(
-  size_t joint_idx, double current_pos, double target_pos)
-{
-  if (joint_idx >= joint_configs_.size()) {
-    return 1.0;
-  }
-  
-  const auto& config = joint_configs_[joint_idx];
-  double lower = config.lower_limit;
-  double upper = config.upper_limit;
-  
-  // Calculate distance to boundary
-  double dist_to_lower = current_pos - lower;
-  double dist_to_upper = upper - current_pos;
-  
-  // Determine motion direction
-  double motion_dir = target_pos - current_pos;
-  
-  // Select relevant boundary distance
-  double relevant_dist;
-  if (motion_dir < 0) {
-    // Moving toward lower limit
-    relevant_dist = dist_to_lower;
-  } else if (motion_dir > 0) {
-    // Moving toward upper limit
-    relevant_dist = dist_to_upper;
-  } else {
-    return 1.0;  // No motion
-  }
-  
-  // If within limit boundary, compute deceleration factor
-  if (relevant_dist < limit_margin_) {
-    if (relevant_dist <= limit_stop_margin_) {
-      // Hard stop zone
-      return 0.0;
-    }
-    // Linear deceleration zone: from limit_decel_factor_ to 1.0
-    double ratio = (relevant_dist - limit_stop_margin_) / (limit_margin_ - limit_stop_margin_);
-    return limit_decel_factor_ + (1.0 - limit_decel_factor_) * ratio;
-  }
-  
-  return 1.0;
-}
-
-bool RsA3HardwareInterface::applyJointLimitProtection(size_t joint_idx, double& target_pos)
-{
-  if (joint_idx >= joint_configs_.size()) {
-    return false;
-  }
-  
-  const auto& config = joint_configs_[joint_idx];
-  double lower = config.lower_limit;
-  double upper = config.upper_limit;
-  
-  bool hit_limit = false;
-  
-  // Check and clamp target position
-  if (target_pos < lower + limit_stop_margin_) {
-    target_pos = lower + limit_stop_margin_;
-    hit_limit = true;
-  } else if (target_pos > upper - limit_stop_margin_) {
-    target_pos = upper - limit_stop_margin_;
-    hit_limit = true;
-  }
-  
-  // Joint limit warning (print every 100 triggers to prevent log flooding)
-  if (hit_limit) {
-    if (!joint_at_limit_[joint_idx]) {
-      joint_at_limit_[joint_idx] = true;
-      RCLCPP_WARN(rclcpp::get_logger("RsA3HardwareInterface"),
-                  "⚠️ 关节 %s 达到限位！pos=%.3f rad（%.1f°），limits=[%.2f, %.2f]",
-                  config.name.c_str(), target_pos, target_pos * 180.0 / M_PI,
-                  lower, upper);
-    }
-    limit_warn_counter_[joint_idx]++;
-    if (limit_warn_counter_[joint_idx] % 500 == 0) {
-      RCLCPP_WARN(rclcpp::get_logger("RsA3HardwareInterface"),
-                  "关节 %s 仍处于限位区（count=%d）",
-                  config.name.c_str(), limit_warn_counter_[joint_idx]);
-    }
-  } else {
-    if (joint_at_limit_[joint_idx]) {
-      joint_at_limit_[joint_idx] = false;
-      limit_warn_counter_[joint_idx] = 0;
-      RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-                  "✓ 关节 %s 已离开限位区", config.name.c_str());
-    }
-  }
-  
-  return hit_limit;
 }
 
 // ============ Pinocchio dynamics function implementation ============

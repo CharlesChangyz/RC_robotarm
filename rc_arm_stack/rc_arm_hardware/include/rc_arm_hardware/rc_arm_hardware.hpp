@@ -128,9 +128,6 @@ private:
   
   // 后端模式
   BackendMode backend_mode_;
-  std::string can_interface_;
-  uint8_t host_can_id_;
-  bool can_enabled_;
   std::string backend_name_;
 
   // dmbot_serial 实机后端
@@ -138,7 +135,6 @@ private:
   std::string dm_serial_number_;
   uint32_t dm_nominal_baud_;
   uint32_t dm_data_baud_;
-  int dm_control_mode_;
   double dm_startup_delay_sec_;
   int dm_enable_retry_count_;
   double dm_enable_retry_interval_sec_;
@@ -178,10 +174,6 @@ private:
   double payload_mass_;
   std::array<double, 3> payload_diaginertia_;
   std::array<double, 3> payload_com_offset_;
-  std::array<double, 3> payload_box_size_;
-  std::string mujoco_payload_body_name_;
-  std::string mujoco_payload_site_name_;
-  std::array<double, 3> mujoco_payload_initial_pos_;
   std::atomic<bool> payload_active_;
   
   // 参考轨迹缓存
@@ -190,23 +182,8 @@ private:
   std::vector<double> smoothed_accelerations_; // 当前执行参考加速度
   
   // 速度前馈计算
-  std::vector<double> last_cmd_positions_;          // 上一周期指令位置（用于调试/兼容）
-  std::vector<double> cmd_velocities_;              // 计算得到的指令速度
-  std::vector<double> filtered_cmd_velocities_;     // 一阶滤波后的指令速度
-  std::vector<double> velocity_ff_stage2_;          // 二阶滤波中间量（最终发送的速度前馈）
-  double max_velocity_;                             // 最大速度限制 (rad/s)
-  double max_acceleration_;                         // 最大加速度限制 (rad/s²)
   bool first_command_;                              // 首条指令标志
   double fallback_control_period_;                  // 异常周期回退值 (s)
-  
-  // Control mode
-  enum class ControlMode
-  {
-    POSITION,    // CSP mode
-    VELOCITY,
-    EFFORT
-  };
-  ControlMode control_mode_;
   
   bool use_mock_hardware_;  // 是否使用仿真/假硬件
 
@@ -358,29 +335,6 @@ private:
   // 外部反馈回调
   void externalFeedbackCallback(const sensor_msgs::msg::JointState::SharedPtr msg);
   
-  // ============ 关节限位保护 ============
-  double limit_margin_;              // 开始减速的余量 (rad)
-  double limit_stop_margin_;         // 硬停止余量 (rad)
-  double limit_decel_factor_;        // 接近限位时的减速系数 (0-1)
-  std::vector<bool> joint_at_limit_; // 每个关节是否处于限位区
-  std::vector<int> limit_warn_counter_;  // 限位告警计数（避免刷屏）
-  
-  /**
-   * @brief 计算限位保护系数
-   * @param joint_idx 关节索引
-   * @param current_pos 当前角度
-   * @param target_pos 目标角度
-   * @return 速度缩放系数 (0.0-1.0)
-   */
-  double computeLimitProtectionFactor(size_t joint_idx, double current_pos, double target_pos);
-  
-  /**
-   * @brief 应用限位保护并夹紧目标角度
-   * @param joint_idx 关节索引
-   * @param target_pos 目标角度（会被修改）
-   * @return 是否触发限位保护
-   */
-  bool applyJointLimitProtection(size_t joint_idx, double& target_pos);
 };
 
 }  // namespace rc_arm_hardware

@@ -5,23 +5,6 @@
 # real = 实机 ros2_control 后端
 backend: real
 
-# CAN 接口名称，例如 can0 / can1
-can_interface: can0
-
-# 主机侧 CAN ID，通常保持 253（0xFD）
-host_can_id: 253
-
-# 外部反馈话题：
-# 实机模式下一般不会主动使用，但保留统一字段，便于 real / mujoco 两份配置共用同一 schema
-external_feedback_topic: /rc_arm_2/mujoco_joint_states
-
-# 外部反馈超时时间，单位秒；
-# 当使用外部反馈模式时，超过该时间未收到消息则认为反馈失效
-external_feedback_timeout: 0.2
-
-# MuJoCo 命令输出话题：
-# 实机模式通常不会用到，但保留统一字段
-mujoco_command_topic: /rc_arm_2/mujoco_joint_command
 vacuum_activate_topic: /rc_arm_2/vacuum_activate
 payload_command_topic: /rc_arm_2/payload_active_command
 payload_active_topic: /rc_arm_2/payload_active
@@ -35,10 +18,6 @@ dm_nom_baud: 1000000
 
 # CAN 数据域波特率
 dm_dat_baud: 2000000
-
-# dmbot_serial 控制模式：
-# 0=MIT, 1=POS_VEL, 2=VEL, 3=POS_FORCE
-dm_control_mode: 0
 
 # 实机启动时先等待 USB2CANFD 稳定，避免过早发使能包
 dm_startup_delay_sec: 5.0
@@ -62,12 +41,6 @@ unloaded_position_kd: 3.0
 # 硬件层统一速度限制，单位 rad/s
 velocity_limit: 8.0
 
-# 参考轨迹速度上限，供硬件层监测/限幅使用，单位 rad/s
-max_velocity: 40.0
-
-# 参考轨迹加速度上限，供硬件层监测使用，单位 rad/s^2
-max_acceleration: 20.0
-
 # 是否启用低刚度模式
 low_stiffness_mode: true
 
@@ -88,19 +61,11 @@ payload_diaginertia_z: 0.022
 payload_com_offset_x: 0.01
 payload_com_offset_y: -0.180
 payload_com_offset_z: 0.025
-payload_box_size_x: 0.0
-payload_box_size_y: 0.0
-payload_box_size_z: 0.0
 payload_position_kp: 60.0
 payload_position_kd: 3.0
 payload_low_stiffness_kp: 0.0
 payload_low_stiffness_kd: 0.0
 payload_low_stiffness_torque_bias: 0.0
-mujoco_payload_body_name: payload_block
-mujoco_payload_site_name: attachment_site
-mujoco_payload_initial_pos_x: 0.30
-mujoco_payload_initial_pos_y: 0.00
-mujoco_payload_initial_pos_z: 0.20
 
 #j1 低刚度 Kp 覆盖值；
 #0 表示回退到 unloaded_low_stiffness_kp
@@ -148,15 +113,6 @@ use_pinocchio_inverse_dynamics: true
 # Pinocchio 使用的 URDF 路径；
 # 这里写相对 rc_arm_description 包目录的路径
 urdf_path: urdf/rc_arm_2/rc_arm_2.pinocchio.urdf
-
-# 关节接近限位时开始减速的边界，单位 rad
-limit_margin: 0.15
-
-# 关节进入硬停止保护区的边界，单位 rad
-limit_stop_margin: 0.02
-
-# 限位减速系数，范围 0~1，越小减速越明显
-limit_decel_factor: 0.3
 
 # 当 controller_manager 提供的周期异常时，硬件层采用的回退控制周期，单位秒
 fallback_control_period: 0.005

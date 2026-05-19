@@ -46,7 +46,7 @@ def generate_launch_description():
         DeclareLaunchArgument("target_pose_executor_status_log_period", default_value="1.0", description="target_pose 执行器状态心跳打印周期（秒，<=0 关闭）"),
         DeclareLaunchArgument("target_pose_executor_status_base_frame", default_value=LaunchConfiguration("world_frame_id"), description="状态打印使用的基坐标系"),
         DeclareLaunchArgument("target_pose_executor_status_eef_frame", default_value="end_effector", description="状态打印使用的末端坐标系"),
-        DeclareLaunchArgument("target_pose_executor_trajectory_sampling_period", default_value="0.01", description="Ruckig 轨迹采样周期（秒）"),
+        DeclareLaunchArgument("target_pose_executor_trajectory_sampling_period", default_value="0.002", description="Ruckig 轨迹采样周期（秒）"),
         DeclareLaunchArgument("target_pose_executor_action_name", default_value="/arm_controller/follow_joint_trajectory", description="FollowJointTrajectory action 名"),
         DeclareLaunchArgument("use_position_printer", default_value="false", description="是否打印各关节当前角度"),
         DeclareLaunchArgument("position_print_topic", default_value="/rc_arm_2/mujoco_joint_positions", description="角度打印订阅话题（JointState.position）"),
