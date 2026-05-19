@@ -97,13 +97,13 @@ mujoco_payload_initial_pos_z: 0.20
 
 # j1 低刚度 Kp 覆盖值；
 # 0 表示回退到 unloaded_low_stiffness_kp
-unloaded_low_stiffness_kp_j1: 1.5
+unloaded_low_stiffness_kp_j1: 5.0
 
 # j1 空载低刚度 Kd 覆盖值；
 # 0 表示回退到 unloaded_low_stiffness_kd
-unloaded_low_stiffness_kd_j1: 1.0
-payload_low_stiffness_kp_j1: 1.5
-payload_low_stiffness_kd_j1: 1.0
+unloaded_low_stiffness_kd_j1: 0.5
+payload_low_stiffness_kp_j1: 5.0
+payload_low_stiffness_kd_j1: 0.5
 
 # j2 低刚度 Kp 覆盖值
 unloaded_low_stiffness_kp_j2: 20.0

@@ -54,6 +54,7 @@ from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E40
 SCRIPT_RUN_MUJOCO = ROOT_DIR / "scripts" / "run_rc_arm_mujoco.sh"
 SCRIPT_RUN_MUJOCO_BRIDGE = ROOT_DIR / "scripts" / "run_rc_arm_mujoco_bridge.sh"
 SCRIPT_RUN_REAL = ROOT_DIR / "scripts" / "run_rc_arm_real.sh"
+RC_ARM_STACK_SETUP = RC_ARM_STACK_DIR / "install" / "setup.bash"
 J4_WORLD_MIN_DEG = 0.0
 J4_WORLD_MAX_DEG = 120.0
 AUTO_CLEANUP_WAIT_SEC = 1.0
@@ -617,9 +618,14 @@ class TargetPublisherWindow(QMainWindow):
         self._request_reachability()
 
     def _ros2_env_command(self, ros2_args: List[str]) -> List[str]:
+        if not RC_ARM_STACK_SETUP.is_file():
+            raise FileNotFoundError(
+                f"missing workspace setup: {RC_ARM_STACK_SETUP} "
+                f"(build first: cd {RC_ARM_STACK_DIR} && colcon build)"
+            )
         command = (
             "source /opt/ros/humble/setup.bash && "
-            f"source {shlex.quote(str(RC_MOVEIT_DIR / 'install' / 'setup.bash'))} && "
+            f"source {shlex.quote(str(RC_ARM_STACK_SETUP))} && "
             + " ".join(shlex.quote(part) for part in ros2_args)
         )
         return ["bash", "-lc", command]
