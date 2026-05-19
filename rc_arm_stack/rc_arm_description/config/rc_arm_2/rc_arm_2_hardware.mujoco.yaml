@@ -34,7 +34,14 @@ unloaded_position_kd: 3.0
 # 硬件层统一速度限制，单位 rad/s
 velocity_limit: 12.0
 
+# 参考轨迹速度上限，供硬件层监测/限幅使用，单位 rad/s
+max_velocity: 40.0
+
+# 参考轨迹加速度上限，供硬件层监测使用，单位 rad/s^2
+max_acceleration: 20.0
+
 # 是否启用低刚度模式
+# MuJoCo 在线跟踪默认关闭；否则会长期使用较软的低刚度 PD，目标追踪明显变慢
 low_stiffness_mode: true
 
 # 空载低刚度模式全局 Kp
@@ -86,12 +93,12 @@ payload_low_stiffness_kp_j3: 10.0
 payload_low_stiffness_kd_j3: 2.0
 
 # j4 低刚度 Kp 覆盖值
-unloaded_low_stiffness_kp_j4: 5.0
+unloaded_low_stiffness_kp_j4: 0.03
 
 # j4 空载低刚度 Kd 覆盖值
-unloaded_low_stiffness_kd_j4: 0.03
-payload_low_stiffness_kp_j4: 5.0
-payload_low_stiffness_kd_j4: 0.03
+unloaded_low_stiffness_kd_j4: 0.01
+payload_low_stiffness_kp_j4: 0.03
+payload_low_stiffness_kd_j4: 0.01
 
 # 是否启用 Pinocchio 重力补偿项
 use_pinocchio_gravity: false
