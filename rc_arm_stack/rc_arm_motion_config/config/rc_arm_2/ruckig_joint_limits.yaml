@@ -1,7 +1,7 @@
 joint_limits:
   j1_joint:
-    min_position: -0.2942036732051034
-    max_position: 3.9357963267948963
+    min_position: -1.8650
+    max_position: 2.3650
     max_velocity: 12.0
     max_acceleration: 60.0
     max_jerk: 120.0

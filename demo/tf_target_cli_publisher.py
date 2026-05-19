@@ -46,6 +46,9 @@ from arm_msgs.msg import Arm2TargetPoint
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 RC_ARM_STACK_DIR = ROOT_DIR / "rc_arm_stack"
+DEFAULT_SOURCE_URDF = (
+    RC_ARM_STACK_DIR / "rc_arm_description" / "urdf" / "rc_arm_2" / "rc_arm_2.urdf.xacro"
+)
 sys.path.insert(0, str(ROOT_DIR / "rc_arm_stack" / "rc_arm_motion_config" / "launch"))
 
 from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E402
@@ -77,6 +80,13 @@ def middleware_command() -> List[str]:
         "ros2 run rc_arm2_middleware arm2_middleware"
     )
     return ["bash", "-lc", command]
+
+
+def preferred_demo_urdf_path() -> str:
+    """Prefer the source-tree URDF so local geometry edits reflect immediately in the GUI."""
+    if DEFAULT_SOURCE_URDF.is_file():
+        return str(DEFAULT_SOURCE_URDF)
+    return ""
 
 
 @dataclass
@@ -615,6 +625,7 @@ class TargetPublisherWindow(QMainWindow):
         self._update_status_labels()
         self._startup_cleanup_project_ros_processes()
         self._backend.start()
+        self._append_log(f"reachability URDF: {self._kinematics.urdf_path}")
         self._request_reachability()
 
     def _ros2_env_command(self, ros2_args: List[str]) -> List[str]:
@@ -1303,7 +1314,7 @@ def parse_args():
     parser.add_argument("--joint-state-topic", default="/joint_states")
     parser.add_argument("--middleware-target-topic", default="/arm2/middleware/target_point")
     parser.add_argument("--middleware-run-action-set-topic", default="/arm2/middleware/run_action_set")
-    parser.add_argument("--urdf-path", default="")
+    parser.add_argument("--urdf-path", default=preferred_demo_urdf_path())
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--reachability-step", type=float, default=0.05)
     return parser.parse_args()
