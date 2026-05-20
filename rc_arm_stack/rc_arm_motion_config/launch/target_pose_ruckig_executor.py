@@ -194,6 +194,8 @@ class TargetPoseRuckigExecutor(Node):
         self._otg_has_state = False
         self._otg_target_positions: Optional[List[float]] = None
         self._otg_last_sync_reason = "init"
+        self._last_otg_reset_log_reason = ""
+        self._last_otg_reset_log_time_sec = 0.0
         self._otg_plan_feedback_position_reset = 2.5
         self._otg_plan_feedback_velocity_reset = max(
             2.0,
@@ -686,6 +688,26 @@ class TargetPoseRuckigExecutor(Node):
             return f"plan_feedback_velocity_desync:{max_velocity_error:.3f}"
         return None
 
+    def _max_joint_error_detail(
+        self,
+        feedback_values: Sequence[float],
+        planned_values: Sequence[float],
+    ) -> Tuple[Optional[str], float, float, float]:
+        max_error_joint: Optional[str] = None
+        max_error_value = 0.0
+        max_feedback_value = 0.0
+        max_planned_value = 0.0
+        for index, joint_name in enumerate(self._joint_names):
+            feedback_value = float(feedback_values[index])
+            planned_value = float(planned_values[index])
+            error_value = abs(feedback_value - planned_value)
+            if max_error_joint is None or error_value > max_error_value:
+                max_error_joint = joint_name
+                max_error_value = error_value
+                max_feedback_value = feedback_value
+                max_planned_value = planned_value
+        return max_error_joint, max_error_value, max_feedback_value, max_planned_value
+
     def _prime_otg_from_feedback(
         self,
         current_positions: Sequence[float],
@@ -706,7 +728,50 @@ class TargetPoseRuckigExecutor(Node):
         self._otg_target_positions = list(target_positions)
         self._otg_has_state = True
         self._otg_last_sync_reason = reason
-        self.get_logger().info("[OTG] sync_from_feedback reason=%s" % reason)
+        self._log_otg_reset(reason, current_positions, current_velocities)
+
+    def _log_otg_reset(
+        self,
+        reason: str,
+        current_positions: Sequence[float],
+        current_velocities: Sequence[float],
+    ) -> None:
+        now_sec = self._now_sec()
+        if (
+            reason == self._last_otg_reset_log_reason
+            and (now_sec - self._last_otg_reset_log_time_sec) < 1.0
+        ):
+            return
+
+        log_message = f"[OTG] rebuild_from_feedback reason={reason}"
+        if reason.startswith("plan_feedback_position_desync"):
+            max_joint, max_error, feedback_value, planned_value = self._max_joint_error_detail(
+                current_positions,
+                self._otg_input.current_position,
+            )
+            if max_joint is not None:
+                log_message += (
+                    " joint=%s feedback=%.6f planned=%.6f abs_err=%.6f"
+                    % (max_joint, feedback_value, planned_value, max_error)
+                )
+        elif reason.startswith("plan_feedback_velocity_desync"):
+            max_joint, max_error, feedback_value, planned_value = self._max_joint_error_detail(
+                current_velocities,
+                self._otg_input.current_velocity,
+            )
+            if max_joint is not None:
+                log_message += (
+                    " joint=%s feedback=%.6f planned=%.6f abs_err=%.6f"
+                    % (max_joint, feedback_value, planned_value, max_error)
+                )
+
+        if reason.startswith("plan_feedback_position_desync") or reason.startswith("plan_feedback_velocity_desync"):
+            self.get_logger().warn(log_message)
+        else:
+            self.get_logger().info(log_message)
+
+        self._last_otg_reset_log_reason = reason
+        self._last_otg_reset_log_time_sec = now_sec
 
     def _advance_otg_state_from_output(self, target_positions: Sequence[float]) -> None:
         try:
