@@ -14,10 +14,11 @@ def _project_venv_python() -> str:
         if candidate.is_file():
             return str(candidate)
     raise RuntimeError("project virtualenv python not found; expected .venv/bin/python3 in a parent directory")
-
+# PROJECT_VENV_PYTHON = "/home/dust/rc_robotarm_mujoco/.venv/bin/python3"
 
 def generate_launch_description():
     project_venv_python = _project_venv_python()
+    # PROJECT_VENV_PYTHON
     default_hardware_config = PathJoinSubstitution(
         [FindPackageShare("rc_arm_description"), "config", "rc_arm_2", "rc_arm_2_hardware.real.yaml"]
     )
@@ -109,6 +110,7 @@ def generate_launch_description():
     tf_target_bridge = ExecuteProcess(
         cmd=[
             project_venv_python,
+            # PROJECT_VENV_PYTHON
             PathJoinSubstitution([FindPackageShare("rc_arm_motion_config"), "launch", "tf_target_pose_bridge.py"]),
             "--tf-topic",
             LaunchConfiguration("tf_target_topic"),
@@ -128,6 +130,7 @@ def generate_launch_description():
     target_pose_executor = ExecuteProcess(
         cmd=[
             project_venv_python,
+            # PROJECT_VENV_PYTHON
             PathJoinSubstitution([FindPackageShare("rc_arm_motion_config"), "launch", "target_pose_ruckig_executor.py"]),
             "--target-topic",
             LaunchConfiguration("tf_target_pose_topic"),
@@ -171,6 +174,7 @@ def generate_launch_description():
     torque_printer = ExecuteProcess(
         cmd=[
             project_venv_python,
+            # PROJECT_VENV_PYTHON
             PathJoinSubstitution([FindPackageShare("rc_arm_motion_config"), "launch", "joint_torque_printer.py"]),
             "--topic",
             LaunchConfiguration("torque_print_topic"),
