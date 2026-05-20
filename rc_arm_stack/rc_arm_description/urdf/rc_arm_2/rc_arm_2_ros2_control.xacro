@@ -71,8 +71,8 @@
         <param name="payload_low_stiffness_kp">${hardware_config.payload_low_stiffness_kp_j1}</param>
         <param name="payload_low_stiffness_kd">${hardware_config.payload_low_stiffness_kd_j1}</param>
         <command_interface name="position">
-          <param name="min">-1.8650</param>
-          <param name="max">2.3650</param>
+          <param name="min">-0.2942036732051034</param>
+          <param name="max">3.9357963267948963</param>
         </command_interface>
         <command_interface name="velocity">
           <param name="min">-12.0</param>
