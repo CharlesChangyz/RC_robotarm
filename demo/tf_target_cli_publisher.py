@@ -592,8 +592,7 @@ class TargetPublisherWindow(QMainWindow):
         self._editing_dirty = False
         self._actual_pose_ready = False
         self._syncing_editor = False
-        self._tracking_base_target: Optional[TargetState] = None
-        self._tracking_started_monotonic = 0.0
+        self._wheel_drag_origin: Dict[str, float] = {}
 
         self.setWindowTitle("RC Arm TF Target Publisher")
         self.resize(1080, 760)
@@ -621,8 +620,6 @@ class TargetPublisherWindow(QMainWindow):
         self._reachability_timer.setInterval(300)
         self._reachability_timer.setSingleShot(True)
         self._reachability_timer.timeout.connect(self._request_reachability)
-        self._tracking_timer = QTimer(self)
-        self._tracking_timer.timeout.connect(self._on_tracking_timer)
 
         self._build_ui()
         self._install_shortcuts()
@@ -838,6 +835,8 @@ class TargetPublisherWindow(QMainWindow):
         self._j4_step_spin.setValue(5.0)
 
         self._field_spins = {}
+        self._axis_wheels = {}
+        self._axis_wheel_delta_labels = {}
         rows = [
             ("x", "x", "m"),
             ("y", "y", "m"),
@@ -861,12 +860,30 @@ class TargetPublisherWindow(QMainWindow):
             layout.addWidget(minus, row, 1)
             layout.addWidget(spin, row, 2)
             layout.addWidget(plus, row, 3)
+            if field_key in ("x", "y", "z"):
+                dial = QDial()
+                dial.setRange(-20, 20)
+                dial.setValue(0)
+                dial.setNotchesVisible(True)
+                dial.setWrapping(False)
+                dial.sliderPressed.connect(lambda axis=field_key: self._on_axis_wheel_pressed(axis))
+                dial.valueChanged.connect(
+                    lambda value, axis=field_key: self._on_axis_wheel_changed(axis, value)
+                )
+                dial.sliderReleased.connect(lambda axis=field_key: self._on_axis_wheel_released(axis))
+                delta_label = QLabel("0.0000 m")
+                layout.addWidget(dial, row, 4)
+                layout.addWidget(delta_label, row, 5)
+                self._axis_wheels[field_key] = dial
+                self._axis_wheel_delta_labels[field_key] = delta_label
             self._field_spins[field_key] = spin
 
         layout.addWidget(QLabel("xyz step"), 4, 0)
         layout.addWidget(self._xyz_step_spin, 4, 2)
+        layout.addWidget(QLabel("xyz wheel"), 4, 4)
         layout.addWidget(QLabel("j4 step"), 5, 0)
         layout.addWidget(self._j4_step_spin, 5, 2)
+        layout.addWidget(QLabel("drag single axis"), 5, 4, 1, 2)
 
         self._send_if_changed = QCheckBox("Send if changed only")
         self._send_if_changed.setChecked(True)
@@ -885,74 +902,6 @@ class TargetPublisherWindow(QMainWindow):
         layout.addWidget(send_btn, 7, 0, 1, 2)
         layout.addWidget(reset_btn, 7, 2)
         layout.addWidget(home_btn, 7, 3)
-        layout.addWidget(self._build_tracking_controls(), 8, 0, 1, 4)
-        return box
-
-    def _build_tracking_controls(self) -> QWidget:
-        box = QGroupBox("Tracking Sim")
-        layout = QGridLayout(box)
-
-        self._tracking_send_rate_spin = QDoubleSpinBox()
-        self._tracking_send_rate_spin.setDecimals(1)
-        self._tracking_send_rate_spin.setRange(1.0, 60.0)
-        self._tracking_send_rate_spin.setValue(15.0)
-        self._tracking_send_rate_spin.setSuffix(" Hz")
-        self._tracking_send_rate_spin.valueChanged.connect(self._on_tracking_rate_changed)
-
-        self._tracking_period_spin = QDoubleSpinBox()
-        self._tracking_period_spin.setDecimals(2)
-        self._tracking_period_spin.setRange(0.2, 30.0)
-        self._tracking_period_spin.setValue(4.0)
-        self._tracking_period_spin.setSuffix(" s")
-
-        self._tracking_amp_spins = {}
-        for axis, value in (("x", 0.03), ("y", 0.03), ("z", 0.00)):
-            spin = QDoubleSpinBox()
-            spin.setDecimals(3)
-            spin.setRange(0.0, 1.0)
-            spin.setValue(value)
-            spin.setSingleStep(0.005)
-            spin.setSuffix(" m")
-            self._tracking_amp_spins[axis] = spin
-
-        self._tracking_phase_dial = QDial()
-        self._tracking_phase_dial.setRange(0, 359)
-        self._tracking_phase_dial.setWrapping(True)
-        self._tracking_phase_dial.setNotchesVisible(True)
-        self._tracking_phase_dial.setValue(0)
-        self._tracking_phase_dial.valueChanged.connect(self._on_tracking_phase_changed)
-        self._tracking_phase_label = QLabel("0 deg")
-
-        self._tracking_running_check = QCheckBox("Continuous send")
-        self._tracking_running_check.setChecked(False)
-        self._tracking_running_check.toggled.connect(self._on_tracking_toggled)
-
-        self._tracking_start_btn = QPushButton("Start Tracking")
-        self._tracking_start_btn.clicked.connect(self._start_tracking)
-        self._tracking_stop_btn = QPushButton("Stop Tracking")
-        self._tracking_stop_btn.clicked.connect(self._stop_tracking)
-        self._tracking_center_btn = QPushButton("Use Current As Center")
-        self._tracking_center_btn.clicked.connect(self._capture_tracking_center)
-        self._tracking_preview_label = QLabel("center=editing target")
-
-        layout.addWidget(QLabel("send rate"), 0, 0)
-        layout.addWidget(self._tracking_send_rate_spin, 0, 1)
-        layout.addWidget(QLabel("cycle"), 0, 2)
-        layout.addWidget(self._tracking_period_spin, 0, 3)
-        layout.addWidget(QLabel("x amp"), 1, 0)
-        layout.addWidget(self._tracking_amp_spins["x"], 1, 1)
-        layout.addWidget(QLabel("y amp"), 1, 2)
-        layout.addWidget(self._tracking_amp_spins["y"], 1, 3)
-        layout.addWidget(QLabel("z amp"), 2, 0)
-        layout.addWidget(self._tracking_amp_spins["z"], 2, 1)
-        layout.addWidget(QLabel("phase wheel"), 2, 2)
-        layout.addWidget(self._tracking_phase_label, 2, 3)
-        layout.addWidget(self._tracking_phase_dial, 3, 0, 1, 2)
-        layout.addWidget(self._tracking_running_check, 3, 2, 1, 2)
-        layout.addWidget(self._tracking_start_btn, 4, 0, 1, 2)
-        layout.addWidget(self._tracking_stop_btn, 4, 2)
-        layout.addWidget(self._tracking_center_btn, 4, 3)
-        layout.addWidget(self._tracking_preview_label, 5, 0, 1, 4)
         return box
 
     def _build_reachability_panel(self) -> QWidget:
@@ -1028,7 +977,7 @@ class TargetPublisherWindow(QMainWindow):
         self._editing_label = QLabel("NA")
         self._last_sent_label = QLabel("NA")
         self._send_status_label = QLabel("idle")
-        self._tracking_status_label = QLabel("stopped")
+        self._wheel_status_label = QLabel("idle")
         self._vacuum_status_label = QLabel("unknown")
         self._middleware_status_label = QLabel("idle")
         self._payload_status_label = QLabel("false")
@@ -1038,7 +987,7 @@ class TargetPublisherWindow(QMainWindow):
         layout.addRow("Editing target", self._editing_label)
         layout.addRow("Last sent target", self._last_sent_label)
         layout.addRow("Last send result", self._send_status_label)
-        layout.addRow("Tracking sim", self._tracking_status_label)
+        layout.addRow("XYZ wheel", self._wheel_status_label)
         layout.addRow("Last vacuum command", self._vacuum_status_label)
         layout.addRow("Last middleware command", self._middleware_status_label)
         layout.addRow("Payload active", self._payload_status_label)
@@ -1080,7 +1029,6 @@ class TargetPublisherWindow(QMainWindow):
             self._field_spins["j4"].setValue(math.degrees(self._editing_target.j4_rad))
         finally:
             self._syncing_editor = False
-        self._update_tracking_preview()
         self._update_status_labels()
 
     def _read_editing_target(self) -> TargetState:
@@ -1119,16 +1067,11 @@ class TargetPublisherWindow(QMainWindow):
         self._send_btn.setEnabled(self._actual_pose_ready)
         self._run_action_set_btn.setEnabled(self._actual_pose_ready)
         self._action_set_spin.setEnabled(self._actual_pose_ready)
-        tracking_enabled = self._actual_pose_ready
-        self._tracking_start_btn.setEnabled(tracking_enabled and not self._tracking_timer.isActive())
-        self._tracking_stop_btn.setEnabled(self._tracking_timer.isActive())
-        self._tracking_running_check.setEnabled(tracking_enabled)
-        if self._tracking_timer.isActive():
-            self._tracking_status_label.setText("running")
-        elif self._tracking_running_check.isChecked():
-            self._tracking_status_label.setText("armed")
+        if self._wheel_drag_origin:
+            active_axes = ",".join(sorted(self._wheel_drag_origin.keys()))
+            self._wheel_status_label.setText(f"dragging {active_axes}")
         else:
-            self._tracking_status_label.setText("stopped")
+            self._wheel_status_label.setText("idle")
 
     def _request_reachability(self) -> None:
         if not self._actual_pose_ready:
@@ -1143,120 +1086,40 @@ class TargetPublisherWindow(QMainWindow):
         self._update_status_labels()
         self._reachability_timer.start()
 
-    def _tracking_phase_offset_rad(self) -> float:
-        return math.radians(float(self._tracking_phase_dial.value()))
+    def _set_axis_wheel_delta_label(self, axis: str, delta: float) -> None:
+        self._axis_wheel_delta_labels[axis].setText("{:+.4f} m".format(delta))
 
-    def _tracking_center_target(self) -> TargetState:
-        center = self._tracking_base_target
-        if center is None:
-            center = self._read_editing_target()
-        return TargetState(center.x, center.y, center.z, center.j4_rad)
-
-    def _update_tracking_preview(self) -> None:
-        center = self._tracking_center_target()
-        self._tracking_preview_label.setText(
-            "center=({:.3f}, {:.3f}, {:.3f}) j4={:.1f} deg".format(
-                center.x,
-                center.y,
-                center.z,
-                math.degrees(center.j4_rad),
-            )
-        )
-
-    def _capture_tracking_center(self) -> None:
-        self._tracking_base_target = self._read_editing_target()
-        self._update_tracking_preview()
-        self._set_send_status("tracking center captured from editing target")
-
-    @Slot()
-    def _on_tracking_phase_changed(self) -> None:
-        self._tracking_phase_label.setText(f"{self._tracking_phase_dial.value()} deg")
-        if self._tracking_timer.isActive():
-            self._publish_tracking_target()
-
-    @Slot()
-    def _on_tracking_rate_changed(self) -> None:
-        if self._tracking_timer.isActive():
-            interval_ms = max(20, int(round(1000.0 / self._tracking_send_rate_spin.value())))
-            self._tracking_timer.setInterval(interval_ms)
-
-    @Slot(bool)
-    def _on_tracking_toggled(self, enabled: bool) -> None:
-        if enabled:
-            self._start_tracking()
-        else:
-            self._stop_tracking()
-
-    def _build_tracking_target(self) -> TargetState:
-        center = self._tracking_center_target()
-        elapsed = max(0.0, time.monotonic() - self._tracking_started_monotonic)
-        cycle_sec = max(0.2, float(self._tracking_period_spin.value()))
-        phase = 2.0 * math.pi * (elapsed / cycle_sec) + self._tracking_phase_offset_rad()
-        x_amp = self._tracking_amp_spins["x"].value()
-        y_amp = self._tracking_amp_spins["y"].value()
-        z_amp = self._tracking_amp_spins["z"].value()
-        return TargetState(
-            x=center.x + x_amp * math.sin(phase),
-            y=center.y + y_amp * math.cos(phase),
-            z=center.z + z_amp * math.sin(phase + math.pi / 2.0),
-            j4_rad=center.j4_rad,
-        )
-
-    def _publish_tracking_target(self) -> None:
-        state = self._build_tracking_target()
-        self._editing_target = state
-        self._sync_editing_widgets()
-        self._backend.queue_send_target(state, False)
-        self._backend.queue_reachability(state)
-
-    def _start_tracking(self) -> None:
-        if self._tracking_timer.isActive():
+    def _publish_axis_wheel_target(self) -> None:
+        if not self._actual_pose_ready:
+            self._wheel_status_label.setText("blocked: waiting for actual pose")
             return
         self._editing_target = self._read_editing_target()
-        if not self._validate_motion_target("Last send result"):
-            self._tracking_running_check.blockSignals(True)
-            self._tracking_running_check.setChecked(False)
-            self._tracking_running_check.blockSignals(False)
-            self._update_status_labels()
-            return
-        self._tracking_base_target = TargetState(
-            self._editing_target.x,
-            self._editing_target.y,
-            self._editing_target.z,
-            self._editing_target.j4_rad,
-        )
-        self._tracking_started_monotonic = time.monotonic()
-        interval_ms = max(20, int(round(1000.0 / self._tracking_send_rate_spin.value())))
-        self._tracking_timer.setInterval(interval_ms)
-        self._tracking_timer.start()
-        self._tracking_running_check.blockSignals(True)
-        self._tracking_running_check.setChecked(True)
-        self._tracking_running_check.blockSignals(False)
-        self._publish_tracking_target()
-        self._set_send_status(
-            "tracking sim started rate={:.1f}Hz cycle={:.2f}s".format(
-                self._tracking_send_rate_spin.value(),
-                self._tracking_period_spin.value(),
-            )
-        )
+        self._backend.queue_send_target(self._editing_target, False)
+        self._backend.queue_reachability(self._editing_target)
+
+    def _on_axis_wheel_pressed(self, axis: str) -> None:
+        self._wheel_drag_origin[axis] = self._field_spins[axis].value()
+        self._set_axis_wheel_delta_label(axis, 0.0)
         self._update_status_labels()
 
-    def _stop_tracking(self) -> None:
-        was_running = self._tracking_timer.isActive()
-        self._tracking_timer.stop()
-        self._tracking_running_check.blockSignals(True)
-        self._tracking_running_check.setChecked(False)
-        self._tracking_running_check.blockSignals(False)
-        if was_running:
-            self._set_send_status("tracking sim stopped")
-        self._update_status_labels()
-
-    @Slot()
-    def _on_tracking_timer(self) -> None:
-        if not self._actual_pose_ready:
-            self._stop_tracking()
+    def _on_axis_wheel_changed(self, axis: str, value: int) -> None:
+        if axis not in self._wheel_drag_origin:
+            self._set_axis_wheel_delta_label(axis, 0.0)
             return
-        self._publish_tracking_target()
+        delta = float(value) * self._xyz_step_spin.value()
+        self._set_axis_wheel_delta_label(axis, delta)
+        target_value = self._wheel_drag_origin[axis] + delta
+        self._field_spins[axis].setValue(target_value)
+        self._publish_axis_wheel_target()
+
+    def _on_axis_wheel_released(self, axis: str) -> None:
+        self._wheel_drag_origin.pop(axis, None)
+        dial = self._axis_wheels[axis]
+        dial.blockSignals(True)
+        dial.setValue(0)
+        dial.blockSignals(False)
+        self._set_axis_wheel_delta_label(axis, 0.0)
+        self._update_status_labels()
 
     def _send_target(self) -> None:
         self._editing_target = self._read_editing_target()
@@ -1494,7 +1357,6 @@ class TargetPublisherWindow(QMainWindow):
         self._log_view.appendPlainText(text)
 
     def closeEvent(self, event) -> None:  # noqa: N802
-        self._tracking_timer.stop()
         self._mujoco_stack.stop()
         self._mujoco_bridge.stop()
         self._real_stack.stop()
