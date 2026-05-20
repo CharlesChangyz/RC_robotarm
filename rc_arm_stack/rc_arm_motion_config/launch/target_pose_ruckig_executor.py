@@ -19,7 +19,7 @@ import tf2_ros
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 import yaml
 
-from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics
+from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics, normalize_angle_rad
 
 try:
     from ruckig import InputParameter, OutputParameter, Result, Ruckig
@@ -747,13 +747,14 @@ class TargetPoseRuckigExecutor(Node):
     def _request_reached(
         self,
         request: ExecutionRequest,
+        current_positions: Sequence[float],
         current_velocities: Sequence[float],
     ) -> bool:
         current_pose = self._get_current_eef_pose()
         if current_pose is None:
             return False
 
-        current_xyz, current_quat = current_pose
+        current_xyz, _current_quat = current_pose
         target = request.target.pose
         dx = current_xyz[0] - float(target.position.x)
         dy = current_xyz[1] - float(target.position.y)
@@ -768,7 +769,9 @@ class TargetPoseRuckigExecutor(Node):
                 float(target.orientation.w),
             )
         )
-        rot_error = _quat_angle(current_quat, target_quat)
+        target_pitch = self._kinematics.world_pitch_from_quaternion(target_quat)
+        current_pitch = self._kinematics.forward_world_pitch(current_positions)
+        rot_error = abs(normalize_angle_rad(current_pitch - target_pitch))
         max_velocity = max((abs(float(v)) for v in current_velocities), default=0.0)
         return (
             pos_error <= self._pos_threshold
@@ -807,7 +810,11 @@ class TargetPoseRuckigExecutor(Node):
         self._last_tracking_error_joint = None
         self._last_tracking_error_value = 0.0
 
-        if self._active_request is not None and self._request_reached(self._active_request, current_velocities):
+        if self._active_request is not None and self._request_reached(
+            self._active_request,
+            current_positions,
+            current_velocities,
+        ):
             self._complete_active_request(
                 success=True,
                 error_code=0,
@@ -864,7 +871,7 @@ def parse_args():
     parser.add_argument("--trajectory-sampling-period", type=float, default=0.01)
     parser.add_argument("--joint-state-topic", default="/joint_states")
     parser.add_argument("--urdf-path", default="")
-    parser.add_argument("--pos-threshold", type=float, default=0.003)
+    parser.add_argument("--pos-threshold", type=float, default=0.03)
     parser.add_argument("--rot-threshold", type=float, default=0.03)
     parser.add_argument("--check-period", type=float, default=0.01)
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
