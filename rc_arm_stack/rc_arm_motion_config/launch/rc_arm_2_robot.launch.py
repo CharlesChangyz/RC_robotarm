@@ -6,6 +6,8 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
+PROJECT_VENV_PYTHON = "/home/dust/rc_robotarm_mujoco/.venv/bin/python3"
+
 
 def generate_launch_description():
     default_hardware_config = PathJoinSubstitution(
@@ -37,8 +39,8 @@ def generate_launch_description():
         DeclareLaunchArgument("use_target_pose_executor", default_value="true", description="是否启用 target_pose 执行链路"),
         DeclareLaunchArgument("target_pose_executor_joint_names", default_value="j1_joint,j2_joint,j3_joint,j4_joint", description="target_pose 执行器使用的关节顺序"),
         DeclareLaunchArgument("target_pose_executor_default_frame", default_value=LaunchConfiguration("world_frame_id"), description="target_pose 没有 frame_id 时使用的默认坐标系"),
-        DeclareLaunchArgument("target_pose_executor_pos_threshold", default_value="0.003", description="在线追踪位置容差/去抖阈值（m）"),
-        DeclareLaunchArgument("target_pose_executor_rot_threshold", default_value="0.03", description="在线追踪姿态容差/去抖阈值（rad）"),
+        DeclareLaunchArgument("target_pose_executor_pos_threshold", default_value="0.03", description="在线追踪位置容差/去抖阈值（m）"),
+        DeclareLaunchArgument("target_pose_executor_rot_threshold", default_value="0.3", description="在线追踪姿态容差/去抖阈值（rad）"),
         DeclareLaunchArgument("target_pose_executor_check_period", default_value="0.01", description="target_pose 在线跟踪周期（s）"),
         DeclareLaunchArgument("target_pose_executor_j4_axis", default_value="x", description="目标姿态中 j4 对应的旋转轴（x/y/z）"),
         DeclareLaunchArgument("target_pose_executor_joint_state_topic", default_value="/joint_states", description="target_pose 执行器读取当前关节角的话题"),
@@ -98,7 +100,7 @@ def generate_launch_description():
 
     tf_target_bridge = ExecuteProcess(
         cmd=[
-            "python3",
+            PROJECT_VENV_PYTHON,
             PathJoinSubstitution([FindPackageShare("rc_arm_motion_config"), "launch", "tf_target_pose_bridge.py"]),
             "--tf-topic",
             LaunchConfiguration("tf_target_topic"),
@@ -117,7 +119,7 @@ def generate_launch_description():
 
     target_pose_executor = ExecuteProcess(
         cmd=[
-            "python3",
+            PROJECT_VENV_PYTHON,
             PathJoinSubstitution([FindPackageShare("rc_arm_motion_config"), "launch", "target_pose_ruckig_executor.py"]),
             "--target-topic",
             LaunchConfiguration("tf_target_pose_topic"),
@@ -160,7 +162,7 @@ def generate_launch_description():
 
     torque_printer = ExecuteProcess(
         cmd=[
-            "python3",
+            PROJECT_VENV_PYTHON,
             PathJoinSubstitution([FindPackageShare("rc_arm_motion_config"), "launch", "joint_torque_printer.py"]),
             "--topic",
             LaunchConfiguration("torque_print_topic"),
@@ -173,7 +175,7 @@ def generate_launch_description():
 
     position_printer = ExecuteProcess(
         cmd=[
-            "python3",
+            PROJECT_VENV_PYTHON,
             PathJoinSubstitution([FindPackageShare("rc_arm_motion_config"), "launch", "joint_position_printer.py"]),
             "--topic",
             LaunchConfiguration("position_print_topic"),

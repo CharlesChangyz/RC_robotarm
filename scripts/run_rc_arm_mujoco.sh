@@ -5,6 +5,7 @@ set -eo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 WORKSPACE_DIR="${REPO_ROOT}/rc_arm_stack"
+VENV_ACTIVATE="${REPO_ROOT}/.venv/bin/activate"
 
 if [[ ! -f "${WORKSPACE_DIR}/install/setup.bash" ]]; then
   echo "[run_rc_arm_mujoco] missing workspace setup: ${WORKSPACE_DIR}/install/setup.bash"
@@ -13,6 +14,10 @@ if [[ ! -f "${WORKSPACE_DIR}/install/setup.bash" ]]; then
 fi
 
 source /opt/ros/humble/setup.bash
+if [[ -f "${VENV_ACTIVATE}" ]]; then
+  # Prefer the project venv so launch-time Python nodes can import local deps such as ruckig.
+  source "${VENV_ACTIVATE}"
+fi
 source "${WORKSPACE_DIR}/install/setup.bash"
 set -u
 
@@ -24,6 +29,7 @@ USE_TARGET_POSE_EXECUTOR="${USE_TARGET_POSE_EXECUTOR:-true}"
 JOINT_LIMITS_FILE="${JOINT_LIMITS_FILE:-${WORKSPACE_DIR}/rc_arm_motion_config/config/rc_arm_2/ruckig_joint_limits.yaml}"
 
 echo "[run_rc_arm_mujoco] workspace: ${WORKSPACE_DIR}"
+echo "[run_rc_arm_mujoco] python3=$(command -v python3)"
 echo "[run_rc_arm_mujoco] hardware_config_file=${HARDWARE_CONFIG_FILE}"
 echo "[run_rc_arm_mujoco] controllers_file=${CONTROLLERS_FILE}"
 echo "[run_rc_arm_mujoco] use_rviz=${USE_RVIZ}"
