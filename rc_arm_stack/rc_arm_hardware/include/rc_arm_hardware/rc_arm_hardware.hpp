@@ -182,6 +182,9 @@ private:
   std::vector<double> smoothed_accelerations_; // 当前执行参考加速度
   
   // 速度前馈计算
+  std::vector<double> filtered_cmd_velocities_;     // 一级滤波后的速度参考
+  std::vector<double> velocity_ff_stage2_;          // 二级滤波后的最终速度前馈
+  double max_acceleration_;                         // 硬件层每周期限加速度 (rad/s^2)
   bool first_command_;                              // 首条指令标志
   double fallback_control_period_;                  // 异常周期回退值 (s)
   

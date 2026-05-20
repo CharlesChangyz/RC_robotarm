@@ -4,25 +4,25 @@ joint_limits:
     max_position: 3.9357963267948963
     max_velocity: 12.0
     max_acceleration: 60.0
-    max_jerk: 120.0
+    max_jerk: 60.0
 
   j2_joint:
     min_position: 0.0
     max_position: 1.85
     max_velocity: 12.0
     max_acceleration: 60.0
-    max_jerk: 120.0
+    max_jerk: 60.0
 
   j3_joint:
     min_position: 0.0
     max_position: 2.13861
     max_velocity: 12.0
     max_acceleration: 60.0
-    max_jerk: 120.0
+    max_jerk: 60.0
 
   j4_joint:
     min_position: -3.14159265358979
     max_position: 3.14159265358979
     max_velocity: 20.0
     max_acceleration: 60.0
-    max_jerk: 120.0
+    max_jerk: 60.0

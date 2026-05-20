@@ -253,11 +253,19 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   smoothed_positions_.resize(num_joints, 0.0);
   smoothed_velocities_.resize(num_joints, 0.0);
   smoothed_accelerations_.resize(num_joints, 0.0);
+  filtered_cmd_velocities_.resize(num_joints, 0.0);
+  velocity_ff_stage2_.resize(num_joints, 0.0);
   
   // 默认参数
+  max_acceleration_ = 8.0;      // 硬件层每周期限加速度
   fallback_control_period_ = 0.005;  // 默认 200Hz -> 5ms
   first_command_ = true;
   gravity_feedforward_ratio_ = 0.5;  // 默认 50% 重力补偿前馈
+
+  if (info_.hardware_parameters.count("max_acceleration")) {
+    max_acceleration_ = std::stod(info_.hardware_parameters.at("max_acceleration"));
+  }
+  max_acceleration_ = std::max(1e-4, max_acceleration_);
 
   if (info_.hardware_parameters.count("fallback_control_period")) {
     fallback_control_period_ = std::stod(info_.hardware_parameters.at("fallback_control_period"));
@@ -274,7 +282,8 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
               "已初始化：%zu 个关节，backend=%s",
               num_joints, backend_name_.c_str());
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
-              "  轨迹参考：直接执行上层 position/velocity/acceleration（无硬件层二次滤波与限加速度）");
+              "  轨迹参考：执行上层 position/velocity/acceleration，并启用硬件层二级速度前馈滤波与限加速度（max_acc=%.1f rad/s²）",
+              max_acceleration_);
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "  回退控制周期：%.4f s",
               fallback_control_period_);
@@ -718,6 +727,8 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_activate(
     smoothed_positions_[i] = initial_position;
     smoothed_velocities_[i] = 0.0;
     smoothed_accelerations_[i] = 0.0;
+    filtered_cmd_velocities_[i] = 0.0;
+    velocity_ff_stage2_[i] = 0.0;
   }
 
   first_command_ = false;
@@ -952,6 +963,8 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       smoothed_positions_[i] = hw_commands_positions_[i];
       smoothed_velocities_[i] = 0.0;
       smoothed_accelerations_[i] = 0.0;
+      filtered_cmd_velocities_[i] = 0.0;
+      velocity_ff_stage2_[i] = 0.0;
     }
 
     first_command_ = false;
@@ -1002,6 +1015,16 @@ hardware_interface::return_type RsA3HardwareInterface::write(
         std::abs(new_velocity),
         config.velocity_limit);
     }
+    if (std::abs(new_acceleration) > max_acceleration_ * 1.10) {
+      RCLCPP_WARN_THROTTLE(
+        rclcpp::get_logger("RsA3HardwareInterface"),
+        *debug_node_->get_clock(),
+        2000,
+        "关节 %s 加速度超限：|a|=%.4f, limit=%.4f",
+        config.name.c_str(),
+        std::abs(new_acceleration),
+        max_acceleration_);
+    }
     id_ref_positions[i] = new_position;
     id_ref_velocities[i] = new_velocity;
     id_ref_accelerations[i] = new_acceleration;
@@ -1015,12 +1038,35 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     auto params = getMotorParams(config.motor_type);
     cmd_position = std::clamp(cmd_position, params.p_min, params.p_max);
 
+    const double raw_cmd_velocity = new_velocity;
     const double velocity_threshold = 0.001;
-    double cmd_velocity = (std::abs(new_velocity) < velocity_threshold) ? 0.0 : new_velocity;
+    double cmd_velocity = (std::abs(raw_cmd_velocity) < velocity_threshold) ? 0.0 : raw_cmd_velocity;
     const double joint_velocity_limit = std::max(0.1, config.velocity_limit);
     cmd_velocity = std::clamp(cmd_velocity, -joint_velocity_limit, joint_velocity_limit);
+
+    const double alpha1 = 0.1;
+    const double first_stage =
+      alpha1 * cmd_velocity + (1.0 - alpha1) * filtered_cmd_velocities_[i];
+    filtered_cmd_velocities_[i] = first_stage;
+
+    const double alpha2 = 0.15;
+    double filtered_velocity =
+      alpha2 * first_stage + (1.0 - alpha2) * velocity_ff_stage2_[i];
+
+    const double max_velocity_change = max_acceleration_ * dt;
+    const double velocity_change = filtered_velocity - velocity_ff_stage2_[i];
+    if (std::abs(velocity_change) > max_velocity_change) {
+      filtered_velocity = velocity_ff_stage2_[i] +
+        max_velocity_change * (velocity_change > 0.0 ? 1.0 : -1.0);
+    }
+
+    if (std::abs(filtered_velocity) < 0.005) {
+      filtered_velocity = 0.0;
+    }
+
+    velocity_ff_stage2_[i] = filtered_velocity;
     cmd_positions_motor[i] = cmd_position;
-    cmd_velocities_motor[i] = cmd_velocity * config.direction;
+    cmd_velocities_motor[i] = filtered_velocity * config.direction;
   }
 
   std::vector<double> pinocchio_gravity_torques_actual;
