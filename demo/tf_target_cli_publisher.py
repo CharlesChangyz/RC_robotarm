@@ -20,6 +20,7 @@ from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QDial,
     QDoubleSpinBox,
     QFormLayout,
     QGridLayout,
@@ -45,8 +46,11 @@ from arm_msgs.msg import Arm2TargetPoint
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-RC_MOVEIT_DIR = ROOT_DIR / "rc_moveit"
-sys.path.insert(0, str(ROOT_DIR / "rc_moveit" / "rc_arm_moveit_config" / "launch"))
+RC_ARM_STACK_DIR = ROOT_DIR / "rc_arm_stack"
+DEFAULT_SOURCE_URDF = (
+    RC_ARM_STACK_DIR / "rc_arm_description" / "urdf" / "rc_arm_2" / "rc_arm_2.urdf.xacro"
+)
+sys.path.insert(0, str(ROOT_DIR / "rc_arm_stack" / "rc_arm_motion_config" / "launch"))
 
 from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E402
 
@@ -54,30 +58,36 @@ from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E40
 SCRIPT_RUN_MUJOCO = ROOT_DIR / "scripts" / "run_rc_arm_mujoco.sh"
 SCRIPT_RUN_MUJOCO_BRIDGE = ROOT_DIR / "scripts" / "run_rc_arm_mujoco_bridge.sh"
 SCRIPT_RUN_REAL = ROOT_DIR / "scripts" / "run_rc_arm_real.sh"
+RC_ARM_STACK_SETUP = RC_ARM_STACK_DIR / "install" / "setup.bash"
 J4_WORLD_MIN_DEG = 0.0
 J4_WORLD_MAX_DEG = 120.0
 AUTO_CLEANUP_WAIT_SEC = 1.0
 PROJECT_ROS_CLEANUP_PATTERNS = (
     ("middleware", "arm2_middleware"),
-    ("executor", "target_pose_moveit_executor.py"),
+    ("executor", "target_pose_ruckig_executor.py"),
     ("tf bridge", "tf_target_pose_bridge.py"),
-    ("payload sync", "payload_scene_sync.py"),
-    ("move_group", "move_group"),
     ("robot_state_publisher", "robot_state_publisher"),
     ("static_transform_publisher", "static_transform_publisher"),
     ("ros2_control_node", "ros2_control_node"),
-    ("real launch", "ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py"),
+    ("real launch", "ros2 launch rc_arm_motion_config rc_arm_2_robot.launch.py"),
 )
 
 
 def middleware_command() -> List[str]:
     command = (
-        f"cd {shlex.quote(str(RC_MOVEIT_DIR))} && "
+        f"cd {shlex.quote(str(RC_ARM_STACK_DIR))} && "
         "source /opt/ros/humble/setup.bash && "
         "source install/setup.bash && "
         "ros2 run rc_arm2_middleware arm2_middleware"
     )
     return ["bash", "-lc", command]
+
+
+def preferred_demo_urdf_path() -> str:
+    """Prefer the source-tree URDF so local geometry edits reflect immediately in the GUI."""
+    if DEFAULT_SOURCE_URDF.is_file():
+        return str(DEFAULT_SOURCE_URDF)
+    return ""
 
 
 @dataclass
@@ -582,6 +592,7 @@ class TargetPublisherWindow(QMainWindow):
         self._editing_dirty = False
         self._actual_pose_ready = False
         self._syncing_editor = False
+        self._wheel_drag_origin: Dict[str, float] = {}
 
         self.setWindowTitle("RC Arm TF Target Publisher")
         self.resize(1080, 760)
@@ -609,19 +620,29 @@ class TargetPublisherWindow(QMainWindow):
         self._reachability_timer.setInterval(300)
         self._reachability_timer.setSingleShot(True)
         self._reachability_timer.timeout.connect(self._request_reachability)
+        self._live_send_pending = False
+        self._live_xyz_send_timer = QTimer(self)
+        self._live_xyz_send_timer.timeout.connect(self._flush_live_xyz_send)
 
         self._build_ui()
+        self._update_live_send_timer_interval()
         self._install_shortcuts()
         self._sync_editing_widgets()
         self._update_status_labels()
         self._startup_cleanup_project_ros_processes()
         self._backend.start()
+        self._append_log(f"reachability URDF: {self._kinematics.urdf_path}")
         self._request_reachability()
 
     def _ros2_env_command(self, ros2_args: List[str]) -> List[str]:
+        if not RC_ARM_STACK_SETUP.is_file():
+            raise FileNotFoundError(
+                f"missing workspace setup: {RC_ARM_STACK_SETUP} "
+                f"(build first: cd {RC_ARM_STACK_DIR} && colcon build)"
+            )
         command = (
             "source /opt/ros/humble/setup.bash && "
-            f"source {shlex.quote(str(RC_MOVEIT_DIR / 'install' / 'setup.bash'))} && "
+            f"source {shlex.quote(str(RC_ARM_STACK_SETUP))} && "
             + " ".join(shlex.quote(part) for part in ros2_args)
         )
         return ["bash", "-lc", command]
@@ -818,6 +839,8 @@ class TargetPublisherWindow(QMainWindow):
         self._j4_step_spin.setValue(5.0)
 
         self._field_spins = {}
+        self._axis_wheels = {}
+        self._axis_wheel_delta_labels = {}
         rows = [
             ("x", "x", "m"),
             ("y", "y", "m"),
@@ -832,7 +855,7 @@ class TargetPublisherWindow(QMainWindow):
                 spin.setRange(J4_WORLD_MIN_DEG, J4_WORLD_MAX_DEG)
             else:
                 spin.setRange(-10.0, 10.0)
-            spin.valueChanged.connect(self._on_editing_changed)
+            spin.valueChanged.connect(lambda _value, axis=field_key: self._on_editing_changed(axis))
             minus = QPushButton("-")
             plus = QPushButton("+")
             minus.clicked.connect(lambda _=False, axis=field_key: self._step_axis(axis, -1.0))
@@ -841,12 +864,43 @@ class TargetPublisherWindow(QMainWindow):
             layout.addWidget(minus, row, 1)
             layout.addWidget(spin, row, 2)
             layout.addWidget(plus, row, 3)
+            if field_key in ("x", "y", "z"):
+                dial = QDial()
+                dial.setRange(-20, 20)
+                dial.setValue(0)
+                dial.setNotchesVisible(True)
+                dial.setWrapping(False)
+                dial.sliderPressed.connect(lambda axis=field_key: self._on_axis_wheel_pressed(axis))
+                dial.valueChanged.connect(
+                    lambda value, axis=field_key: self._on_axis_wheel_changed(axis, value)
+                )
+                dial.sliderReleased.connect(lambda axis=field_key: self._on_axis_wheel_released(axis))
+                dial.setToolTip("Drag to continuously publish this axis target.")
+                delta_label = QLabel("0.0000 m")
+                layout.addWidget(dial, row, 4)
+                layout.addWidget(delta_label, row, 5)
+                self._axis_wheels[field_key] = dial
+                self._axis_wheel_delta_labels[field_key] = delta_label
             self._field_spins[field_key] = spin
 
         layout.addWidget(QLabel("xyz step"), 4, 0)
         layout.addWidget(self._xyz_step_spin, 4, 2)
+        layout.addWidget(QLabel("xyz dial"), 4, 4)
         layout.addWidget(QLabel("j4 step"), 5, 0)
         layout.addWidget(self._j4_step_spin, 5, 2)
+        layout.addWidget(QLabel("drag to live-send"), 5, 4, 1, 2)
+
+        self._live_xyz_send_checkbox = QCheckBox("Live xyz send while editing")
+        self._live_xyz_send_checkbox.setChecked(False)
+        self._live_xyz_send_checkbox.setToolTip(
+            "When enabled, x/y/z spinbox edits, wheel steps, and +/- clicks are sent continuously at ~100 Hz."
+        )
+        self._live_send_rate_spin = QSpinBox()
+        self._live_send_rate_spin.setRange(1, 200)
+        self._live_send_rate_spin.setValue(100)
+        self._live_send_rate_spin.setSuffix(" Hz")
+        self._live_send_rate_spin.setToolTip("Continuous xyz target publish rate.")
+        self._live_send_rate_spin.valueChanged.connect(self._update_live_send_timer_interval)
 
         self._send_if_changed = QCheckBox("Send if changed only")
         self._send_if_changed.setChecked(True)
@@ -861,10 +915,13 @@ class TargetPublisherWindow(QMainWindow):
         home_btn.clicked.connect(self._reset_to_home)
         self._home_btn = home_btn
 
-        layout.addWidget(self._send_if_changed, 6, 0, 1, 4)
-        layout.addWidget(send_btn, 7, 0, 1, 2)
-        layout.addWidget(reset_btn, 7, 2)
-        layout.addWidget(home_btn, 7, 3)
+        layout.addWidget(self._live_xyz_send_checkbox, 6, 0, 1, 4)
+        layout.addWidget(QLabel("live send rate"), 6, 4)
+        layout.addWidget(self._live_send_rate_spin, 6, 5)
+        layout.addWidget(self._send_if_changed, 7, 0, 1, 4)
+        layout.addWidget(send_btn, 8, 0, 1, 2)
+        layout.addWidget(reset_btn, 8, 2)
+        layout.addWidget(home_btn, 8, 3)
         return box
 
     def _build_reachability_panel(self) -> QWidget:
@@ -940,6 +997,7 @@ class TargetPublisherWindow(QMainWindow):
         self._editing_label = QLabel("NA")
         self._last_sent_label = QLabel("NA")
         self._send_status_label = QLabel("idle")
+        self._wheel_status_label = QLabel("idle")
         self._vacuum_status_label = QLabel("unknown")
         self._middleware_status_label = QLabel("idle")
         self._payload_status_label = QLabel("false")
@@ -949,6 +1007,7 @@ class TargetPublisherWindow(QMainWindow):
         layout.addRow("Editing target", self._editing_label)
         layout.addRow("Last sent target", self._last_sent_label)
         layout.addRow("Last send result", self._send_status_label)
+        layout.addRow("XYZ wheel", self._wheel_status_label)
         layout.addRow("Last vacuum command", self._vacuum_status_label)
         layout.addRow("Last middleware command", self._middleware_status_label)
         layout.addRow("Payload active", self._payload_status_label)
@@ -1028,19 +1087,96 @@ class TargetPublisherWindow(QMainWindow):
         self._send_btn.setEnabled(self._actual_pose_ready)
         self._run_action_set_btn.setEnabled(self._actual_pose_ready)
         self._action_set_spin.setEnabled(self._actual_pose_ready)
+        if self._wheel_drag_origin:
+            active_axes = ",".join(sorted(self._wheel_drag_origin.keys()))
+            self._wheel_status_label.setText(f"dragging {active_axes}")
+        elif self._live_xyz_send_timer.isActive() or self._live_send_pending:
+            self._wheel_status_label.setText(
+                f"live xyz send @ {self._live_send_rate_spin.value()} Hz"
+            )
+        else:
+            self._wheel_status_label.setText("idle")
+
+    def _update_live_send_timer_interval(self) -> None:
+        hz = max(1, int(self._live_send_rate_spin.value()))
+        interval_ms = max(1, int(round(1000.0 / float(hz))))
+        self._live_xyz_send_timer.setInterval(interval_ms)
+        self._update_status_labels()
+
+    def _schedule_live_xyz_send(self) -> None:
+        self._live_send_pending = True
+        if not self._live_xyz_send_timer.isActive():
+            self._live_xyz_send_timer.start()
+        self._update_status_labels()
 
     def _request_reachability(self) -> None:
         if not self._actual_pose_ready:
             return
         self._backend.queue_reachability(self._editing_target)
 
-    def _on_editing_changed(self) -> None:
+    def _on_editing_changed(self, axis: Optional[str] = None) -> None:
         if self._syncing_editor:
             return
         self._editing_target = self._read_editing_target()
         self._editing_dirty = True
         self._update_status_labels()
         self._reachability_timer.start()
+        if (
+            axis in ("x", "y", "z")
+            and self._live_xyz_send_checkbox.isChecked()
+            and self._actual_pose_ready
+        ):
+            self._schedule_live_xyz_send()
+
+    def _flush_live_xyz_send(self) -> None:
+        if not self._actual_pose_ready:
+            self._wheel_status_label.setText("blocked: waiting for actual pose")
+            self._live_send_pending = False
+            self._live_xyz_send_timer.stop()
+            return
+        if not self._live_send_pending:
+            self._live_xyz_send_timer.stop()
+            self._update_status_labels()
+            return
+        self._editing_target = self._read_editing_target()
+        self._backend.queue_send_target(self._editing_target, False)
+        self._backend.queue_reachability(self._editing_target)
+        self._live_send_pending = False
+        self._update_status_labels()
+
+    def _set_axis_wheel_delta_label(self, axis: str, delta: float) -> None:
+        self._axis_wheel_delta_labels[axis].setText("{:+.4f} m".format(delta))
+
+    def _publish_axis_wheel_target(self) -> None:
+        if not self._actual_pose_ready:
+            self._wheel_status_label.setText("blocked: waiting for actual pose")
+            return
+        self._editing_target = self._read_editing_target()
+        self._schedule_live_xyz_send()
+
+    def _on_axis_wheel_pressed(self, axis: str) -> None:
+        self._wheel_drag_origin[axis] = self._field_spins[axis].value()
+        self._set_axis_wheel_delta_label(axis, 0.0)
+        self._update_status_labels()
+
+    def _on_axis_wheel_changed(self, axis: str, value: int) -> None:
+        if axis not in self._wheel_drag_origin:
+            self._set_axis_wheel_delta_label(axis, 0.0)
+            return
+        delta = float(value) * self._xyz_step_spin.value()
+        self._set_axis_wheel_delta_label(axis, delta)
+        target_value = self._wheel_drag_origin[axis] + delta
+        self._field_spins[axis].setValue(target_value)
+        self._publish_axis_wheel_target()
+
+    def _on_axis_wheel_released(self, axis: str) -> None:
+        self._wheel_drag_origin.pop(axis, None)
+        dial = self._axis_wheels[axis]
+        dial.blockSignals(True)
+        dial.setValue(0)
+        dial.blockSignals(False)
+        self._set_axis_wheel_delta_label(axis, 0.0)
+        self._update_status_labels()
 
     def _send_target(self) -> None:
         self._editing_target = self._read_editing_target()
@@ -1053,7 +1189,7 @@ class TargetPublisherWindow(QMainWindow):
         if not self._validate_motion_target("Last middleware command"):
             return
         duplicates = self._find_duplicate_nodes(
-            ["/arm2_middleware", "/rc_arm_target_pose_moveit_executor"]
+            ["/arm2_middleware", "/rc_arm_target_pose_executor"]
         )
         if duplicates is None:
             self._middleware_status_label.setText("blocked: unable to inspect ROS nodes")
@@ -1067,7 +1203,7 @@ class TargetPublisherWindow(QMainWindow):
             )
             return
         if not self._check_required_single_nodes(
-            ["/arm2_middleware", "/rc_arm_target_pose_moveit_executor"],
+            ["/arm2_middleware", "/rc_arm_target_pose_executor"],
             "ROS Nodes Not Ready",
             blocked_status=self._middleware_status_label,
         ):
@@ -1218,10 +1354,8 @@ class TargetPublisherWindow(QMainWindow):
             return
         if not self._auto_cleanup_ros_duplicates(
             [
-                "/move_group",
-                "/rc_arm_target_pose_moveit_executor",
+                "/rc_arm_target_pose_executor",
                 "/rc_arm_tf_target_pose_bridge",
-                "/rc_arm_payload_scene_sync",
                 "/robot_state_publisher",
             ],
             "Duplicate ROS Nodes",
@@ -1301,7 +1435,7 @@ def parse_args():
     parser.add_argument("--joint-state-topic", default="/joint_states")
     parser.add_argument("--middleware-target-topic", default="/arm2/middleware/target_point")
     parser.add_argument("--middleware-run-action-set-topic", default="/arm2/middleware/run_action_set")
-    parser.add_argument("--urdf-path", default="")
+    parser.add_argument("--urdf-path", default=preferred_demo_urdf_path())
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--reachability-step", type=float, default=0.05)
     return parser.parse_args()
