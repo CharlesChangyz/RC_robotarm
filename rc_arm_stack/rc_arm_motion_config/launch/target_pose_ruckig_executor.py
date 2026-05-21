@@ -136,6 +136,8 @@ class TargetPoseRuckigExecutor(Node):
         trajectory_sampling_period: float,
         pos_threshold: float,
         rot_threshold: float,
+        manual_target_pos_delta_threshold: float,
+        manual_target_rot_delta_threshold: float,
         check_period: float,
         j4_axis: str,
         joint_state_topic: str,
@@ -166,6 +168,8 @@ class TargetPoseRuckigExecutor(Node):
         self._stream_period = max(0.001, float(check_period))
         self._pos_threshold = max(0.0, float(pos_threshold))
         self._rot_threshold = max(0.0, float(rot_threshold))
+        self._manual_target_pos_delta_threshold = max(0.0, float(manual_target_pos_delta_threshold))
+        self._manual_target_rot_delta_threshold = max(0.0, float(manual_target_rot_delta_threshold))
         self._success_velocity_tolerance = 0.25
         self._j4_axis = str(j4_axis).strip().lower() if str(j4_axis).strip() else "x"
         if self._j4_axis not in {"x", "y", "z"}:
@@ -558,7 +562,7 @@ class TargetPoseRuckigExecutor(Node):
         )
         self._event("middleware_track_start", pose_msg, extra="execution_id=%d" % execution_id)
 
-    def _target_changed(self, prev: PoseStamped, cur: PoseStamped) -> bool:
+    def _manual_target_changed(self, prev: PoseStamped, cur: PoseStamped) -> bool:
         if _normalize_frame_id(prev.header.frame_id) != _normalize_frame_id(cur.header.frame_id):
             return True
 
@@ -575,7 +579,10 @@ class TargetPoseRuckigExecutor(Node):
             (float(dq.x), float(dq.y), float(dq.z), float(dq.w)),
             (float(pq.x), float(pq.y), float(pq.z), float(pq.w)),
         )
-        return pos_delta > self._pos_threshold or rot_delta > self._rot_threshold
+        return (
+            pos_delta > self._manual_target_pos_delta_threshold
+            or rot_delta > self._manual_target_rot_delta_threshold
+        )
 
     def _select_manual_target(self) -> Optional[PoseStamped]:
         with self._manual_target_lock:
@@ -584,7 +591,7 @@ class TargetPoseRuckigExecutor(Node):
                 return None
             if (
                 self._active_manual_target is None
-                or self._target_changed(self._active_manual_target, self._latest_manual_target)
+                or self._manual_target_changed(self._active_manual_target, self._latest_manual_target)
             ):
                 self._active_manual_target = _copy_pose_stamped(self._latest_manual_target)
             return _copy_pose_stamped(self._active_manual_target)
@@ -1021,6 +1028,8 @@ def parse_args():
     parser.add_argument("--urdf-path", default="")
     parser.add_argument("--pos-threshold", type=float, default=0.03)
     parser.add_argument("--rot-threshold", type=float, default=0.03)
+    parser.add_argument("--manual-target-pos-delta-threshold", type=float, default=0.0)
+    parser.add_argument("--manual-target-rot-delta-threshold", type=float, default=0.0)
     parser.add_argument("--check-period", type=float, default=0.01)
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
     parser.add_argument("--status-log-period", type=float, default=1.0, help="state log period, <=0 to disable")
@@ -1055,6 +1064,8 @@ def main() -> None:
             trajectory_sampling_period=args.trajectory_sampling_period,
             pos_threshold=args.pos_threshold,
             rot_threshold=args.rot_threshold,
+            manual_target_pos_delta_threshold=args.manual_target_pos_delta_threshold,
+            manual_target_rot_delta_threshold=args.manual_target_rot_delta_threshold,
             check_period=args.check_period,
             j4_axis=args.j4_axis,
             joint_state_topic=args.joint_state_topic,

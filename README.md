@@ -78,6 +78,7 @@ source install/setup.bash
 - 当前仓库不再包含任何基于外部规划场景或碰撞物体同步的执行链。
 - Ruckig 执行器默认采用“计划态连续推进，反馈仅用于启动对齐和严重失配恢复”的策略。
 - 目标变化默认只更新 `target_position`，不再因为 `target_change` 直接从实机反馈重建 OTG。
+- 手动 `/rc_arm_2/target_pose` 目标更新默认不再复用“到位容差”做去抖；如需抑制极小抖动，可单独调 `target_pose_executor_manual_target_*_delta_threshold`。
 - 与反馈重同步相关的参数通过 `rc_arm_2_robot.launch.py` 暴露，默认值偏向实机稳定：
   - `target_pose_executor_feedback_sync_mode=desync_only`
   - `target_pose_executor_feedback_position_reset_threshold=0.12`
