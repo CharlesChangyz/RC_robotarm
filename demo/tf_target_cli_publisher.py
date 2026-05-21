@@ -50,7 +50,24 @@ RC_ARM_STACK_DIR = ROOT_DIR / "rc_arm_stack"
 DEFAULT_SOURCE_URDF = (
     RC_ARM_STACK_DIR / "rc_arm_description" / "urdf" / "rc_arm_2" / "rc_arm_2.urdf.xacro"
 )
-sys.path.insert(0, str(ROOT_DIR / "rc_arm_stack" / "rc_arm_motion_config" / "launch"))
+KINEMATICS_MODULE_DIR_CANDIDATES = (
+    ROOT_DIR / "rc_arm_stack" / "rc_arm_motion_config" / "launch",
+    ROOT_DIR / "rc_moveit" / "rc_arm_moveit_config" / "launch",
+)
+
+
+def _add_kinematics_module_path() -> None:
+    for candidate in KINEMATICS_MODULE_DIR_CANDIDATES:
+        if (candidate / "rc_arm_world_pitch_kinematics.py").is_file():
+            sys.path.insert(0, str(candidate))
+            return
+    raise ModuleNotFoundError(
+        "rc_arm_world_pitch_kinematics not found under expected launch directories: %s"
+        % ", ".join(str(path) for path in KINEMATICS_MODULE_DIR_CANDIDATES)
+    )
+
+
+_add_kinematics_module_path()
 
 from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E402
 
