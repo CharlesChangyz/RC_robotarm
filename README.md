@@ -23,9 +23,9 @@
 
 1. 上游发送 `/rc_arm_2/target_pose` 或 `/arm2/middleware/motion_target`
 2. `target_pose_ruckig_executor.py` 先做 IK
-3. executor 读取 `ruckig_joint_limits.yaml` 并生成关节轨迹
-4. executor 通过 `/arm_controller/follow_joint_trajectory` 下发轨迹
-5. `rc_arm_controller` 执行并返回结果
+3. executor 读取 `ruckig_joint_limits.yaml`，用 IK + Ruckig 在线生成单点流式参考
+4. executor 通过 `/arm_controller/joint_trajectory` 下发单点轨迹参考
+5. `rc_arm_controller` 以流式方式执行参考并返回结果
 6. middleware 从 `/arm2/middleware/motion_execution` 获取成功/失败状态
 
 `payload_active` 链路与轨迹执行解耦，仍由：
@@ -76,4 +76,14 @@ source install/setup.bash
 ## 说明
 
 - 当前仓库不再包含任何基于外部规划场景或碰撞物体同步的执行链。
+- Ruckig 执行器默认采用“计划态连续推进，反馈仅用于启动对齐和严重失配恢复”的策略。
+- 目标变化默认只更新 `target_position`，不再因为 `target_change` 直接从实机反馈重建 OTG。
+- 与反馈重同步相关的参数通过 `rc_arm_2_robot.launch.py` 暴露，默认值偏向实机稳定：
+  - `target_pose_executor_feedback_sync_mode=desync_only`
+  - `target_pose_executor_feedback_position_reset_threshold=0.12`
+  - `target_pose_executor_feedback_position_reset_cycles=3`
+  - `target_pose_executor_feedback_velocity_reset_enabled=false`
+  - `target_pose_executor_feedback_velocity_reset_threshold=1.5`
+  - `target_pose_executor_feedback_velocity_filter_alpha=0.2`
+  - `target_pose_executor_feedback_accel_mode=zero`
 - `rc_arm_stack/build`、`rc_arm_stack/install` 和 `rc_arm_stack/log` 为构建产物目录，可按需重新生成。

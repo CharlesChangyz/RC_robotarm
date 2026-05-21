@@ -41,6 +41,9 @@ EXECUTION_ERROR_LIMITS_LOAD_FAILED = -5
 EXECUTION_ERROR_TARGET_OUT_OF_LIMITS = -6
 EXECUTION_ERROR_TRAJECTORY_GENERATION_FAILED = -7
 
+FEEDBACK_SYNC_MODES = {"init_only", "desync_only", "always"}
+FEEDBACK_ACCEL_MODES = {"zero", "filtered"}
+
 
 def _normalize_frame_id(frame_id: str) -> str:
     return (frame_id or "").strip().lstrip("/")
@@ -99,6 +102,11 @@ def _stamp_to_sec(stamp) -> float:
     return float(getattr(stamp, "sec", 0)) + float(getattr(stamp, "nanosec", 0)) * 1.0e-9
 
 
+def _parse_bool(text: str) -> bool:
+    value = (text or "").strip().lower()
+    return value in {"1", "true", "yes", "y", "on"}
+
+
 @dataclass
 class ExecutionRequest:
     source: str
@@ -135,6 +143,13 @@ class TargetPoseRuckigExecutor(Node):
         status_log_period: float,
         status_base_frame: str,
         status_eef_frame: str,
+        feedback_sync_mode: str,
+        feedback_position_reset_threshold: float,
+        feedback_position_reset_cycles: int,
+        feedback_velocity_reset_enabled: bool,
+        feedback_velocity_reset_threshold: float,
+        feedback_velocity_filter_alpha: float,
+        feedback_accel_mode: str,
     ) -> None:
         super().__init__("rc_arm_target_pose_executor")
 
@@ -158,6 +173,17 @@ class TargetPoseRuckigExecutor(Node):
         self._status_log_period = max(0.0, float(status_log_period))
         self._status_base_frame = _normalize_frame_id(status_base_frame)
         self._status_eef_frame = _normalize_frame_id(status_eef_frame)
+        self._feedback_sync_mode = str(feedback_sync_mode).strip().lower() or "desync_only"
+        if self._feedback_sync_mode not in FEEDBACK_SYNC_MODES:
+            self._feedback_sync_mode = "desync_only"
+        self._feedback_position_reset_threshold = max(0.0, float(feedback_position_reset_threshold))
+        self._feedback_position_reset_cycles = max(1, int(feedback_position_reset_cycles))
+        self._feedback_velocity_reset_enabled = bool(feedback_velocity_reset_enabled)
+        self._feedback_velocity_reset_threshold = max(0.0, float(feedback_velocity_reset_threshold))
+        self._feedback_velocity_filter_alpha = max(0.0, min(1.0, float(feedback_velocity_filter_alpha)))
+        self._feedback_accel_mode = str(feedback_accel_mode).strip().lower() or "zero"
+        if self._feedback_accel_mode not in FEEDBACK_ACCEL_MODES:
+            self._feedback_accel_mode = "zero"
 
         self._manual_target_lock = threading.Lock()
         self._latest_manual_target: Optional[PoseStamped] = None
@@ -175,12 +201,17 @@ class TargetPoseRuckigExecutor(Node):
         self._active_request: Optional[ExecutionRequest] = None
         self._last_manual_failure_detail = ""
         self._last_manual_failure_time_sec = 0.0
-        self._last_feedback_velocities: Optional[List[float]] = None
+        self._filtered_feedback_velocities: Optional[List[float]] = None
+        self._last_feedback_velocities_for_accel: Optional[List[float]] = None
         self._last_feedback_time_sec = 0.0
         self._have_feedback_accel_estimate = False
         self._last_tracking_error_joint: Optional[str] = None
         self._last_tracking_error_value = 0.0
         self._last_tracking_error_log_time_sec = 0.0
+        self._position_desync_cycles = 0
+        self._velocity_desync_cycles = 0
+        self._last_desync_planned_positions: Optional[List[float]] = None
+        self._last_desync_planned_velocities: Optional[List[float]] = None
 
         self._joint_limits = self._load_joint_limits(joint_limits_file, self._joint_names)
         self._kinematics = RcArmWorldPitchKinematics(
@@ -196,11 +227,11 @@ class TargetPoseRuckigExecutor(Node):
         self._otg_last_sync_reason = "init"
         self._last_otg_reset_log_reason = ""
         self._last_otg_reset_log_time_sec = 0.0
-        self._otg_plan_feedback_position_reset = 2.5
-        self._otg_plan_feedback_velocity_reset = max(
-            2.0,
-            min(self._joint_limits[name].max_velocity for name in self._joint_names),
-        )
+        self._otg_plan_feedback_position_reset = self._feedback_position_reset_threshold
+        self._otg_plan_feedback_velocity_reset = self._feedback_velocity_reset_threshold
+        self._otg_input.max_velocity = [self._joint_limits[name].max_velocity for name in self._joint_names]
+        self._otg_input.max_acceleration = [self._joint_limits[name].max_acceleration for name in self._joint_names]
+        self._otg_input.max_jerk = [self._joint_limits[name].max_jerk for name in self._joint_names]
 
         self._trajectory_pub = self.create_publisher(
             JointTrajectory,
@@ -225,7 +256,8 @@ class TargetPoseRuckigExecutor(Node):
 
         self.get_logger().info(
             "TargetPose streaming executor started: manual_topic=%s middleware_target=%s "
-            "middleware_result=%s trajectory_topic=%s joint_limits=%s status_tf=%s->%s"
+            "middleware_result=%s trajectory_topic=%s joint_limits=%s status_tf=%s->%s "
+            "feedback_sync_mode=%s pos_reset=%.3f/%d vel_reset=%d:%.3f vel_alpha=%.2f accel_mode=%s"
             % (
                 self._manual_target_topic,
                 self._middleware_target_topic,
@@ -234,6 +266,13 @@ class TargetPoseRuckigExecutor(Node):
                 joint_limits_file,
                 self._status_base_frame,
                 self._status_eef_frame,
+                self._feedback_sync_mode,
+                self._feedback_position_reset_threshold,
+                self._feedback_position_reset_cycles,
+                1 if self._feedback_velocity_reset_enabled else 0,
+                self._feedback_velocity_reset_threshold,
+                self._feedback_velocity_filter_alpha,
+                self._feedback_accel_mode,
             )
         )
 
@@ -273,38 +312,55 @@ class TargetPoseRuckigExecutor(Node):
         if not msg.name or not msg.position:
             return
         mapping = self._joint_state_map.copy()
+        raw_velocity_map: Dict[str, float] = {}
         for idx, name in enumerate(msg.name):
             if idx >= len(msg.position):
                 continue
-            velocity = 0.0
+            raw_velocity = 0.0
             if idx < len(msg.velocity):
-                velocity = float(msg.velocity[idx])
-            mapping[name] = (float(msg.position[idx]), velocity)
+                raw_velocity = float(msg.velocity[idx])
+            raw_velocity_map[name] = raw_velocity
+            mapping[name] = (float(msg.position[idx]), raw_velocity)
         self._joint_state_map = mapping
         sample_time_sec = _stamp_to_sec(msg.header.stamp)
         if sample_time_sec <= 0.0:
             sample_time_sec = self._now_sec()
         self._joint_state_time_sec = sample_time_sec
 
-        ordered_velocities: List[float] = []
+        ordered_raw_velocities: List[float] = []
         for joint_name in self._joint_names:
             if joint_name not in mapping:
                 self._joint_state_accelerations = {}
                 return
-            _, velocity = mapping[joint_name]
-            ordered_velocities.append(velocity)
+            ordered_raw_velocities.append(float(raw_velocity_map.get(joint_name, 0.0)))
+
+        if (
+            self._filtered_feedback_velocities is None
+            or len(self._filtered_feedback_velocities) != len(self._joint_names)
+        ):
+            filtered_velocities = list(ordered_raw_velocities)
+        else:
+            alpha = self._feedback_velocity_filter_alpha
+            filtered_velocities = [
+                alpha * ordered_raw_velocities[index]
+                + (1.0 - alpha) * self._filtered_feedback_velocities[index]
+                for index in range(len(self._joint_names))
+            ]
+        self._filtered_feedback_velocities = list(filtered_velocities)
 
         max_feedback_dt = max(5.0 * self._stream_period, 0.1)
         accelerations: List[float] = [0.0] * len(self._joint_names)
         dt = sample_time_sec - self._last_feedback_time_sec
         if (
-            self._last_feedback_velocities is not None
-            and len(self._last_feedback_velocities) == len(self._joint_names)
+            self._last_feedback_velocities_for_accel is not None
+            and len(self._last_feedback_velocities_for_accel) == len(self._joint_names)
             and dt > 1.0e-6
             and dt <= max_feedback_dt
         ):
             for index, joint_name in enumerate(self._joint_names):
-                raw_acceleration = (ordered_velocities[index] - self._last_feedback_velocities[index]) / dt
+                raw_acceleration = (
+                    filtered_velocities[index] - self._last_feedback_velocities_for_accel[index]
+                ) / dt
                 limit = self._joint_limits[joint_name].max_acceleration
                 accelerations[index] = max(-limit, min(limit, raw_acceleration))
             self._have_feedback_accel_estimate = True
@@ -314,8 +370,12 @@ class TargetPoseRuckigExecutor(Node):
         self._joint_state_accelerations = {
             joint_name: accelerations[index] for index, joint_name in enumerate(self._joint_names)
         }
-        self._last_feedback_velocities = list(ordered_velocities)
+        self._last_feedback_velocities_for_accel = list(filtered_velocities)
         self._last_feedback_time_sec = sample_time_sec
+        for index, joint_name in enumerate(self._joint_names):
+            position, _ = mapping[joint_name]
+            mapping[joint_name] = (position, filtered_velocities[index])
+        self._joint_state_map = mapping
 
     def _ordered_joint_state(self) -> Optional[Tuple[List[float], List[float], List[float], float]]:
         if not self._joint_state_map:
@@ -604,7 +664,6 @@ class TargetPoseRuckigExecutor(Node):
         reset_reason = self._otg_reset_reason(
             current_positions,
             current_velocities,
-            current_accelerations,
             target_positions,
         )
         if reset_reason is not None:
@@ -615,6 +674,8 @@ class TargetPoseRuckigExecutor(Node):
                 target_positions,
                 reset_reason,
             )
+        elif self._otg_has_state:
+            self._set_otg_target(target_positions)
 
         result = self._otg.update(self._otg_input, self._otg_output)
         if result not in (Result.Working, Result.Finished):
@@ -643,6 +704,11 @@ class TargetPoseRuckigExecutor(Node):
             for index, name in enumerate(self._joint_names)
         ]
 
+    def _feedback_accelerations_for_otg(self, current_accelerations: Sequence[float]) -> List[float]:
+        if self._feedback_accel_mode != "filtered" or not self._have_feedback_accel_estimate:
+            return [0.0] * len(self._joint_names)
+        return self._clamped_feedback_acceleration(current_accelerations)
+
     def _clamped_feedback_acceleration(self, current_accelerations: Sequence[float]) -> List[float]:
         return [
             max(
@@ -652,25 +718,26 @@ class TargetPoseRuckigExecutor(Node):
             for index, name in enumerate(self._joint_names)
         ]
 
-    def _target_positions_changed(self, target_positions: Sequence[float]) -> bool:
-        if self._otg_target_positions is None or len(self._otg_target_positions) != len(target_positions):
-            return True
-        return any(
-            abs(float(target_positions[index]) - float(self._otg_target_positions[index])) > 1.0e-3
-            for index in range(len(target_positions))
-        )
+    def _set_otg_target(self, target_positions: Sequence[float]) -> None:
+        self._otg_input.target_position = list(target_positions)
+        self._otg_input.target_velocity = [0.0] * len(self._joint_names)
+        self._otg_input.target_acceleration = [0.0] * len(self._joint_names)
+        self._otg_target_positions = list(target_positions)
 
     def _otg_reset_reason(
         self,
         current_positions: Sequence[float],
         current_velocities: Sequence[float],
-        current_accelerations: Sequence[float],
         target_positions: Sequence[float],
     ) -> Optional[str]:
         if not self._otg_has_state:
             return "init_feedback"
-        if self._target_positions_changed(target_positions):
-            return "target_change"
+        if self._feedback_sync_mode == "always":
+            return "always_feedback"
+        if self._feedback_sync_mode == "init_only":
+            self._position_desync_cycles = 0
+            self._velocity_desync_cycles = 0
+            return None
 
         planned_positions = list(self._otg_input.current_position)
         planned_velocities = list(self._otg_input.current_velocity)
@@ -678,14 +745,35 @@ class TargetPoseRuckigExecutor(Node):
             abs(float(current_positions[index]) - float(planned_positions[index]))
             for index in range(len(self._joint_names))
         )
-        max_velocity_error = max(
-            abs(float(current_velocities[index]) - float(planned_velocities[index]))
-            for index in range(len(self._joint_names))
-        )
+
         if max_position_error > self._otg_plan_feedback_position_reset:
-            return f"plan_feedback_position_desync:{max_position_error:.3f}"
-        if max_velocity_error > self._otg_plan_feedback_velocity_reset:
-            return f"plan_feedback_velocity_desync:{max_velocity_error:.3f}"
+            self._position_desync_cycles += 1
+            if self._position_desync_cycles >= self._feedback_position_reset_cycles:
+                self._last_desync_planned_positions = list(planned_positions)
+                self._last_desync_planned_velocities = list(planned_velocities)
+                self._position_desync_cycles = 0
+                self._velocity_desync_cycles = 0
+                return f"desync_position:{max_position_error:.3f}"
+        else:
+            self._position_desync_cycles = 0
+
+        if self._feedback_velocity_reset_enabled:
+            max_velocity_error = max(
+                abs(float(current_velocities[index]) - float(planned_velocities[index]))
+                for index in range(len(self._joint_names))
+            )
+            if max_velocity_error > self._otg_plan_feedback_velocity_reset:
+                self._velocity_desync_cycles += 1
+                if self._velocity_desync_cycles >= self._feedback_position_reset_cycles:
+                    self._last_desync_planned_positions = list(planned_positions)
+                    self._last_desync_planned_velocities = list(planned_velocities)
+                    self._position_desync_cycles = 0
+                    self._velocity_desync_cycles = 0
+                    return f"desync_velocity:{max_velocity_error:.3f}"
+            else:
+                self._velocity_desync_cycles = 0
+        else:
+            self._velocity_desync_cycles = 0
         return None
 
     def _max_joint_error_detail(
@@ -718,16 +806,12 @@ class TargetPoseRuckigExecutor(Node):
     ) -> None:
         self._otg_input.current_position = list(current_positions)
         self._otg_input.current_velocity = self._clamped_feedback_velocity(current_velocities)
-        self._otg_input.current_acceleration = self._clamped_feedback_acceleration(current_accelerations)
-        self._otg_input.target_position = list(target_positions)
-        self._otg_input.target_velocity = [0.0] * len(self._joint_names)
-        self._otg_input.target_acceleration = [0.0] * len(self._joint_names)
-        self._otg_input.max_velocity = [self._joint_limits[name].max_velocity for name in self._joint_names]
-        self._otg_input.max_acceleration = [self._joint_limits[name].max_acceleration for name in self._joint_names]
-        self._otg_input.max_jerk = [self._joint_limits[name].max_jerk for name in self._joint_names]
-        self._otg_target_positions = list(target_positions)
+        self._otg_input.current_acceleration = self._feedback_accelerations_for_otg(current_accelerations)
+        self._set_otg_target(target_positions)
         self._otg_has_state = True
         self._otg_last_sync_reason = reason
+        self._position_desync_cycles = 0
+        self._velocity_desync_cycles = 0
         self._log_otg_reset(reason, current_positions, current_velocities)
 
     def _log_otg_reset(
@@ -744,20 +828,20 @@ class TargetPoseRuckigExecutor(Node):
             return
 
         log_message = f"[OTG] rebuild_from_feedback reason={reason}"
-        if reason.startswith("plan_feedback_position_desync"):
+        if reason.startswith("desync_position"):
             max_joint, max_error, feedback_value, planned_value = self._max_joint_error_detail(
                 current_positions,
-                self._otg_input.current_position,
+                self._last_desync_planned_positions or self._otg_input.current_position,
             )
             if max_joint is not None:
                 log_message += (
                     " joint=%s feedback=%.6f planned=%.6f abs_err=%.6f"
                     % (max_joint, feedback_value, planned_value, max_error)
                 )
-        elif reason.startswith("plan_feedback_velocity_desync"):
+        elif reason.startswith("desync_velocity"):
             max_joint, max_error, feedback_value, planned_value = self._max_joint_error_detail(
                 current_velocities,
-                self._otg_input.current_velocity,
+                self._last_desync_planned_velocities or self._otg_input.current_velocity,
             )
             if max_joint is not None:
                 log_message += (
@@ -765,13 +849,15 @@ class TargetPoseRuckigExecutor(Node):
                     % (max_joint, feedback_value, planned_value, max_error)
                 )
 
-        if reason.startswith("plan_feedback_position_desync") or reason.startswith("plan_feedback_velocity_desync"):
+        if reason.startswith("desync_"):
             self.get_logger().warn(log_message)
         else:
             self.get_logger().info(log_message)
 
         self._last_otg_reset_log_reason = reason
         self._last_otg_reset_log_time_sec = now_sec
+        self._last_desync_planned_positions = None
+        self._last_desync_planned_velocities = None
 
     def _advance_otg_state_from_output(self, target_positions: Sequence[float]) -> None:
         try:
@@ -780,10 +866,7 @@ class TargetPoseRuckigExecutor(Node):
             self._otg_input.current_position = list(self._otg_output.new_position)
             self._otg_input.current_velocity = list(self._otg_output.new_velocity)
             self._otg_input.current_acceleration = list(self._otg_output.new_acceleration)
-        self._otg_input.target_position = list(target_positions)
-        self._otg_input.target_velocity = [0.0] * len(self._joint_names)
-        self._otg_input.target_acceleration = [0.0] * len(self._joint_names)
-        self._otg_target_positions = list(target_positions)
+        self._set_otg_target(target_positions)
         self._otg_has_state = True
 
     def _update_tracking_error(
@@ -943,6 +1026,13 @@ def parse_args():
     parser.add_argument("--status-log-period", type=float, default=1.0, help="state log period, <=0 to disable")
     parser.add_argument("--status-base-frame", default="world")
     parser.add_argument("--status-eef-frame", default="end_effector")
+    parser.add_argument("--feedback-sync-mode", choices=sorted(FEEDBACK_SYNC_MODES), default="desync_only")
+    parser.add_argument("--feedback-position-reset-threshold", type=float, default=0.12)
+    parser.add_argument("--feedback-position-reset-cycles", type=int, default=3)
+    parser.add_argument("--feedback-velocity-reset-enabled", default="false")
+    parser.add_argument("--feedback-velocity-reset-threshold", type=float, default=1.5)
+    parser.add_argument("--feedback-velocity-filter-alpha", type=float, default=0.2)
+    parser.add_argument("--feedback-accel-mode", choices=sorted(FEEDBACK_ACCEL_MODES), default="zero")
     return parser.parse_args()
 
 
@@ -972,6 +1062,13 @@ def main() -> None:
             status_log_period=args.status_log_period,
             status_base_frame=args.status_base_frame,
             status_eef_frame=args.status_eef_frame,
+            feedback_sync_mode=args.feedback_sync_mode,
+            feedback_position_reset_threshold=args.feedback_position_reset_threshold,
+            feedback_position_reset_cycles=args.feedback_position_reset_cycles,
+            feedback_velocity_reset_enabled=_parse_bool(args.feedback_velocity_reset_enabled),
+            feedback_velocity_reset_threshold=args.feedback_velocity_reset_threshold,
+            feedback_velocity_filter_alpha=args.feedback_velocity_filter_alpha,
+            feedback_accel_mode=args.feedback_accel_mode,
         )
     except Exception as exc:
         if rclpy.ok():
