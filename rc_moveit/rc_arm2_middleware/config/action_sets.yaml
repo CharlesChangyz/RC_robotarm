@@ -108,9 +108,9 @@ action_sets:
         target_spin: 0.0
 
   - id: 3
-    name: default_sequence
+    name: test_sequence
     steps:
-      - type: move_fixed_pose
+      - type: move_target_offset
         label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.24]
+        offset_xyz: [0.0, 0.0, 0.0]
         target_spin: 0.0

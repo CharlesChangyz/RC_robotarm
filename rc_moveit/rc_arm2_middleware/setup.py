@@ -25,6 +25,7 @@ setup(
     entry_points={
         "console_scripts": [
             "arm2_middleware = rc_arm2_middleware.arm2_middleware_node:main",
+            "orbit_target_point_publisher = rc_arm2_middleware.orbit_target_point_publisher:main",
         ],
     },
 )

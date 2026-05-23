@@ -22,6 +22,7 @@ class MiddlewareState(str, Enum):
     STARTING_SET = "STARTING_SET"
     EXECUTING_STEP = "EXECUTING_STEP"
     WAITING_MOTION_RESULT = "WAITING_MOTION_RESULT"
+    TRACKING_TARGET_OFFSET = "TRACKING_TARGET_OFFSET"
     WAITING_PAYLOAD_ACTIVE = "WAITING_PAYLOAD_ACTIVE"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
@@ -69,6 +70,8 @@ class ActiveRun:
     waiting_execution_baseline_id: int = 0
     waiting_execution_id: Optional[int] = None
     desired_payload_active: Optional[bool] = None
+    last_target_offset_command: Optional[TargetPoint] = None
+    target_offset_publish_count: int = 0
     had_failures: bool = False
     results: List[StepResult] = field(default_factory=list)
 
@@ -99,8 +102,11 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("vacuum_topic", "/rc_arm_2/vacuum_activate")
         self.declare_parameter("payload_command_topic", "/rc_arm_2/payload_active_command")
         self.declare_parameter("payload_active_topic", "/rc_arm_2/payload_active")
+        self.declare_parameter("laser_distance_topic", "/rc_arm_2/laser_distance")
+        self.declare_parameter("laser_distance_threshold", 50)
         self.declare_parameter("motion_wait_timeout_sec", 30.0)
         self.declare_parameter("payload_wait_timeout_sec", 5.0)
+        self.declare_parameter("laser_wait_timeout_sec", 30.0)
 
         self._action_sets_file = Path(self.get_parameter("action_sets_file").value)
         self._target_point_topic = str(self.get_parameter("target_point_topic").value)
@@ -110,12 +116,17 @@ class Arm2MiddlewareNode(Node):
         self._vacuum_topic = str(self.get_parameter("vacuum_topic").value)
         self._payload_command_topic = str(self.get_parameter("payload_command_topic").value)
         self._payload_active_topic = str(self.get_parameter("payload_active_topic").value)
+        self._laser_distance_topic = str(self.get_parameter("laser_distance_topic").value)
+        self._laser_distance_threshold = int(self.get_parameter("laser_distance_threshold").value)
         self._motion_wait_timeout = max(0.0, float(self.get_parameter("motion_wait_timeout_sec").value))
         self._payload_wait_timeout = max(0.0, float(self.get_parameter("payload_wait_timeout_sec").value))
+        self._laser_wait_timeout = max(0.0, float(self.get_parameter("laser_wait_timeout_sec").value))
 
         self._state = MiddlewareState.IDLE
         self._cached_target_point: Optional[TargetPoint] = None
         self._payload_active = False
+        self._latest_laser_distance: Optional[int] = None
+        self._latest_laser_distance_received_ns: Optional[int] = None
         self._active_run: Optional[ActiveRun] = None
         self._latest_motion_execution_id = 0
 
@@ -127,6 +138,7 @@ class Arm2MiddlewareNode(Node):
         self.create_subscription(Arm2TargetPoint, self._target_point_topic, self._on_target_point, 20)
         self.create_subscription(Int32, self._run_action_set_topic, self._on_run_action_set, 10)
         self.create_subscription(Bool, self._payload_active_topic, self._on_payload_active, 10)
+        self.create_subscription(Int32, self._laser_distance_topic, self._on_laser_distance, 20)
         self.create_subscription(
             Arm2MotionExecution,
             self._motion_execution_topic,
@@ -137,7 +149,8 @@ class Arm2MiddlewareNode(Node):
 
         self.get_logger().info(
             "arm2_middleware ready: action_sets=%s target_point=%s run_action_set=%s motion_target=%s "
-            "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s"
+            "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s laser_distance=%s "
+            "laser_threshold=%d laser_wait_timeout=%.2f"
             % (
                 sorted(self._action_sets.keys()),
                 self._target_point_topic,
@@ -147,6 +160,9 @@ class Arm2MiddlewareNode(Node):
                 self._vacuum_topic,
                 self._payload_command_topic,
                 self._payload_active_topic,
+                self._laser_distance_topic,
+                self._laser_distance_threshold,
+                self._laser_wait_timeout,
             )
         )
 
@@ -267,6 +283,10 @@ class Arm2MiddlewareNode(Node):
         )
         self._start_next_step()
 
+    def _on_laser_distance(self, msg: Int32) -> None:
+        self._latest_laser_distance = int(msg.data)
+        self._latest_laser_distance_received_ns = self.get_clock().now().nanoseconds
+
     def _on_payload_active(self, msg: Bool) -> None:
         new_value = bool(msg.data)
         if self._payload_active != new_value:
@@ -290,7 +310,17 @@ class Arm2MiddlewareNode(Node):
             self._latest_motion_execution_id = execution_id
 
         run = self._active_run
-        if run is None or self._state != MiddlewareState.WAITING_MOTION_RESULT:
+        if run is None:
+            return
+
+        if self._state == MiddlewareState.TRACKING_TARGET_OFFSET:
+            self.get_logger().info(
+                "ignoring motion execution during target_offset tracking execution_id=%d status=%s detail=%s"
+                % (execution_id, _motion_status_name(msg.status), msg.detail)
+            )
+            return
+
+        if self._state != MiddlewareState.WAITING_MOTION_RESULT:
             return
 
         if run.waiting_execution_id is None:
@@ -327,6 +357,20 @@ class Arm2MiddlewareNode(Node):
         if self._state == MiddlewareState.WAITING_MOTION_RESULT:
             timeout_sec = self._motion_wait_timeout
             timeout_detail = f"motion wait timeout after {timeout_sec:.2f} sec"
+        elif self._state == MiddlewareState.TRACKING_TARGET_OFFSET:
+            self._refresh_target_offset_target(run)
+            laser_distance = self._latest_laser_distance
+            if (
+                laser_distance is not None
+                and laser_distance < self._laser_distance_threshold
+            ):
+                self._complete_current_step(
+                    "target_offset completed with laser_distance=%d threshold=%d"
+                    % (laser_distance, self._laser_distance_threshold)
+                )
+                return
+            timeout_sec = self._laser_wait_timeout
+            timeout_detail = self._target_offset_timeout_detail(timeout_sec)
         elif self._state == MiddlewareState.WAITING_PAYLOAD_ACTIVE:
             timeout_sec = self._payload_wait_timeout
             desired = run.desired_payload_active
@@ -401,13 +445,18 @@ class Arm2MiddlewareNode(Node):
             if self._cached_target_point is None:
                 self._fail_action_set("move_target_offset requested before target point was received")
                 return
-            x = self._cached_target_point.x + float(step.offset_xyz[0])
-            y = self._cached_target_point.y + float(step.offset_xyz[1])
-            z = self._cached_target_point.z + float(step.offset_xyz[2])
-            self._enter_motion_wait(
-                f"waiting on target_offset x={x:.4f} y={y:.4f} z={z:.4f} spin={step.target_spin_deg:.2f}",
+            self._enter_target_offset_tracking(
+                "tracking target_offset offset=(%.4f, %.4f, %.4f) spin=%.2f threshold=%d timeout=%.2f"
+                % (
+                    float(step.offset_xyz[0]),
+                    float(step.offset_xyz[1]),
+                    float(step.offset_xyz[2]),
+                    step.target_spin_deg,
+                    self._laser_distance_threshold,
+                    self._laser_wait_timeout,
+                )
             )
-            self._publish_motion_target(x, y, z, step.target_spin_deg)
+            self._refresh_target_offset_target(run)
             return
 
         if step.step_type == "move_fixed_pose":
@@ -430,7 +479,23 @@ class Arm2MiddlewareNode(Node):
         run.waiting_execution_baseline_id = self._latest_motion_execution_id
         run.waiting_execution_id = None
         run.desired_payload_active = None
+        run.last_target_offset_command = None
+        run.target_offset_publish_count = 0
         self._set_state(MiddlewareState.WAITING_MOTION_RESULT, detail)
+
+    def _enter_target_offset_tracking(self, detail: str) -> None:
+        run = self._active_run
+        if run is None:
+            self._fail_action_set("internal error: missing active run when entering target_offset tracking")
+            return
+
+        run.waiting_started_ns = self.get_clock().now().nanoseconds
+        run.waiting_execution_baseline_id = self._latest_motion_execution_id
+        run.waiting_execution_id = None
+        run.desired_payload_active = None
+        run.last_target_offset_command = None
+        run.target_offset_publish_count = 0
+        self._set_state(MiddlewareState.TRACKING_TARGET_OFFSET, detail)
 
     def _enter_payload_wait(self, detail: str, desired: bool) -> None:
         run = self._active_run
@@ -439,9 +504,72 @@ class Arm2MiddlewareNode(Node):
             return
 
         run.waiting_started_ns = self.get_clock().now().nanoseconds
+        run.waiting_execution_baseline_id = self._latest_motion_execution_id
         run.waiting_execution_id = None
         run.desired_payload_active = bool(desired)
+        run.last_target_offset_command = None
+        run.target_offset_publish_count = 0
         self._set_state(MiddlewareState.WAITING_PAYLOAD_ACTIVE, detail)
+
+    def _refresh_target_offset_target(self, run: ActiveRun) -> None:
+        step = run.current_step
+        target_point = self._cached_target_point
+        if step is None or step.step_type != "move_target_offset" or target_point is None:
+            return
+
+        x = target_point.x + float(step.offset_xyz[0])
+        y = target_point.y + float(step.offset_xyz[1])
+        z = target_point.z + float(step.offset_xyz[2])
+        self._publish_motion_target(x, y, z, step.target_spin_deg)
+        run.last_target_offset_command = TargetPoint(
+            x=float(x),
+            y=float(y),
+            z=float(z),
+            target_spin_deg=float(step.target_spin_deg),
+        )
+        run.target_offset_publish_count += 1
+        self.get_logger().info(
+            "target_offset publish #%d x=%.4f y=%.4f z=%.4f spin=%.2f laser_distance=%s"
+            % (
+                run.target_offset_publish_count,
+                x,
+                y,
+                z,
+                step.target_spin_deg,
+                self._latest_laser_distance if self._latest_laser_distance is not None else "none",
+            )
+        )
+
+    def _target_offset_timeout_detail(self, timeout_sec: float) -> str:
+        run = self._active_run
+        last_target = run.last_target_offset_command if run is not None else None
+        if last_target is None:
+            target_detail = "last_target=none"
+        else:
+            target_detail = (
+                "last_target=(x=%.4f, y=%.4f, z=%.4f, spin=%.2f)"
+                % (
+                    last_target.x,
+                    last_target.y,
+                    last_target.z,
+                    last_target.target_spin_deg,
+                )
+            )
+
+        laser_detail = (
+            str(self._latest_laser_distance)
+            if self._latest_laser_distance is not None
+            else "none"
+        )
+        return (
+            "target_offset wait timeout after %.2f sec laser_distance=%s threshold=%d %s"
+            % (
+                timeout_sec,
+                laser_detail,
+                self._laser_distance_threshold,
+                target_detail,
+            )
+        )
 
     def _publish_motion_target(self, x: float, y: float, z: float, target_spin_deg: float) -> None:
         msg = Arm2TargetPoint()
@@ -477,6 +605,8 @@ class Arm2MiddlewareNode(Node):
         run.waiting_execution_baseline_id = self._latest_motion_execution_id
         run.waiting_execution_id = None
         run.desired_payload_active = None
+        run.last_target_offset_command = None
+        run.target_offset_publish_count = 0
         self._record_step_result(True, detail)
         run.step_index += 1
         self._start_next_step()
@@ -516,6 +646,8 @@ class Arm2MiddlewareNode(Node):
         run.waiting_started_ns = None
         run.waiting_execution_id = None
         run.desired_payload_active = None
+        run.last_target_offset_command = None
+        run.target_offset_publish_count = 0
         if run.current_step is not None:
             self._record_step_result(False, detail)
         self._set_state(
