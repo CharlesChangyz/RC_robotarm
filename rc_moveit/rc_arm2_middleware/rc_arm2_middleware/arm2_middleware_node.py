@@ -107,6 +107,7 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("motion_wait_timeout_sec", 30.0)
         self.declare_parameter("payload_wait_timeout_sec", 5.0)
         self.declare_parameter("laser_wait_timeout_sec", 30.0)
+        self.declare_parameter("tracking_publish_rate_hz", 10.0)
 
         self._action_sets_file = Path(self.get_parameter("action_sets_file").value)
         self._target_point_topic = str(self.get_parameter("target_point_topic").value)
@@ -121,6 +122,9 @@ class Arm2MiddlewareNode(Node):
         self._motion_wait_timeout = max(0.0, float(self.get_parameter("motion_wait_timeout_sec").value))
         self._payload_wait_timeout = max(0.0, float(self.get_parameter("payload_wait_timeout_sec").value))
         self._laser_wait_timeout = max(0.0, float(self.get_parameter("laser_wait_timeout_sec").value))
+        self._tracking_publish_rate_hz = max(
+            0.1, float(self.get_parameter("tracking_publish_rate_hz").value)
+        )
 
         self._state = MiddlewareState.IDLE
         self._cached_target_point: Optional[TargetPoint] = None
@@ -129,6 +133,7 @@ class Arm2MiddlewareNode(Node):
         self._latest_laser_distance_received_ns: Optional[int] = None
         self._active_run: Optional[ActiveRun] = None
         self._latest_motion_execution_id = 0
+        self._action_sets_mtime_ns: Optional[int] = None
 
         self._action_sets = self._load_action_sets(self._action_sets_file)
 
@@ -145,13 +150,14 @@ class Arm2MiddlewareNode(Node):
             self._on_motion_execution,
             20,
         )
-        self.create_timer(0.1, self._on_timer)
+        self.create_timer(1.0 / self._tracking_publish_rate_hz, self._on_timer)
 
         self.get_logger().info(
-            "arm2_middleware ready: action_sets=%s target_point=%s run_action_set=%s motion_target=%s "
+            "arm2_middleware ready: action_sets_file=%s action_sets=%s target_point=%s run_action_set=%s motion_target=%s "
             "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s laser_distance=%s "
-            "laser_threshold=%d laser_wait_timeout=%.2f"
+            "laser_threshold=%d laser_wait_timeout=%.2f tracking_publish_rate=%.2f"
             % (
+                self._action_sets_file,
                 sorted(self._action_sets.keys()),
                 self._target_point_topic,
                 self._run_action_set_topic,
@@ -163,6 +169,7 @@ class Arm2MiddlewareNode(Node):
                 self._laser_distance_topic,
                 self._laser_distance_threshold,
                 self._laser_wait_timeout,
+                self._tracking_publish_rate_hz,
             )
         )
 
@@ -184,7 +191,34 @@ class Arm2MiddlewareNode(Node):
 
         if not action_sets:
             raise ValueError("no action_sets defined")
+        self._action_sets_mtime_ns = config_path.stat().st_mtime_ns
         return action_sets
+
+    def _reload_action_sets_if_changed(self) -> None:
+        try:
+            current_mtime_ns = self._action_sets_file.stat().st_mtime_ns
+        except FileNotFoundError:
+            self.get_logger().warn(
+                f"action set config disappeared: {self._action_sets_file}"
+            )
+            return
+
+        if self._action_sets_mtime_ns == current_mtime_ns:
+            return
+
+        try:
+            reloaded = self._load_action_sets(self._action_sets_file)
+        except Exception as exc:
+            self.get_logger().warn(
+                f"failed to reload action sets from {self._action_sets_file}: {exc}"
+            )
+            return
+
+        self._action_sets = reloaded
+        self.get_logger().info(
+            "reloaded action sets from %s ids=%s"
+            % (self._action_sets_file, sorted(self._action_sets.keys()))
+        )
 
     def _parse_action_set(self, raw_set: object) -> ActionSet:
         if not isinstance(raw_set, dict):
@@ -264,6 +298,7 @@ class Arm2MiddlewareNode(Node):
 
     def _on_run_action_set(self, msg: Int32) -> None:
         requested_id = int(msg.data)
+        self._reload_action_sets_if_changed()
         if self._state != MiddlewareState.IDLE:
             self.get_logger().warn(
                 "ignoring action set %d while busy in state=%s"

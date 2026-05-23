@@ -73,11 +73,13 @@ PROJECT_ROS_CLEANUP_PATTERNS = (
 
 
 def middleware_command() -> List[str]:
+    action_sets_file = RC_MOVEIT_DIR / "rc_arm2_middleware" / "config" / "action_sets.yaml"
     command = (
         f"cd {shlex.quote(str(RC_MOVEIT_DIR))} && "
         "source /opt/ros/humble/setup.bash && "
         "source install/setup.bash && "
-        "ros2 run rc_arm2_middleware arm2_middleware"
+        "ros2 run rc_arm2_middleware arm2_middleware --ros-args "
+        f"-p action_sets_file:={shlex.quote(str(action_sets_file))}"
     )
     return ["bash", "-lc", command]
 

@@ -385,6 +385,14 @@ def main():
         "MIT simulation bridge started. Torque clamp: global=%.3f Nm, per-joint=%s, payload_config=%s"
         % (args.torque_limit, effective_limit.tolist(), args.hardware_config_file)
     )
+    node.get_logger().info(
+        "viewer env DISPLAY=%s WAYLAND_DISPLAY=%s XDG_SESSION_TYPE=%s"
+        % (
+            os.environ.get("DISPLAY", ""),
+            os.environ.get("WAYLAND_DISPLAY", ""),
+            os.environ.get("XDG_SESSION_TYPE", ""),
+        )
+    )
 
     try:
         while rclpy.ok():
@@ -443,7 +451,15 @@ def main():
             if not render_disabled:
                 try:
                     viewer = _render_frame(viewer, physics)
-                except Exception:
+                except Exception as exc:
+                    node.get_logger().warn(
+                        "MuJoCo viewer disabled after render error: %r DISPLAY=%s WAYLAND_DISPLAY=%s"
+                        % (
+                            exc,
+                            os.environ.get("DISPLAY", ""),
+                            os.environ.get("WAYLAND_DISPLAY", ""),
+                        )
+                    )
                     render_disabled = True
 
             node.publish_torque(tau)
