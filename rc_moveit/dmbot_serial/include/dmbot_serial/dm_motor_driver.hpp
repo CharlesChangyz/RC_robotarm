@@ -60,6 +60,7 @@ public:
     const std::vector<double> & effort);
 
   std::vector<MotorState> readStates() const;
+  uint32_t readLaserDistance() const;
 
 private:
   static damiao::DM_Motor_Type toDamiaoMotorType(MotorType type);

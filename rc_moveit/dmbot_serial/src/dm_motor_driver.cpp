@@ -167,6 +167,16 @@ std::vector<MotorState> DmMotorDriver::readStates() const
   return states;
 }
 
+uint32_t DmMotorDriver::readLaserDistance() const
+{
+  std::lock_guard<std::mutex> lock(driver_mutex_);
+  if (!motor_control_) {
+    return 0;
+  }
+
+  return motor_control_->laser_distance;
+}
+
 damiao::DM_Motor_Type DmMotorDriver::toDamiaoMotorType(MotorType type)
 {
   switch (type) {

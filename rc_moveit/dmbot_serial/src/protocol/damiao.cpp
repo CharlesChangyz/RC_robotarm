@@ -765,16 +765,22 @@ namespace damiao
             // }
             auto m = motors[canID];
             uint8_t motor_id = canID - 0x200;
-            float receive_q = uint_to_float(q_uint, P_MIN_4340, P_MAX_4340, 16);
-            float receive_dq = uint_to_float(dq_uint, V_MIN_4340, V_MAX_4340, 12);
-            float receive_tau = uint_to_float(tau_uint, T_MIN_4340, T_MAX_4340, 12);
+            if(motor_id == 8){
+                float receive = uint_to_float(q_uint, P_MIN_4340, P_MAX_4340, 16);
+                laser_distance = receive;
+            }
+            else {
+                float receive_q = uint_to_float(q_uint, P_MIN_4340, P_MAX_4340, 16);
+                float receive_dq = uint_to_float(dq_uint, V_MIN_4340, V_MAX_4340, 12);
+                float receive_tau = uint_to_float(tau_uint, T_MIN_4340, T_MAX_4340, 12);
+                current_motor_pos[motor_id] = receive_q;
+                current_motor_vel[motor_id] = receive_dq;
+                current_motor_tor[motor_id] = receive_tau;
+            }
             
             //std::cout << "[Rx Motor ID: " << int(motor_id) << "] Pos: " << receive_q << " Vel: " << receive_dq << " Tau: " << receive_tau << std::endl;
            
             //std::cout<< "a" <<std::endl;
-            current_motor_pos[motor_id] = receive_q;
-            current_motor_vel[motor_id] = receive_dq;
-            current_motor_tor[motor_id] = receive_tau;
             //std::cout<< "b" <<std::endl;
             //m->receive_data(receive_q, receive_dq, receive_tau);
             //std::cout<< "c" <<std::endl;

@@ -24,6 +24,7 @@
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float64.hpp"
+#include "std_msgs/msg/u_int32.hpp"
 #include "std_srvs/srv/set_bool.hpp"
 
 #include "dmbot_serial/dm_motor_driver.hpp"
@@ -349,6 +350,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr final_torque_ff_pub_; // 最终前馈力矩(joint frame)
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j2_qd_ref_pub_;           // j2 当前参考速度
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j2_qd_actual_pub_;        // j2 当前实际反馈速度
+  rclcpp::Publisher<std_msgs::msg::UInt32>::SharedPtr laser_distance_pub_;       // 激光测距值
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr payload_active_pub_;         // 统一负载状态
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr mujoco_command_pub_; // MuJoCo 命令输出
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr external_feedback_sub_;

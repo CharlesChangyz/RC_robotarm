@@ -18,6 +18,7 @@
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+#include "std_msgs/msg/u_int32.hpp"
 #include "std_srvs/srv/set_bool.hpp"
 
 namespace rc_arm_hardware
@@ -395,6 +396,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   final_torque_ff_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/final_joint_torque_ff", 10);
   j2_qd_ref_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>("/debug/j2_qd_ref", 10);
   j2_qd_actual_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>("/debug/j2_qd_actual", 10);
+  laser_distance_pub_ = debug_node_->create_publisher<std_msgs::msg::UInt32>("/rc_arm_2/laser_distance", 10);
   payload_active_pub_ = debug_node_->create_publisher<std_msgs::msg::Bool>(payload_active_topic_, 10);
   mujoco_command_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>(mujoco_command_topic_, 10);
   vacuum_activate_sub_ = debug_node_->create_subscription<std_msgs::msg::Bool>(
@@ -947,6 +949,7 @@ hardware_interface::return_type RsA3HardwareInterface::read(
 {
   if (!use_mock_hardware_ && backend_mode_ == BackendMode::REAL && dm_driver_) {
     const auto motor_states = dm_driver_->readStates();
+    const uint32_t laser_distance = dm_driver_->readLaserDistance();
     for (size_t i = 0; i < joint_configs_.size() && i < motor_states.size(); ++i) {
       const auto & config = joint_configs_[i];
       const auto & state = motor_states[i];
@@ -957,6 +960,12 @@ hardware_interface::return_type RsA3HardwareInterface::read(
       hw_velocities_[i] = state.velocity * config.direction;
       hw_efforts_[i] = state.effort * config.direction;
       hw_temperatures_[i] = 25.0;
+    }
+
+    if (laser_distance_pub_) {
+      std_msgs::msg::UInt32 msg;
+      msg.data = laser_distance;
+      laser_distance_pub_->publish(msg);
     }
   } else {
     bool used_external_feedback = false;

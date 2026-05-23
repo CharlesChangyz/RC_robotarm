@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from ament_index_python.packages import get_package_share_directory
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool, Int32
+from std_msgs.msg import Bool, Int32, UInt32
 import yaml
 
 from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPoint
@@ -143,7 +143,7 @@ class Arm2MiddlewareNode(Node):
         self.create_subscription(Arm2TargetPoint, self._target_point_topic, self._on_target_point, 20)
         self.create_subscription(Int32, self._run_action_set_topic, self._on_run_action_set, 10)
         self.create_subscription(Bool, self._payload_active_topic, self._on_payload_active, 10)
-        self.create_subscription(Int32, self._laser_distance_topic, self._on_laser_distance, 20)
+        self.create_subscription(UInt32, self._laser_distance_topic, self._on_laser_distance, 20)
         self.create_subscription(
             Arm2MotionExecution,
             self._motion_execution_topic,
@@ -318,7 +318,7 @@ class Arm2MiddlewareNode(Node):
         )
         self._start_next_step()
 
-    def _on_laser_distance(self, msg: Int32) -> None:
+    def _on_laser_distance(self, msg: UInt32) -> None:
         self._latest_laser_distance = int(msg.data)
         self._latest_laser_distance_received_ns = self.get_clock().now().nanoseconds
 
