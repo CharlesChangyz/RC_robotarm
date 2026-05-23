@@ -29,6 +29,9 @@ EXECUTION_ERROR_IK_FAILED = -3
 EXECUTION_ERROR_GOAL_SEND_EXCEPTION = -4
 EXECUTION_ERROR_GOAL_REJECTED = -5
 EXECUTION_ERROR_RESULT_EXCEPTION = -6
+EXECUTION_ERROR_PREEMPTED = -7
+EXECUTION_ERROR_PENDING_SUPERSEDED = -8
+EXECUTION_ERROR_REDUNDANT_TARGET = -9
 
 
 def _normalize_frame_id(frame_id: str) -> str:
@@ -134,6 +137,9 @@ class TargetPoseMoveItExecutor(Node):
         world_boxes_json: str,
         planning_scene_topic: str,
         scene_publish_retries: int,
+        middleware_preempt_interval_sec: float,
+        middleware_preempt_pos_threshold: float,
+        middleware_preempt_rot_threshold: float,
     ) -> None:
         super().__init__("rc_arm_target_pose_moveit_executor")
 
@@ -161,6 +167,13 @@ class TargetPoseMoveItExecutor(Node):
         self._planning_scene_topic = planning_scene_topic
         self._scene_publish_retries_left = max(1, int(scene_publish_retries))
         self._world_box_configs = self._parse_world_boxes_json(world_boxes_json)
+        self._middleware_preempt_interval_sec = max(0.0, float(middleware_preempt_interval_sec))
+        self._middleware_preempt_pos_threshold = max(
+            0.0, float(middleware_preempt_pos_threshold)
+        )
+        self._middleware_preempt_rot_threshold = max(
+            0.0, float(middleware_preempt_rot_threshold)
+        )
 
         self._manual_target_lock = threading.Lock()
         self._latest_manual_target: Optional[PoseStamped] = None
@@ -168,10 +181,15 @@ class TargetPoseMoveItExecutor(Node):
 
         self._busy = False
         self._active_request: Optional[ExecutionRequest] = None
+        self._active_goal_handle = None
+        self._pending_request: Optional[ExecutionRequest] = None
+        self._canceling_request: Optional[ExecutionRequest] = None
+        self._last_preempt_request_sec = -1.0e9
         self._ready_move_action = False
         self._ready_solver = False
         self._last_ready_tuple = None
         self._latest_joint_map: Dict[str, float] = {}
+        self._latest_joint_velocity_map: Dict[str, float] = {}
         self._next_execution_id = 0
 
         self._last_event = "init"
@@ -226,10 +244,14 @@ class TargetPoseMoveItExecutor(Node):
         if not msg.name or not msg.position:
             return
         mapping = self._latest_joint_map.copy()
+        velocity_mapping = self._latest_joint_velocity_map.copy()
         for idx, name in enumerate(msg.name):
             if idx < len(msg.position):
                 mapping[name] = float(msg.position[idx])
+            if idx < len(msg.velocity):
+                velocity_mapping[name] = float(msg.velocity[idx])
         self._latest_joint_map = mapping
+        self._latest_joint_velocity_map = velocity_mapping
 
     def _now_sec(self) -> float:
         return self.get_clock().now().nanoseconds * 1.0e-9
@@ -475,6 +497,26 @@ class TargetPoseMoveItExecutor(Node):
         msg.detail = str(detail)
         self._middleware_result_pub.publish(msg)
 
+    def _fail_middleware_request(self, request: ExecutionRequest, error_code: int, detail: str) -> None:
+        if request.execution_id is None:
+            return
+        self._publish_motion_execution(
+            request.execution_id,
+            Arm2MotionExecution.STATUS_FAILED,
+            error_code,
+            detail,
+        )
+
+    def _accept_middleware_request(self, request: ExecutionRequest) -> None:
+        if request.execution_id is None:
+            return
+        self._publish_motion_execution(
+            request.execution_id,
+            Arm2MotionExecution.STATUS_ACCEPTED,
+            0,
+            "accepted",
+        )
+
     def _on_manual_target(self, msg: PoseStamped) -> None:
         pose_msg = self._resolve_target_pose(msg)
         with self._manual_target_lock:
@@ -483,42 +525,72 @@ class TargetPoseMoveItExecutor(Node):
 
     def _on_middleware_target(self, msg: Arm2TargetPoint) -> None:
         pose_msg = self._motion_target_to_pose(msg)
-        execution_id = self._allocate_execution_id()
-        self._event("middleware_target_rx", pose_msg, extra="execution_id=%d" % execution_id)
-
-        if self._busy:
-            self._publish_motion_execution(
-                execution_id,
-                Arm2MotionExecution.STATUS_FAILED,
-                EXECUTION_ERROR_BUSY,
-                "executor busy",
-            )
-            return
+        request = ExecutionRequest(
+            source="middleware",
+            target=pose_msg,
+            execution_id=self._allocate_execution_id(),
+        )
+        self._event("middleware_target_rx", pose_msg, extra="execution_id=%d" % request.execution_id)
 
         if not self._executor_ready():
-            self._publish_motion_execution(
-                execution_id,
-                Arm2MotionExecution.STATUS_FAILED,
+            self._fail_middleware_request(
+                request,
                 EXECUTION_ERROR_NOT_READY,
                 "executor not ready",
             )
             return
 
-        self._publish_motion_execution(
-            execution_id,
-            Arm2MotionExecution.STATUS_ACCEPTED,
-            0,
-            "accepted",
-        )
-        self._start_execution(
-            ExecutionRequest(
-                source="middleware",
-                target=pose_msg,
-                execution_id=execution_id,
-            )
-        )
+        if self._busy:
+            self._queue_pending_middleware_request(request)
+            return
 
-    def _target_changed(self, prev: PoseStamped, cur: PoseStamped) -> bool:
+        self._accept_middleware_request(request)
+        self._start_execution(request)
+
+    def _queue_pending_middleware_request(self, request: ExecutionRequest) -> None:
+        reference = self._pending_request if self._pending_request is not None else self._active_request
+        if reference is not None and not self._target_changed(
+            reference.target,
+            request.target,
+            pos_threshold=self._middleware_preempt_pos_threshold,
+            rot_threshold=self._middleware_preempt_rot_threshold,
+        ):
+            self._fail_middleware_request(
+                request,
+                EXECUTION_ERROR_REDUNDANT_TARGET,
+                "target delta below preempt threshold",
+            )
+            return
+
+        if self._pending_request is not None and self._pending_request.execution_id is not None:
+            self._fail_middleware_request(
+                self._pending_request,
+                EXECUTION_ERROR_PENDING_SUPERSEDED,
+                "superseded by newer middleware target",
+            )
+
+        self._pending_request = request
+        self._accept_middleware_request(request)
+        self._event(
+            "middleware_target_pending",
+            request.target,
+            extra="execution_id=%d active_source=%s"
+            % (
+                request.execution_id,
+                self._active_request.source if self._active_request is not None else "idle",
+            ),
+        )
+        self._maybe_preempt_active_request()
+
+    def _target_changed(
+        self,
+        prev: PoseStamped,
+        cur: PoseStamped,
+        pos_threshold: Optional[float] = None,
+        rot_threshold: Optional[float] = None,
+    ) -> bool:
+        pos_threshold = self._pos_threshold if pos_threshold is None else max(0.0, float(pos_threshold))
+        rot_threshold = self._rot_threshold if rot_threshold is None else max(0.0, float(rot_threshold))
         if _normalize_frame_id(prev.header.frame_id) != _normalize_frame_id(cur.header.frame_id):
             return True
 
@@ -535,10 +607,17 @@ class TargetPoseMoveItExecutor(Node):
             (float(dq.x), float(dq.y), float(dq.z), float(dq.w)),
             (float(pq.x), float(pq.y), float(pq.z), float(pq.w)),
         )
-        return pos_delta > self._pos_threshold or rot_delta > self._rot_threshold
+        return pos_delta > pos_threshold or rot_delta > rot_threshold
 
     def _on_timer(self) -> None:
-        if self._busy or not self._executor_ready():
+        if self._busy:
+            self._maybe_preempt_active_request()
+            return
+
+        if not self._executor_ready():
+            return
+
+        if self._start_pending_request():
             return
 
         with self._manual_target_lock:
@@ -563,6 +642,51 @@ class TargetPoseMoveItExecutor(Node):
         if missing:
             return None
         return {name: self._latest_joint_map[name] for name in self._joint_names}
+
+    def _current_joint_velocities(self) -> Optional[Dict[str, float]]:
+        if not self._latest_joint_velocity_map:
+            return None
+        missing = [name for name in self._joint_names if name not in self._latest_joint_velocity_map]
+        if missing:
+            return None
+        return {name: self._latest_joint_velocity_map[name] for name in self._joint_names}
+
+    def _start_pending_request(self) -> bool:
+        if self._busy or self._pending_request is None:
+            return False
+        request = self._pending_request
+        self._pending_request = None
+        self._start_execution(request)
+        return True
+
+    def _maybe_preempt_active_request(self) -> None:
+        if self._active_request is None or self._pending_request is None:
+            return
+        if self._active_request.source != "middleware":
+            return
+        if self._active_goal_handle is None or self._canceling_request is not None:
+            return
+        if (
+            self._now_sec() - self._last_preempt_request_sec
+            < self._middleware_preempt_interval_sec
+        ):
+            return
+
+        self._canceling_request = self._active_request
+        self._last_preempt_request_sec = self._now_sec()
+        self._event(
+            "goal_cancel_request",
+            self._pending_request.target,
+            extra="active_execution_id=%s pending_execution_id=%s"
+            % (
+                self._active_request.execution_id,
+                self._pending_request.execution_id,
+            ),
+        )
+        cancel_future = self._active_goal_handle.cancel_goal_async()
+        cancel_future.add_done_callback(
+            lambda future, request=self._active_request: self._on_cancel_response(future, request)
+        )
 
     def _start_execution(self, request: ExecutionRequest) -> None:
         if self._busy:
@@ -625,6 +749,19 @@ class TargetPoseMoveItExecutor(Node):
         goal.request.max_velocity_scaling_factor = self._vel_scale
         goal.request.max_acceleration_scaling_factor = self._acc_scale
 
+        start_joints = self._current_seed_joints()
+        if start_joints is not None:
+            goal.request.start_state.joint_state.header.stamp = self.get_clock().now().to_msg()
+            goal.request.start_state.joint_state.name = list(self._joint_names)
+            goal.request.start_state.joint_state.position = [
+                start_joints[joint] for joint in self._joint_names
+            ]
+            start_velocities = self._current_joint_velocities()
+            if start_velocities is not None:
+                goal.request.start_state.joint_state.velocity = [
+                    start_velocities[joint] for joint in self._joint_names
+                ]
+
         constraints = Constraints()
         for joint in self._joint_names:
             jc = JointConstraint()
@@ -677,11 +814,34 @@ class TargetPoseMoveItExecutor(Node):
             )
             return
 
+        self._active_goal_handle = goal_handle
         self._event("goal_accepted", request.target, extra="source=%s" % request.source)
+        self._maybe_preempt_active_request()
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(
             lambda future, request=request: self._on_goal_result(future, request)
         )
+
+    def _on_cancel_response(self, future, request: ExecutionRequest) -> None:
+        if self._canceling_request is not request:
+            return
+
+        try:
+            response = future.result()
+        except Exception as exc:
+            self._canceling_request = None
+            self.get_logger().warn(f"MoveGroup cancel exception: {exc}")
+            self._event("goal_cancel_exception", request.target, extra="source=%s" % request.source)
+            return
+
+        goals_canceling = getattr(response, "goals_canceling", [])
+        if not goals_canceling:
+            self._canceling_request = None
+            self.get_logger().warn("MoveGroup cancel rejected or no goals_canceling returned")
+            self._event("goal_cancel_rejected", request.target, extra="source=%s" % request.source)
+            return
+
+        self._event("goal_cancel_accepted", request.target, extra="source=%s" % request.source)
 
     def _on_goal_result(self, future, request: ExecutionRequest) -> None:
         if self._active_request is not request:
@@ -699,6 +859,21 @@ class TargetPoseMoveItExecutor(Node):
                 error_code=EXECUTION_ERROR_RESULT_EXCEPTION,
                 detail=f"MoveGroup result exception: {exc}",
                 reason="exec_result_exception",
+            )
+            return
+
+        if (
+            self._canceling_request is request
+            and self._pending_request is not None
+            and result.error_code.val != result.error_code.SUCCESS
+        ):
+            self._event("goal_preempted", request.target, extra="source=%s" % request.source)
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_PREEMPTED,
+                detail="execution preempted by newer middleware target",
+                reason="goal_preempted",
             )
             return
 
@@ -741,6 +916,9 @@ class TargetPoseMoveItExecutor(Node):
             else Arm2MotionExecution.STATUS_FAILED
         )
 
+        self._active_goal_handle = None
+        if self._canceling_request is request:
+            self._canceling_request = None
         self._active_request = None
         self._set_busy(False, reason)
 
@@ -751,6 +929,8 @@ class TargetPoseMoveItExecutor(Node):
                 error_code,
                 detail,
             )
+
+        self._start_pending_request()
 
 
 def parse_args():
@@ -785,6 +965,9 @@ def parse_args():
     )
     parser.add_argument("--planning-scene-topic", default="/planning_scene")
     parser.add_argument("--scene-publish-retries", type=int, default=5)
+    parser.add_argument("--middleware-preempt-interval-sec", type=float, default=0.25)
+    parser.add_argument("--middleware-preempt-pos-threshold", type=float, default=0.01)
+    parser.add_argument("--middleware-preempt-rot-threshold", type=float, default=0.08)
     return parser.parse_args()
 
 
@@ -821,6 +1004,9 @@ def main() -> None:
         world_boxes_json=args.world_boxes_json,
         planning_scene_topic=args.planning_scene_topic,
         scene_publish_retries=args.scene_publish_retries,
+        middleware_preempt_interval_sec=args.middleware_preempt_interval_sec,
+        middleware_preempt_pos_threshold=args.middleware_preempt_pos_threshold,
+        middleware_preempt_rot_threshold=args.middleware_preempt_rot_threshold,
     )
 
     try:
