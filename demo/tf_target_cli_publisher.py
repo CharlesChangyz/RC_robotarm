@@ -79,6 +79,7 @@ RC_ARM_STACK_SETUP = RC_ARM_STACK_DIR / "install" / "setup.bash"
 J4_WORLD_MIN_DEG = 0.0
 J4_WORLD_MAX_DEG = 120.0
 AUTO_CLEANUP_WAIT_SEC = 1.0
+WHEEL_CONTINUOUS_INTERVAL_MS = 50
 PROJECT_ROS_CLEANUP_PATTERNS = (
     ("middleware", "arm2_middleware"),
     ("executor", "target_pose_ruckig_executor.py"),
@@ -637,9 +638,6 @@ class TargetPublisherWindow(QMainWindow):
         self._reachability_timer.setInterval(300)
         self._reachability_timer.setSingleShot(True)
         self._reachability_timer.timeout.connect(self._request_reachability)
-        self._live_send_pending = False
-        self._live_xyz_send_timer = QTimer(self)
-        self._live_xyz_send_timer.timeout.connect(self._flush_live_xyz_send)
 
         self._build_ui()
         self._update_live_send_timer_interval()
@@ -850,6 +848,15 @@ class TargetPublisherWindow(QMainWindow):
         self._xyz_step_spin.setDecimals(3)
         self._xyz_step_spin.setRange(0.001, 1.0)
         self._xyz_step_spin.setValue(0.1)
+        self._wheel_send_rate_spin = QDoubleSpinBox()
+        self._wheel_send_rate_spin.setDecimals(1)
+        self._wheel_send_rate_spin.setRange(1.0, 60.0)
+        self._wheel_send_rate_spin.setValue(1000.0 / WHEEL_CONTINUOUS_INTERVAL_MS)
+        self._wheel_send_rate_spin.setSuffix(" Hz")
+        self._wheel_send_rate_spin.valueChanged.connect(self._on_wheel_send_rate_changed)
+        self._wheel_continuous_send_check = QCheckBox("Continuous send")
+        self._wheel_continuous_send_check.setChecked(True)
+        self._wheel_continuous_send_check.toggled.connect(self._on_wheel_continuous_toggled)
         self._j4_step_spin = QDoubleSpinBox()
         self._j4_step_spin.setDecimals(1)
         self._j4_step_spin.setRange(0.1, 180.0)
@@ -881,43 +888,12 @@ class TargetPublisherWindow(QMainWindow):
             layout.addWidget(minus, row, 1)
             layout.addWidget(spin, row, 2)
             layout.addWidget(plus, row, 3)
-            if field_key in ("x", "y", "z"):
-                dial = QDial()
-                dial.setRange(-20, 20)
-                dial.setValue(0)
-                dial.setNotchesVisible(True)
-                dial.setWrapping(False)
-                dial.sliderPressed.connect(lambda axis=field_key: self._on_axis_wheel_pressed(axis))
-                dial.valueChanged.connect(
-                    lambda value, axis=field_key: self._on_axis_wheel_changed(axis, value)
-                )
-                dial.sliderReleased.connect(lambda axis=field_key: self._on_axis_wheel_released(axis))
-                dial.setToolTip("Drag to continuously publish this axis target.")
-                delta_label = QLabel("0.0000 m")
-                layout.addWidget(dial, row, 4)
-                layout.addWidget(delta_label, row, 5)
-                self._axis_wheels[field_key] = dial
-                self._axis_wheel_delta_labels[field_key] = delta_label
             self._field_spins[field_key] = spin
 
         layout.addWidget(QLabel("xyz step"), 4, 0)
         layout.addWidget(self._xyz_step_spin, 4, 2)
-        layout.addWidget(QLabel("xyz dial"), 4, 4)
         layout.addWidget(QLabel("j4 step"), 5, 0)
         layout.addWidget(self._j4_step_spin, 5, 2)
-        layout.addWidget(QLabel("drag to live-send"), 5, 4, 1, 2)
-
-        self._live_xyz_send_checkbox = QCheckBox("Live xyz send while editing")
-        self._live_xyz_send_checkbox.setChecked(False)
-        self._live_xyz_send_checkbox.setToolTip(
-            "When enabled, x/y/z spinbox edits, wheel steps, and +/- clicks are sent continuously at ~100 Hz."
-        )
-        self._live_send_rate_spin = QSpinBox()
-        self._live_send_rate_spin.setRange(1, 200)
-        self._live_send_rate_spin.setValue(100)
-        self._live_send_rate_spin.setSuffix(" Hz")
-        self._live_send_rate_spin.setToolTip("Continuous xyz target publish rate.")
-        self._live_send_rate_spin.valueChanged.connect(self._update_live_send_timer_interval)
 
         self._send_if_changed = QCheckBox("Send if changed only")
         self._send_if_changed.setChecked(True)
@@ -932,13 +908,10 @@ class TargetPublisherWindow(QMainWindow):
         home_btn.clicked.connect(self._reset_to_home)
         self._home_btn = home_btn
 
-        layout.addWidget(self._live_xyz_send_checkbox, 6, 0, 1, 4)
-        layout.addWidget(QLabel("live send rate"), 6, 4)
-        layout.addWidget(self._live_send_rate_spin, 6, 5)
-        layout.addWidget(self._send_if_changed, 7, 0, 1, 4)
-        layout.addWidget(send_btn, 8, 0, 1, 2)
-        layout.addWidget(reset_btn, 8, 2)
-        layout.addWidget(home_btn, 8, 3)
+        layout.addWidget(self._send_if_changed, 6, 0, 1, 4)
+        layout.addWidget(send_btn, 7, 0, 1, 2)
+        layout.addWidget(reset_btn, 7, 2)
+        layout.addWidget(home_btn, 7, 3)
         return box
 
     def _build_reachability_panel(self) -> QWidget:
@@ -1104,27 +1077,6 @@ class TargetPublisherWindow(QMainWindow):
         self._send_btn.setEnabled(self._actual_pose_ready)
         self._run_action_set_btn.setEnabled(self._actual_pose_ready)
         self._action_set_spin.setEnabled(self._actual_pose_ready)
-        if self._wheel_drag_origin:
-            active_axes = ",".join(sorted(self._wheel_drag_origin.keys()))
-            self._wheel_status_label.setText(f"dragging {active_axes}")
-        elif self._live_xyz_send_timer.isActive() or self._live_send_pending:
-            self._wheel_status_label.setText(
-                f"live xyz send @ {self._live_send_rate_spin.value()} Hz"
-            )
-        else:
-            self._wheel_status_label.setText("idle")
-
-    def _update_live_send_timer_interval(self) -> None:
-        hz = max(1, int(self._live_send_rate_spin.value()))
-        interval_ms = max(1, int(round(1000.0 / float(hz))))
-        self._live_xyz_send_timer.setInterval(interval_ms)
-        self._update_status_labels()
-
-    def _schedule_live_xyz_send(self) -> None:
-        self._live_send_pending = True
-        if not self._live_xyz_send_timer.isActive():
-            self._live_xyz_send_timer.start()
-        self._update_status_labels()
 
     def _request_reachability(self) -> None:
         if not self._actual_pose_ready:
@@ -1194,6 +1146,87 @@ class TargetPublisherWindow(QMainWindow):
         dial.blockSignals(False)
         self._set_axis_wheel_delta_label(axis, 0.0)
         self._update_status_labels()
+
+    def _wheel_send_period_sec(self) -> float:
+        return 1.0 / max(1.0, self._wheel_send_rate_spin.value())
+
+    def _axis_wheel_delta(self, axis: str) -> float:
+        return float(self._axis_wheels[axis].value()) * self._xyz_step_spin.value()
+
+    def _set_axis_wheel_delta_label(self, axis: str, delta: float) -> None:
+        self._axis_wheel_delta_labels[axis].setText("{:+.4f} m".format(delta))
+
+    def _publish_axis_wheel_target(self) -> None:
+        if not self._actual_pose_ready:
+            self._wheel_status_label.setText("blocked: waiting for actual pose")
+            return
+        self._editing_target = self._read_editing_target()
+        self._backend.queue_send_target(self._editing_target, False)
+        self._backend.queue_reachability(self._editing_target)
+
+    def _on_axis_wheel_pressed(self, axis: str) -> None:
+        self._wheel_drag_origin[axis] = self._field_spins[axis].value()
+        self._set_axis_wheel_delta_label(axis, 0.0)
+        if self._wheel_continuous_send_check.isChecked() and not self._wheel_send_timer.isActive():
+            self._wheel_send_timer.setInterval(max(1, int(round(self._wheel_send_period_sec() * 1000.0))))
+            self._wheel_send_timer.start()
+        self._update_status_labels()
+
+    def _on_axis_wheel_changed(self, axis: str, value: int) -> None:
+        if axis not in self._wheel_drag_origin:
+            self._set_axis_wheel_delta_label(axis, 0.0)
+            return
+        del value
+        delta = self._axis_wheel_delta(axis)
+        self._set_axis_wheel_delta_label(axis, delta)
+        if self._wheel_continuous_send_check.isChecked():
+            self._apply_axis_wheel_motion(force=True)
+        else:
+            if abs(delta) > 1.0e-9:
+                self._field_spins[axis].setValue(self._field_spins[axis].value() + delta)
+                self._publish_axis_wheel_target()
+
+    def _on_axis_wheel_released(self, axis: str) -> None:
+        self._wheel_drag_origin.pop(axis, None)
+        dial = self._axis_wheels[axis]
+        dial.blockSignals(True)
+        dial.setValue(0)
+        dial.blockSignals(False)
+        self._set_axis_wheel_delta_label(axis, 0.0)
+        if not self._wheel_drag_origin:
+            self._wheel_send_timer.stop()
+        self._update_status_labels()
+
+    def _on_wheel_send_rate_changed(self, _value: float) -> None:
+        self._wheel_send_timer.setInterval(max(1, int(round(self._wheel_send_period_sec() * 1000.0))))
+
+    def _on_wheel_continuous_toggled(self, enabled: bool) -> None:
+        if enabled:
+            if self._wheel_drag_origin and not self._wheel_send_timer.isActive():
+                self._wheel_send_timer.setInterval(max(1, int(round(self._wheel_send_period_sec() * 1000.0))))
+                self._wheel_send_timer.start()
+        else:
+            self._wheel_send_timer.stop()
+        self._update_status_labels()
+
+    def _apply_axis_wheel_motion(self, force: bool = False) -> None:
+        if not self._wheel_drag_origin:
+            return
+
+        moved_axes = []
+        for axis in list(self._wheel_drag_origin.keys()):
+            delta = self._axis_wheel_delta(axis)
+            self._set_axis_wheel_delta_label(axis, delta)
+            if abs(delta) <= 1.0e-9:
+                continue
+            self._field_spins[axis].setValue(self._field_spins[axis].value() + delta)
+            moved_axes.append(axis)
+
+        if moved_axes:
+            self._publish_axis_wheel_target()
+
+    def _on_wheel_send_timer(self) -> None:
+        self._apply_axis_wheel_motion()
 
     def _send_target(self) -> None:
         self._editing_target = self._read_editing_target()
