@@ -757,7 +757,7 @@ namespace damiao
             uint16_t q_uint = (uint16_t(value.data[1]) << 8) | value.data[2];
             uint16_t dq_uint = (uint16_t(value.data[3]) << 4) | (value.data[4] >> 4);
             uint16_t tau_uint = (uint16_t(value.data[4] & 0xf) << 8) | value.data[5];
-
+            laser_distance = (uint16_t(value.data[6]) << 8) | value.data[7];
             // if (motors.find(canID) == motors.end())
             // {
             //     std::cout<<"return"<<std::endl;
@@ -765,19 +765,16 @@ namespace damiao
             // }
             auto m = motors[canID];
             uint8_t motor_id = canID - 0x200;
-            if(motor_id == 8){
-                float receive = uint_to_float(q_uint, P_MIN_4340, P_MAX_4340, 16);
-                laser_distance = receive;
-            }
-            else {
-                float receive_q = uint_to_float(q_uint, P_MIN_4340, P_MAX_4340, 16);
-                float receive_dq = uint_to_float(dq_uint, V_MIN_4340, V_MAX_4340, 12);
-                float receive_tau = uint_to_float(tau_uint, T_MIN_4340, T_MAX_4340, 12);
-                current_motor_pos[motor_id] = receive_q;
-                current_motor_vel[motor_id] = receive_dq;
-                current_motor_tor[motor_id] = receive_tau;
-            }
             
+    
+            float receive_q = uint_to_float(q_uint, P_MIN_4340, P_MAX_4340, 16);
+            float receive_dq = uint_to_float(dq_uint, V_MIN_4340, V_MAX_4340, 12);
+            float receive_tau = uint_to_float(tau_uint, T_MIN_4340, T_MAX_4340, 12);
+            current_motor_pos[motor_id] = receive_q;
+            current_motor_vel[motor_id] = receive_dq;
+            current_motor_tor[motor_id] = receive_tau;
+            
+        
             //std::cout << "[Rx Motor ID: " << int(motor_id) << "] Pos: " << receive_q << " Vel: " << receive_dq << " Tau: " << receive_tau << std::endl;
            
             //std::cout<< "a" <<std::endl;
