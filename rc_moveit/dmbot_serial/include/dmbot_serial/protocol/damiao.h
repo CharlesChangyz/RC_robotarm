@@ -253,7 +253,7 @@ namespace damiao
         float mit_kp[MOTOR_NUM] = {0};
         float mit_kd[MOTOR_NUM] = {0};
 
-        uint32_t laser_distance = 0;
+        uint32_t laser_distance = 1000;
 
         /**************************************************************************************************************************** */
 
