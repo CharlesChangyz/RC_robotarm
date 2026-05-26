@@ -1,25 +1,24 @@
-"""
-rc_arm_2 MoveIt real-hardware launch
-"""
+"""rc_arm_2 Servo-based real-hardware launch."""
 
 import os
 import yaml
+
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler, TimerAction
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, RegisterEventHandler, TimerAction
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
 from launch_ros.parameter_descriptions import ParameterValue
-from ament_index_python.packages import get_package_share_directory
+from launch_ros.substitutions import FindPackageShare
 
 
 def load_yaml(package_name, file_path):
     package_path = get_package_share_directory(package_name)
     absolute_file_path = os.path.join(package_path, file_path)
     try:
-        with open(absolute_file_path, 'r') as file:
+        with open(absolute_file_path, "r", encoding="utf-8") as file:
             return yaml.safe_load(file)
     except EnvironmentError:
         return None
@@ -34,26 +33,19 @@ def generate_launch_description():
     )
 
     declared_arguments = [
-        DeclareLaunchArgument(
-            "use_mock_hardware",
-            default_value="false",
-            description="Use mock hardware and disable CAN communication",
-        ),
-        DeclareLaunchArgument(
-            "hardware_config_file",
-            default_value=default_hardware_config,
-            description="Hardware plugin configuration YAML",
-        ),
-        DeclareLaunchArgument(
-            "controllers_file",
-            default_value=default_controllers_file,
-            description="ros2_control controllers YAML",
-        ),
-        DeclareLaunchArgument(
-            "use_rviz",
-            default_value="true",
-            description="Start RViz2 with MoveIt plugin",
-        ),
+        DeclareLaunchArgument("use_mock_hardware", default_value="false"),
+        DeclareLaunchArgument("hardware_config_file", default_value=default_hardware_config),
+        DeclareLaunchArgument("controllers_file", default_value=default_controllers_file),
+        DeclareLaunchArgument("use_rviz", default_value="true"),
+        DeclareLaunchArgument("use_tf_target_bridge", default_value="true"),
+        DeclareLaunchArgument("tf_target_topic", default_value="/tf"),
+        DeclareLaunchArgument("tf_target_static_topic", default_value="/tf_static"),
+        DeclareLaunchArgument("tf_target_parent_frame", default_value="world"),
+        DeclareLaunchArgument("tf_target_child_frame", default_value="rc_arm_2_target"),
+        DeclareLaunchArgument("tf_target_pose_topic", default_value="/rc_arm_2/target_pose"),
+        DeclareLaunchArgument("middleware_motion_target_topic", default_value="/arm2/middleware/motion_target"),
+        DeclareLaunchArgument("middleware_motion_result_topic", default_value="/arm2/middleware/motion_execution"),
+        DeclareLaunchArgument("target_tracker_j4_axis", default_value="x"),
     ]
 
     use_mock_hardware = LaunchConfiguration("use_mock_hardware")
@@ -91,25 +83,8 @@ def generate_launch_description():
     kinematics_yaml = load_yaml("rc_arm_moveit_config", "config/rc_arm_2/kinematics.yaml")
     joint_limits_yaml = load_yaml("rc_arm_moveit_config", "config/rc_arm_2/joint_limits.yaml")
     robot_description_planning = {"robot_description_planning": joint_limits_yaml}
-
-    ompl_planning_yaml = load_yaml("rc_arm_moveit_config", "config/rc_arm_2/ompl_planning.yaml")
-    ompl_planning_pipeline_config = {"move_group": ompl_planning_yaml}
-
-    moveit_controllers_yaml = load_yaml("rc_arm_moveit_config", "config/rc_arm_2/moveit_controllers.yaml")
-
-    trajectory_execution = {
-        "moveit_manage_controllers": False,
-        "trajectory_execution.allowed_execution_duration_scaling": 4.0,
-        "trajectory_execution.allowed_goal_duration_margin": 2.0,
-        "trajectory_execution.allowed_start_tolerance": 0.1,
-    }
-
-    planning_scene_monitor_parameters = {
-        "publish_planning_scene": True,
-        "publish_geometry_updates": True,
-        "publish_state_updates": True,
-        "publish_transforms_updates": True,
-    }
+    servo_yaml = load_yaml("rc_arm_moveit_config", "config/rc_arm_2/servo.yaml")
+    servo_params = {"moveit_servo": servo_yaml}
 
     rviz_config_file = PathJoinSubstitution(
         [FindPackageShare("rc_arm_moveit_config"), "config", "moveit.rviz"]
@@ -160,20 +135,59 @@ def generate_launch_description():
         ],
     )
 
-    move_group_node = Node(
-        package="moveit_ros_move_group",
-        executable="move_group",
+    servo_node = Node(
+        package="moveit_servo",
+        executable="servo_node_main",
+        name="servo_node",
         output="screen",
         parameters=[
+            servo_params,
             robot_description,
             robot_description_semantic,
             robot_description_planning,
             kinematics_yaml,
-            ompl_planning_pipeline_config,
-            trajectory_execution,
-            moveit_controllers_yaml,
-            planning_scene_monitor_parameters,
         ],
+    )
+
+    tf_target_bridge = ExecuteProcess(
+        cmd=[
+            "python3",
+            PathJoinSubstitution(
+                [FindPackageShare("rc_arm_moveit_config"), "launch", "tf_target_pose_bridge.py"]
+            ),
+            "--tf-topic",
+            LaunchConfiguration("tf_target_topic"),
+            "--tf-static-topic",
+            LaunchConfiguration("tf_target_static_topic"),
+            "--parent-frame",
+            LaunchConfiguration("tf_target_parent_frame"),
+            "--child-frame",
+            LaunchConfiguration("tf_target_child_frame"),
+            "--target-pose-topic",
+            LaunchConfiguration("tf_target_pose_topic"),
+        ],
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("use_tf_target_bridge")),
+    )
+
+    servo_target_adapter = ExecuteProcess(
+        cmd=[
+            "python3",
+            PathJoinSubstitution(
+                [FindPackageShare("rc_arm_moveit_config"), "launch", "servo_target_adapter.py"]
+            ),
+            "--target-topic",
+            LaunchConfiguration("tf_target_pose_topic"),
+            "--middleware-target-topic",
+            LaunchConfiguration("middleware_motion_target_topic"),
+            "--middleware-result-topic",
+            LaunchConfiguration("middleware_motion_result_topic"),
+            "--planning-frame",
+            "base_link",
+            "--j4-axis",
+            LaunchConfiguration("target_tracker_j4_axis"),
+        ],
+        output="screen",
     )
 
     rviz_node = Node(
@@ -182,12 +196,7 @@ def generate_launch_description():
         name="rviz2",
         output="log",
         arguments=["-d", rviz_config_file],
-        parameters=[
-            robot_description,
-            robot_description_semantic,
-            robot_description_planning,
-            kinematics_yaml,
-        ],
+        parameters=[robot_description, robot_description_semantic],
         condition=IfCondition(use_rviz),
     )
 
@@ -198,18 +207,15 @@ def generate_launch_description():
         )
     )
 
-    delay_move_group = RegisterEventHandler(
+    delay_servo = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=arm_controller_spawner,
-            on_exit=[move_group_node],
+            on_exit=[servo_node],
         )
     )
 
-    delay_rviz = TimerAction(
-        period=5.0,
-        actions=[rviz_node],
-        condition=IfCondition(use_rviz),
-    )
+    delay_adapter = TimerAction(period=2.0, actions=[servo_target_adapter])
+    delay_rviz = TimerAction(period=2.0, actions=[rviz_node], condition=IfCondition(use_rviz))
 
     return LaunchDescription(
         declared_arguments
@@ -219,7 +225,9 @@ def generate_launch_description():
             static_tf_node,
             joint_state_broadcaster_spawner,
             delay_arm_controller,
-            delay_move_group,
+            delay_servo,
+            tf_target_bridge,
+            delay_adapter,
             delay_rviz,
         ]
     )

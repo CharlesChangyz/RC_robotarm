@@ -59,12 +59,18 @@ J4_WORLD_MIN_DEG = 0.0
 J4_WORLD_MAX_DEG = 120.0
 AUTO_CLEANUP_WAIT_SEC = 1.0
 WHEEL_CONTINUOUS_INTERVAL_MS = 50
+TARGET_STREAM_INTERVAL_SEC = 0.02
+TARGET_STREAM_MIN_DURATION_SEC = 1.2
+TARGET_STREAM_MAX_DURATION_SEC = 4.0
+TARGET_STREAM_LINEAR_SPEED_MPS = 0.03
+TARGET_STREAM_ANGULAR_SPEED_RADPS = 0.35
+TARGET_PATH_SAFETY_SAMPLES = 24
+TARGET_PATH_MIN_LIMIT_SCALE = 0.55
 PROJECT_ROS_CLEANUP_PATTERNS = (
     ("middleware", "arm2_middleware"),
-    ("executor", "target_pose_moveit_executor.py"),
+    ("servo adapter", "servo_target_adapter.py"),
     ("tf bridge", "tf_target_pose_bridge.py"),
-    ("payload sync", "payload_scene_sync.py"),
-    ("move_group", "move_group"),
+    ("servo", "servo_node_main"),
     ("robot_state_publisher", "robot_state_publisher"),
     ("static_transform_publisher", "static_transform_publisher"),
     ("ros2_control_node", "ros2_control_node"),
@@ -116,6 +122,27 @@ class ActualPose:
 def normalize_frame_id(frame_id: str) -> str:
     return (frame_id or "").strip().lstrip("/")
 
+
+def normalize_angle_rad(angle: float) -> float:
+    while angle > math.pi:
+        angle -= 2.0 * math.pi
+    while angle < -math.pi:
+        angle += 2.0 * math.pi
+    return angle
+
+
+def lerp(a: float, b: float, ratio: float) -> float:
+    return a + (b - a) * ratio
+
+
+def format_target_state(state: TargetState) -> str:
+    return "xyz=({:.3f}, {:.3f}, {:.3f}) j4={:.1f}deg".format(
+        state.x,
+        state.y,
+        state.z,
+        math.degrees(state.j4_rad),
+    )
+
 class RosBackend(QObject):
     actual_pose_updated = Signal(object)
     reachability_updated = Signal(object)
@@ -158,6 +185,12 @@ class RosBackend(QObject):
         self._last_middleware_sent_time = 0.0
         self._latest_joint_map: Dict[str, float] = {}
         self._last_solver_solution: Optional[Dict[str, float]] = None
+        self._actual_pose: Optional[ActualPose] = None
+        self._stream_target: Optional[TargetState] = None
+        self._stream_start: Optional[TargetState] = None
+        self._stream_started_at = 0.0
+        self._stream_duration_sec = 0.0
+        self._last_stream_publish_at = 0.0
 
     def start(self) -> None:
         if not rclpy.ok():
@@ -236,6 +269,7 @@ class RosBackend(QObject):
                 rclpy.spin_once(self._node, timeout_sec=0.05)
                 self._refresh_actual_pose()
                 self._flush_send_request()
+                self._flush_target_stream()
                 self._flush_vacuum_request()
                 self._flush_payload_request()
                 self._flush_middleware_request()
@@ -273,6 +307,7 @@ class RosBackend(QObject):
             z=float(trans.transform.translation.z),
             world_pitch_rad=world_pitch,
         )
+        self._actual_pose = actual
         self.actual_pose_updated.emit(actual)
 
     def _flush_send_request(self) -> None:
@@ -283,10 +318,178 @@ class RosBackend(QObject):
             return
 
         state, changed_only = pending
-        if changed_only and self._last_sent is not None and state.almost_equal(self._last_sent):
+        if changed_only and self._stream_target is not None and state.almost_equal(self._stream_target):
             self.last_send_status.emit("skipped: unchanged target")
             return
 
+        start_state = self._stream_current_state()
+        goal_state = TargetState(state.x, state.y, state.z, state.j4_rad)
+        safe, detail = self._path_safety_report(start_state, goal_state)
+        if not safe:
+            self.last_send_status.emit(
+                "blocked: unsafe path | current={} | target={} | {}".format(
+                    format_target_state(start_state),
+                    format_target_state(goal_state),
+                    detail,
+                )
+            )
+            return
+        self._stream_start = start_state
+        self._stream_target = goal_state
+        self._stream_started_at = time.monotonic()
+        self._stream_duration_sec = self._compute_stream_duration(start_state, self._stream_target)
+        self._last_stream_publish_at = 0.0
+        self._last_sent = goal_state
+        self.last_send_status.emit(
+            "streaming {} -> {} over {:.2f}s at {:.0f}".format(
+                normalize_frame_id(self._args.parent_frame),
+                normalize_frame_id(self._args.child_frame),
+                self._stream_duration_sec,
+                time.time(),
+            )
+        )
+        self.last_sent_updated.emit(self._last_sent)
+
+    def _stream_current_state(self) -> TargetState:
+        if self._stream_target is not None and self._stream_start is not None and self._stream_duration_sec > 0.0:
+            now = time.monotonic()
+            ratio = min(1.0, max(0.0, (now - self._stream_started_at) / self._stream_duration_sec))
+            return self._interpolate_target_state(self._stream_start, self._stream_target, ratio)
+        if self._last_sent is not None:
+            return TargetState(self._last_sent.x, self._last_sent.y, self._last_sent.z, self._last_sent.j4_rad)
+        if self._actual_pose is not None and self._actual_pose.world_pitch_rad is not None:
+            return TargetState(
+                self._actual_pose.x,
+                self._actual_pose.y,
+                self._actual_pose.z,
+                self._actual_pose.world_pitch_rad,
+            )
+        home_x, home_y, home_z, home_pitch = self._kinematics.zero_home_pose()
+        return TargetState(home_x, home_y, home_z, home_pitch)
+
+    def _compute_stream_duration(self, start: TargetState, goal: TargetState) -> float:
+        linear_delta = math.sqrt(
+            (goal.x - start.x) ** 2 +
+            (goal.y - start.y) ** 2 +
+            (goal.z - start.z) ** 2
+        )
+        angular_delta = abs(normalize_angle_rad(goal.j4_rad - start.j4_rad))
+        linear_time = linear_delta / TARGET_STREAM_LINEAR_SPEED_MPS if TARGET_STREAM_LINEAR_SPEED_MPS > 1.0e-6 else 0.0
+        angular_time = angular_delta / TARGET_STREAM_ANGULAR_SPEED_RADPS if TARGET_STREAM_ANGULAR_SPEED_RADPS > 1.0e-6 else 0.0
+        return max(TARGET_STREAM_MIN_DURATION_SEC, min(TARGET_STREAM_MAX_DURATION_SEC, max(linear_time, angular_time)))
+
+    def _joint_limit_scale(self, joint_solution: Dict[str, float]) -> float:
+        joint_names = list(self._kinematics.zero_home_joint_map().keys())
+        scale_margin = 0.28
+        stop_margin = 0.18
+        min_scale = 1.0
+        for index, joint_name in enumerate(joint_names):
+            value = float(joint_solution[joint_name])
+            lower = float(self._kinematics.lower_limits[index])
+            upper = float(self._kinematics.upper_limits[index])
+            distance = min(value - lower, upper - value)
+            if distance <= stop_margin:
+                return 0.0
+            if distance >= scale_margin:
+                continue
+            ratio = (distance - stop_margin) / (scale_margin - stop_margin)
+            min_scale = min(min_scale, max(0.0, min(1.0, ratio)))
+        return min_scale
+
+    def _sample_pushes_into_limit(
+        self,
+        previous_solution: Dict[str, float],
+        solution: Dict[str, float],
+    ) -> Optional[str]:
+        joint_names = list(self._kinematics.zero_home_joint_map().keys())
+        scale_margin = 0.28
+        for index, joint_name in enumerate(joint_names):
+            previous_value = float(previous_solution[joint_name])
+            current_value = float(solution[joint_name])
+            lower = float(self._kinematics.lower_limits[index])
+            upper = float(self._kinematics.upper_limits[index])
+            dist_lower = previous_value - lower
+            dist_upper = upper - previous_value
+            moving_toward_lower = current_value < previous_value - 1.0e-4
+            moving_toward_upper = current_value > previous_value + 1.0e-4
+            if dist_lower <= scale_margin and dist_lower <= dist_upper and moving_toward_lower:
+                return (
+                    "{} pushes toward lower limit: prev={:.1f}deg current={:.1f}deg margin={:.1f}deg"
+                ).format(
+                    joint_name,
+                    math.degrees(previous_value),
+                    math.degrees(current_value),
+                    math.degrees(dist_lower),
+                )
+            if dist_upper <= scale_margin and dist_upper < dist_lower and moving_toward_upper:
+                return (
+                    "{} pushes toward upper limit: prev={:.1f}deg current={:.1f}deg margin={:.1f}deg"
+                ).format(
+                    joint_name,
+                    math.degrees(previous_value),
+                    math.degrees(current_value),
+                    math.degrees(dist_upper),
+                )
+        return None
+
+    def _interpolate_target_state(
+        self,
+        start: TargetState,
+        goal: TargetState,
+        ratio: float,
+    ) -> TargetState:
+        clamped_ratio = max(0.0, min(1.0, ratio))
+        angle_delta = normalize_angle_rad(goal.j4_rad - start.j4_rad)
+        return TargetState(
+            lerp(start.x, goal.x, clamped_ratio),
+            lerp(start.y, goal.y, clamped_ratio),
+            lerp(start.z, goal.z, clamped_ratio),
+            normalize_angle_rad(start.j4_rad + angle_delta * clamped_ratio),
+        )
+
+    def _path_safety_report(self, start: TargetState, goal: TargetState) -> tuple[bool, str]:
+        seed = self._current_seed_joints()
+        previous_solution = seed
+        for step in range(1, TARGET_PATH_SAFETY_SAMPLES + 1):
+            ratio = float(step) / float(TARGET_PATH_SAFETY_SAMPLES)
+            sample = self._interpolate_target_state(start, goal, ratio)
+            solution = self._solve_state(sample, seed_joints=seed)
+            if solution is None:
+                return (
+                    False,
+                    "sample {}/{} ratio={:.2f} unreachable at {}".format(
+                        step,
+                        TARGET_PATH_SAFETY_SAMPLES,
+                        ratio,
+                        format_target_state(sample),
+                    ),
+                )
+            limit_scale = self._joint_limit_scale(solution)
+            push_reason = None
+            if previous_solution is not None:
+                push_reason = self._sample_pushes_into_limit(previous_solution, solution)
+            if limit_scale < TARGET_PATH_MIN_LIMIT_SCALE and push_reason:
+                joint_text = ", ".join(
+                    "{}={:.1f}deg".format(name, math.degrees(float(solution[name])))
+                    for name in self._kinematics.zero_home_joint_map().keys()
+                )
+                return (
+                    False,
+                    "sample {}/{} ratio={:.2f} limit_scale={:.2f} at {} | {} | joints [{}]".format(
+                        step,
+                        TARGET_PATH_SAFETY_SAMPLES,
+                        ratio,
+                        limit_scale,
+                        format_target_state(sample),
+                        push_reason,
+                        joint_text,
+                    ),
+                )
+            seed = solution
+            previous_solution = solution
+        return True, "safe"
+
+    def _publish_tf_target(self, state: TargetState) -> None:
         qx, qy, qz, qw = self._kinematics.quaternion_from_world_pitch(state.j4_rad)
         tf_msg = TransformStamped()
         tf_msg.header.stamp = self._node.get_clock().now().to_msg()
@@ -300,15 +503,25 @@ class RosBackend(QObject):
         tf_msg.transform.rotation.z = qz
         tf_msg.transform.rotation.w = qw
         self._tf_pub.publish(TFMessage(transforms=[tf_msg]))
-        self._last_sent = TargetState(state.x, state.y, state.z, state.j4_rad)
-        self.last_sent_updated.emit(self._last_sent)
-        self.last_send_status.emit(
-            "published {} -> {} at {:.0f}".format(
-                normalize_frame_id(self._args.parent_frame),
-                normalize_frame_id(self._args.child_frame),
-                time.time(),
-            )
-        )
+
+    def _flush_target_stream(self) -> None:
+        if self._node is None or self._tf_pub is None:
+            return
+        if self._stream_target is None or self._stream_start is None:
+            return
+        now = time.monotonic()
+        if (now - self._last_stream_publish_at) < TARGET_STREAM_INTERVAL_SEC:
+            return
+        if self._stream_duration_sec <= 1.0e-6:
+            ratio = 1.0
+        else:
+            ratio = min(1.0, max(0.0, (now - self._stream_started_at) / self._stream_duration_sec))
+        state = self._interpolate_target_state(self._stream_start, self._stream_target, ratio)
+        self._publish_tf_target(state)
+        self._last_stream_publish_at = now
+        if ratio >= 1.0:
+            self._stream_start = None
+            self._stream_target = None
 
     def _flush_vacuum_request(self) -> None:
         with self._lock:
@@ -1182,7 +1395,7 @@ class TargetPublisherWindow(QMainWindow):
         if not self._validate_motion_target("Last middleware command"):
             return
         duplicates = self._find_duplicate_nodes(
-            ["/arm2_middleware", "/rc_arm_target_pose_moveit_executor"]
+            ["/arm2_middleware", "/rc_arm_servo_target_adapter"]
         )
         if duplicates is None:
             self._middleware_status_label.setText("blocked: unable to inspect ROS nodes")
@@ -1196,7 +1409,7 @@ class TargetPublisherWindow(QMainWindow):
             )
             return
         if not self._check_required_single_nodes(
-            ["/arm2_middleware", "/rc_arm_target_pose_moveit_executor"],
+            ["/arm2_middleware", "/rc_arm_servo_target_adapter"],
             "ROS Nodes Not Ready",
             blocked_status=self._middleware_status_label,
         ):
@@ -1347,10 +1560,9 @@ class TargetPublisherWindow(QMainWindow):
             return
         if not self._auto_cleanup_ros_duplicates(
             [
-                "/move_group",
-                "/rc_arm_target_pose_moveit_executor",
+                "/rc_arm_servo_target_adapter",
+                "/servo_node",
                 "/rc_arm_tf_target_pose_bridge",
-                "/rc_arm_payload_scene_sync",
                 "/robot_state_publisher",
             ],
             "Duplicate ROS Nodes",

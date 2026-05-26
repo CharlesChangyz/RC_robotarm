@@ -272,6 +272,7 @@ class RcArmWorldPitchKinematics:
 
         best = None
         best_cost = None
+        best_limit_margin = None
         best_seed_metric = None
         seed_reference = self.joint_vector(seed_joints) if seed_joints is not None else self.zero_joints
 
@@ -295,17 +296,26 @@ class RcArmWorldPitchKinematics:
                 continue
 
             seed_metric = float(np.linalg.norm(result.x - seed_reference))
+            limit_margin = float(np.min(np.minimum(result.x - self.lower_limits, self.upper_limits - result.x)))
             total_cost = pos_error + 0.05 * pitch_error
             if (
                 best is None
                 or total_cost < float(best_cost) - 1.0e-9
                 or (
                     abs(total_cost - float(best_cost)) <= 1.0e-9
-                    and seed_metric < float(best_seed_metric) - 1.0e-9
+                    and (
+                        best_limit_margin is None
+                        or limit_margin > float(best_limit_margin) + 1.0e-9
+                        or (
+                            abs(limit_margin - float(best_limit_margin)) <= 1.0e-9
+                            and seed_metric < float(best_seed_metric) - 1.0e-9
+                        )
+                    )
                 )
             ):
                 best = result.x.copy()
                 best_cost = total_cost
+                best_limit_margin = limit_margin
                 best_seed_metric = seed_metric
 
         if best is None:

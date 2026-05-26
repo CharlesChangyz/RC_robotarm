@@ -26,9 +26,8 @@ arm_controller:
       - j3_joint
       - j4_joint
 
-    # 是否允许通过 ~/joint_trajectory 话题直接下发轨迹
-    # 正式主链建议保持 false，只走 FollowJointTrajectory
-    allow_topic_commands: false
+    # 允许 Servo 通过 ~/joint_trajectory 话题直接下发轨迹
+    allow_topic_commands: true
 
     # FollowJointTrajectory feedback 发布频率，单位 Hz
     feedback_publish_rate: 20.0

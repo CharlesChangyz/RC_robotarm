@@ -20,7 +20,6 @@ HARDWARE_CONFIG_FILE="${HARDWARE_CONFIG_FILE:-${WORKSPACE_DIR}/rc_arm_descriptio
 CONTROLLERS_FILE="${CONTROLLERS_FILE:-${WORKSPACE_DIR}/rc_arm_description/config/rc_arm_2/rc_arm_2_controllers.yaml}"
 USE_RVIZ="${USE_RVIZ:-false}"
 USE_TF_TARGET_BRIDGE="${USE_TF_TARGET_BRIDGE:-true}"
-USE_TARGET_POSE_MOVEIT_EXECUTOR="${USE_TARGET_POSE_MOVEIT_EXECUTOR:-true}"
 
 echo "[run_rc_arm_real] workspace: ${WORKSPACE_DIR}"
 echo "[run_rc_arm_real] hardware_config_file=${HARDWARE_CONFIG_FILE}"
@@ -33,5 +32,4 @@ exec ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py \
   controllers_file:="${CONTROLLERS_FILE}" \
   use_rviz:="${USE_RVIZ}" \
   use_tf_target_bridge:="${USE_TF_TARGET_BRIDGE}" \
-  use_target_pose_moveit_executor:="${USE_TARGET_POSE_MOVEIT_EXECUTOR}" \
   "$@"
