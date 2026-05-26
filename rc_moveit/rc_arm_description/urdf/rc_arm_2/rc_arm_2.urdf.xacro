@@ -16,6 +16,15 @@
     <color rgba="0.75 0.8 0.9 1.0"/>
   </material>
 
+  <link name="world"/>
+
+  <joint name="world_to_base_link" type="fixed">
+    <!-- Place the world origin on the j1 rotation axis while preserving base_link axes. -->
+    <origin xyz="0 0.00169679105026498 -0.0135" rpy="0 0 0"/>
+    <parent link="world"/>
+    <child link="base_link"/>
+  </joint>
+
   <link name="base_link">
     <inertial>
       <origin xyz="-0.0188823543579507 -0.056778161374344 0.0186316009957921" rpy="0 0 0"/>
@@ -189,7 +198,7 @@
   <joint name="l4_to_end_effector" type="fixed">
     <parent link="l4"/>
     <child link="end_effector"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0.01 0 0.0275" rpy="0 0 0"/>
   </joint>
 
   <xacro:rc_arm_2_ros2_control

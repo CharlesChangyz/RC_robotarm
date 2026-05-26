@@ -174,6 +174,10 @@ class RcArmWorldPitchKinematics:
         self.lower_limits = np.array([self._joint_specs[name].lower for name in self._joint_names], dtype=float)
         self.upper_limits = np.array([self._joint_specs[name].upper for name in self._joint_names], dtype=float)
         self.zero_joints = np.zeros(len(self._joint_names), dtype=float)
+        self._world_origin_in_base = np.array(
+            self._joint_specs[self._joint_names[0]].origin_xyz,
+            dtype=float,
+        )
         self._zero_pitch_offset = self._raw_world_pitch(self.zero_joints)
         self._zero_position = self.forward_position(self.zero_joints)
         self._plane_y_constant = self._position_in_j1_frame(self.zero_joints, self._zero_position)[1]
@@ -232,7 +236,7 @@ class RcArmWorldPitchKinematics:
 
     def forward_position(self, joints: Sequence[float] | Dict[str, float]) -> Tuple[float, float, float]:
         transform = self.forward_transform(joints)
-        position = transform[:3, 3]
+        position = transform[:3, 3] - self._world_origin_in_base
         return (float(position[0]), float(position[1]), float(position[2]))
 
     def forward_world_pitch(self, joints: Sequence[float] | Dict[str, float]) -> float:
@@ -319,9 +323,7 @@ class RcArmWorldPitchKinematics:
         return math.atan2(float(tool_direction_plane[2]), float(tool_direction_plane[0]))
 
     def _position_in_j1_frame(self, joints_vec: np.ndarray, world_position: Sequence[float]) -> np.ndarray:
-        spec = self._joint_specs[self._joint_names[0]]
-        origin = np.array(spec.origin_xyz, dtype=float)
-        relative = np.array(world_position, dtype=float) - origin
+        relative = np.array(world_position, dtype=float)
         return self._j1_cancel_rotation(float(joints_vec[0])) @ relative
 
     def _j1_cancel_rotation(self, q1: float) -> np.ndarray:
@@ -381,8 +383,8 @@ class RcArmWorldPitchKinematics:
 
     def _solve_q1_guess(self, x: float, y: float) -> Optional[float]:
         spec = self._joint_specs[self._joint_names[0]]
-        rel_x = float(x) - float(spec.origin_xyz[0])
-        rel_y = float(y) - float(spec.origin_xyz[1])
+        rel_x = float(x)
+        rel_y = float(y)
         rho = math.hypot(rel_x, rel_y)
         const_y = float(self._plane_y_constant)
         if rho <= 1.0e-9 or rho + 1.0e-9 < abs(const_y):

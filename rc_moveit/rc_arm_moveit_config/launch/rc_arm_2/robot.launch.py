@@ -129,13 +129,6 @@ def generate_launch_description():
         parameters=[robot_description],
     )
 
-    static_tf_node = Node(
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        arguments=["0", "0", "0", "0", "0", "0", "world", "base_link"],
-        output="log",
-    )
-
     joint_state_broadcaster_spawner = Node(
         package="controller_manager",
         executable="spawner",
@@ -216,7 +209,6 @@ def generate_launch_description():
         + [
             ros2_control_node,
             robot_state_publisher_node,
-            static_tf_node,
             joint_state_broadcaster_spawner,
             delay_arm_controller,
             delay_move_group,
