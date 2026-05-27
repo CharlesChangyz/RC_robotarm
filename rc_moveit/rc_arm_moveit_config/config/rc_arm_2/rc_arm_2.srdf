@@ -20,8 +20,6 @@
 
   <end_effector name="ee" parent_link="end_effector" group="arm"/>
 
-  <virtual_joint name="world_joint" type="fixed" parent_frame="world" child_link="base_link"/>
-
   <disable_collisions link1="base_link" link2="l1" reason="Adjacent"/>
   <disable_collisions link1="l1" link2="l2" reason="Adjacent"/>
   <disable_collisions link1="l2" link2="l3" reason="Adjacent"/>

@@ -35,6 +35,4 @@ exec ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py \
   use_rviz:="${USE_RVIZ}" \
   use_tf_target_bridge:="${USE_TF_TARGET_BRIDGE}" \
   use_target_pose_moveit_executor:="${USE_TARGET_POSE_MOVEIT_EXECUTOR}" \
-  target_pose_executor_world_boxes_json:='[{"id":"keep_out","frame_id":"world","size":[1.6,0.05,1.6],"position":[0.0,0.3,0.0]}]'\
-  target_pose_executor_world_boxes_json:='[{"id":"keep_out2","frame_id":"world","size":[1.6,0.05,1.6],"position":[0.0,0.3,0.0]}]'\
   "$@"
