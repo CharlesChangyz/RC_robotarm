@@ -6,6 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+import socket
+import struct
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from ament_index_python.packages import get_package_share_directory
@@ -64,6 +66,8 @@ class StepResult:
 @dataclass
 class ActiveRun:
     action_set: ActionSet
+    trigger_source: str = "topic"
+    trigger_can_id: Optional[int] = None
     step_index: int = 0
     current_step: Optional[ActionStep] = None
     waiting_started_ns: Optional[int] = None
@@ -108,6 +112,11 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("payload_wait_timeout_sec", 5.0)
         self.declare_parameter("laser_wait_timeout_sec", 30.0)
         self.declare_parameter("tracking_publish_rate_hz", 10.0)
+        self.declare_parameter("can_bridge_enabled", False)
+        self.declare_parameter("can_interface", "can0")
+        self.declare_parameter("can_command_base_id", 0x20)
+        self.declare_parameter("can_complete_id", 0x30)
+        self.declare_parameter("can_poll_rate_hz", 100.0)
 
         self._action_sets_file = Path(self.get_parameter("action_sets_file").value)
         self._target_point_topic = str(self.get_parameter("target_point_topic").value)
@@ -125,6 +134,11 @@ class Arm2MiddlewareNode(Node):
         self._tracking_publish_rate_hz = max(
             0.1, float(self.get_parameter("tracking_publish_rate_hz").value)
         )
+        self._can_bridge_enabled = bool(self.get_parameter("can_bridge_enabled").value)
+        self._can_interface = str(self.get_parameter("can_interface").value)
+        self._can_command_base_id = int(self.get_parameter("can_command_base_id").value)
+        self._can_complete_id = int(self.get_parameter("can_complete_id").value)
+        self._can_poll_rate_hz = max(1.0, float(self.get_parameter("can_poll_rate_hz").value))
 
         self._state = MiddlewareState.IDLE
         self._cached_target_point: Optional[TargetPoint] = None
@@ -134,8 +148,11 @@ class Arm2MiddlewareNode(Node):
         self._active_run: Optional[ActiveRun] = None
         self._latest_motion_execution_id = 0
         self._action_sets_mtime_ns: Optional[int] = None
+        self._can_socket: Optional[socket.socket] = None
 
         self._action_sets = self._load_action_sets(self._action_sets_file)
+        if self._can_bridge_enabled:
+            self._init_can_bridge()
 
         self._motion_target_pub = self.create_publisher(Arm2TargetPoint, self._motion_target_topic, 10)
         self._vacuum_pub = self.create_publisher(Bool, self._vacuum_topic, 10)
@@ -151,11 +168,14 @@ class Arm2MiddlewareNode(Node):
             20,
         )
         self.create_timer(1.0 / self._tracking_publish_rate_hz, self._on_timer)
+        if self._can_bridge_enabled:
+            self.create_timer(1.0 / self._can_poll_rate_hz, self._poll_can_bridge)
 
         self.get_logger().info(
             "arm2_middleware ready: action_sets_file=%s action_sets=%s target_point=%s run_action_set=%s motion_target=%s "
             "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s laser_distance=%s "
-            "laser_threshold=%d laser_wait_timeout=%.2f tracking_publish_rate=%.2f"
+            "laser_threshold=%d laser_wait_timeout=%.2f tracking_publish_rate=%.2f can_bridge=%d can_interface=%s "
+            "can_command_base_id=0x%X can_complete_id=0x%X"
             % (
                 self._action_sets_file,
                 sorted(self._action_sets.keys()),
@@ -170,6 +190,10 @@ class Arm2MiddlewareNode(Node):
                 self._laser_distance_threshold,
                 self._laser_wait_timeout,
                 self._tracking_publish_rate_hz,
+                1 if self._can_bridge_enabled else 0,
+                self._can_interface,
+                self._can_command_base_id,
+                self._can_complete_id,
             )
         )
 
@@ -194,6 +218,10 @@ class Arm2MiddlewareNode(Node):
         self._action_sets_mtime_ns = config_path.stat().st_mtime_ns
         return action_sets
 
+    def destroy_node(self) -> bool:
+        self._close_can_bridge()
+        return super().destroy_node()
+
     def _reload_action_sets_if_changed(self) -> None:
         try:
             current_mtime_ns = self._action_sets_file.stat().st_mtime_ns
@@ -215,6 +243,7 @@ class Arm2MiddlewareNode(Node):
             return
 
         self._action_sets = reloaded
+        self._configure_can_filters()
         self.get_logger().info(
             "reloaded action sets from %s ids=%s"
             % (self._action_sets_file, sorted(self._action_sets.keys()))
@@ -298,23 +327,35 @@ class Arm2MiddlewareNode(Node):
 
     def _on_run_action_set(self, msg: Int32) -> None:
         requested_id = int(msg.data)
+        self._try_start_action_set(requested_id, source="topic")
+
+    def _try_start_action_set(
+        self,
+        requested_id: int,
+        source: str,
+        can_id: Optional[int] = None,
+    ) -> None:
         self._reload_action_sets_if_changed()
         if self._state != MiddlewareState.IDLE:
             self.get_logger().warn(
-                "ignoring action set %d while busy in state=%s"
-                % (requested_id, self._state.value)
+                "ignoring action set %d from %s while busy in state=%s"
+                % (requested_id, source, self._state.value)
             )
             return
 
         action_set = self._action_sets.get(requested_id)
         if action_set is None:
-            self.get_logger().warn(f"unknown action set id={requested_id}")
+            self.get_logger().warn(f"unknown action set id={requested_id} source={source}")
             return
 
-        self._active_run = ActiveRun(action_set=action_set)
+        self._active_run = ActiveRun(
+            action_set=action_set,
+            trigger_source=source,
+            trigger_can_id=can_id,
+        )
         self._set_state(
             MiddlewareState.STARTING_SET,
-            f"starting action_set id={action_set.action_id} name={action_set.name}",
+            f"starting action_set id={action_set.action_id} name={action_set.name} source={source}",
         )
         self._start_next_step()
 
@@ -448,6 +489,8 @@ class Arm2MiddlewareNode(Node):
                     for result in run.results
                 ]
             )
+            if run.trigger_source == "can":
+                self._send_can_completion(run.action_set.action_id)
             self._active_run = None
             self._set_state(MiddlewareState.IDLE, "ready for next action set")
             return
@@ -691,6 +734,126 @@ class Arm2MiddlewareNode(Node):
         )
         self._active_run = None
         self._set_state(MiddlewareState.IDLE, "ready for next action set")
+
+    def _init_can_bridge(self) -> None:
+        self._close_can_bridge()
+        try:
+            can_socket = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
+            can_socket.bind((self._can_interface,))
+            can_socket.setblocking(False)
+        except OSError as exc:
+            raise RuntimeError(
+                f"failed to initialize CAN bridge on {self._can_interface}: {exc}"
+            ) from exc
+
+        self._can_socket = can_socket
+        self._configure_can_filters()
+        self.get_logger().info(
+            "CAN bridge enabled on %s with action_ids=%s"
+            % (self._can_interface, sorted(self._action_sets.keys()))
+        )
+
+    def _close_can_bridge(self) -> None:
+        if self._can_socket is None:
+            return
+        try:
+            self._can_socket.close()
+        finally:
+            self._can_socket = None
+
+    def _configure_can_filters(self) -> None:
+        if self._can_socket is None:
+            return
+
+        filters: List[bytes] = []
+        for action_id in sorted(self._action_sets.keys()):
+            can_id = self._can_id_for_action_set(action_id)
+            if can_id is None:
+                self.get_logger().warn(
+                    "skipping CAN filter for action_set=%d because mapped can_id is out of range"
+                    % action_id
+                )
+                continue
+            filters.append(struct.pack("=II", can_id, socket.CAN_SFF_MASK))
+
+        if not filters:
+            self.get_logger().warn("CAN bridge has no valid receive filters configured")
+            return
+
+        self._can_socket.setsockopt(
+            socket.SOL_CAN_RAW,
+            socket.CAN_RAW_FILTER,
+            b"".join(filters),
+        )
+
+    def _poll_can_bridge(self) -> None:
+        if self._can_socket is None:
+            return
+
+        while True:
+            try:
+                frame_data = self._can_socket.recv(16)
+            except BlockingIOError:
+                return
+            except OSError as exc:
+                self.get_logger().warn(f"CAN bridge receive failed: {exc}")
+                return
+
+            if len(frame_data) < 16:
+                self.get_logger().warn(
+                    "ignoring short CAN frame on %s length=%d"
+                    % (self._can_interface, len(frame_data))
+                )
+                continue
+
+            can_id_raw, can_dlc, _payload = struct.unpack("=IB3x8s", frame_data[:16])
+            if can_id_raw & getattr(socket, "CAN_EFF_FLAG", 0):
+                continue
+            if can_id_raw & getattr(socket, "CAN_RTR_FLAG", 0):
+                continue
+            can_id = can_id_raw & socket.CAN_SFF_MASK
+            action_id = self._action_set_id_from_can_id(can_id)
+            if action_id is None:
+                continue
+
+            self.get_logger().info(
+                "received CAN command id=0x%X dlc=%d -> action_set=%d"
+                % (can_id, can_dlc, action_id)
+            )
+            self._try_start_action_set(action_id, source="can", can_id=can_id)
+
+    def _can_id_for_action_set(self, action_id: int) -> Optional[int]:
+        can_id = self._can_command_base_id + int(action_id)
+        if 0 <= can_id <= socket.CAN_SFF_MASK:
+            return can_id
+        return None
+
+    def _action_set_id_from_can_id(self, can_id: int) -> Optional[int]:
+        action_id = int(can_id) - self._can_command_base_id
+        if action_id < 1:
+            return None
+        if action_id not in self._action_sets:
+            return None
+        return action_id
+
+    def _send_can_completion(self, action_set_id: int) -> None:
+        if self._can_socket is None:
+            return
+
+        frame = struct.pack("=IB3x8s", self._can_complete_id, 0, b"\x00" * 8)
+        try:
+            self._can_socket.send(frame)
+        except OSError as exc:
+            self.get_logger().warn(
+                "failed to send CAN completion id=0x%X for action_set=%d: %s"
+                % (self._can_complete_id, action_set_id, exc)
+            )
+            return
+
+        self.get_logger().info(
+            "sent CAN completion id=0x%X for action_set=%d on %s"
+            % (self._can_complete_id, action_set_id, self._can_interface)
+        )
 
 
 def main(args: Optional[Sequence[str]] = None) -> None:

@@ -17,8 +17,6 @@
         <xacro:unless value="${use_mock_hardware}">
           <plugin>rc_arm_hardware/RsA3HardwareInterface</plugin>
           <param name="backend">${hardware_config.backend}</param>
-          <param name="can_interface">${hardware_config.can_interface}</param>
-          <param name="host_can_id">${hardware_config.host_can_id}</param>
           <param name="external_feedback_topic">${hardware_config.external_feedback_topic}</param>
           <param name="external_feedback_timeout">${hardware_config.external_feedback_timeout}</param>
           <param name="mujoco_command_topic">${hardware_config.mujoco_command_topic}</param>

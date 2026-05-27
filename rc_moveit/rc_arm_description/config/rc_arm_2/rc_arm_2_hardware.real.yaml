@@ -5,12 +5,6 @@
 # real = 实机 ros2_control 后端
 backend: real
 
-# CAN 接口名称，例如 can0 / can1
-can_interface: can0
-
-# 主机侧 CAN ID，通常保持 253（0xFD）
-host_can_id: 253
-
 # 外部反馈话题：
 # 实机模式下一般不会主动使用，但保留统一字段，便于 real / mujoco 两份配置共用同一 schema
 external_feedback_topic: /rc_arm_2/mujoco_joint_states

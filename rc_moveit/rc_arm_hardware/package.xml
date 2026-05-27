@@ -3,7 +3,7 @@
 <package format="3">
   <name>rc_arm_hardware</name>
   <version>1.0.0</version>
-  <description>ROS2 Control hardware interface for EL-A3 robot arm with Robstride motors via CANdle/gs_usb</description>
+  <description>ROS2 Control hardware interface for the EL-A3 arm using the dmbot_serial DM motor backend</description>
   <maintainer email="user@example.com">User</maintainer>
   <license>Apache-2.0</license>
 

@@ -11,6 +11,7 @@
 
   <exec_depend>rc_arm_description</exec_depend>
   <exec_depend>rc_arm_hardware</exec_depend>
+  <exec_depend>rc_arm2_middleware</exec_depend>
   <exec_depend>moveit_ros_move_group</exec_depend>
   <exec_depend>moveit_ros_planning_interface</exec_depend>
   <exec_depend>moveit_ros_visualization</exec_depend>

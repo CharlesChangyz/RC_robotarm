@@ -49,9 +49,6 @@ double getDoubleParamOr(
 
 RsA3HardwareInterface::RsA3HardwareInterface()
   : backend_mode_(BackendMode::REAL)
-  , can_interface_("can0")
-  , host_can_id_(0xFD)
-  , can_enabled_(true)
   , backend_name_("real")
   , dm_serial_number_("9940F4E149D904A69924737E3DE6629F")
   , dm_nominal_baud_(1000000)
@@ -121,12 +118,6 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   // 解析参数
   if (info_.hardware_parameters.count("backend")) {
     backend_name_ = info_.hardware_parameters.at("backend");
-  }
-  if (info_.hardware_parameters.count("can_interface")) {
-    can_interface_ = info_.hardware_parameters.at("can_interface");
-  }
-  if (info_.hardware_parameters.count("host_can_id")) {
-    host_can_id_ = std::stoi(info_.hardware_parameters.at("host_can_id"));
   }
   if (info_.hardware_parameters.count("velocity_limit")) {
     velocity_limit_ = std::stod(info_.hardware_parameters.at("velocity_limit"));
@@ -217,7 +208,6 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
     return hardware_interface::CallbackReturn::ERROR;
   }
   external_feedback_enabled_ = backend_mode_ == BackendMode::MUJOCO;
-  can_enabled_ = backend_mode_ == BackendMode::REAL;
 
   if (info_.hardware_parameters.count("low_stiffness_mode")) {
     low_stiffness_mode_ = parseBoolParam(info_.hardware_parameters.at("low_stiffness_mode"));

@@ -25,7 +25,6 @@ include_directories(include)
 # Hardware interface library
 add_library(${PROJECT_NAME} SHARED
   src/rc_arm_hardware.cpp
-  src/robstride_can_driver.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC

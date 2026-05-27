@@ -21,11 +21,17 @@ CONTROLLERS_FILE="${CONTROLLERS_FILE:-${WORKSPACE_DIR}/rc_arm_description/config
 USE_RVIZ="${USE_RVIZ:-false}"
 USE_TF_TARGET_BRIDGE="${USE_TF_TARGET_BRIDGE:-true}"
 USE_TARGET_POSE_MOVEIT_EXECUTOR="${USE_TARGET_POSE_MOVEIT_EXECUTOR:-true}"
+USE_ARM2_MIDDLEWARE="${USE_ARM2_MIDDLEWARE:-true}"
+MIDDLEWARE_CAN_BRIDGE_ENABLED="${MIDDLEWARE_CAN_BRIDGE_ENABLED:-false}"
+MIDDLEWARE_CAN_INTERFACE="${MIDDLEWARE_CAN_INTERFACE:-can0}"
 
 echo "[run_rc_arm_mujoco] workspace: ${WORKSPACE_DIR}"
 echo "[run_rc_arm_mujoco] hardware_config_file=${HARDWARE_CONFIG_FILE}"
 echo "[run_rc_arm_mujoco] controllers_file=${CONTROLLERS_FILE}"
 echo "[run_rc_arm_mujoco] use_rviz=${USE_RVIZ}"
+echo "[run_rc_arm_mujoco] use_arm2_middleware=${USE_ARM2_MIDDLEWARE}"
+echo "[run_rc_arm_mujoco] middleware_can_bridge_enabled=${MIDDLEWARE_CAN_BRIDGE_ENABLED}"
+echo "[run_rc_arm_mujoco] middleware_can_interface=${MIDDLEWARE_CAN_INTERFACE}"
 echo "[run_rc_arm_mujoco] make sure your MuJoCo side publishes JointState and consumes commands using the topics configured in ${HARDWARE_CONFIG_FILE}"
 echo "[run_rc_arm_mujoco] payload and unloaded defaults are read directly from ${HARDWARE_CONFIG_FILE}"
 
@@ -35,4 +41,7 @@ exec ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py \
   use_rviz:="${USE_RVIZ}" \
   use_tf_target_bridge:="${USE_TF_TARGET_BRIDGE}" \
   use_target_pose_moveit_executor:="${USE_TARGET_POSE_MOVEIT_EXECUTOR}" \
+  use_arm2_middleware:="${USE_ARM2_MIDDLEWARE}" \
+  middleware_can_bridge_enabled:="${MIDDLEWARE_CAN_BRIDGE_ENABLED}" \
+  middleware_can_interface:="${MIDDLEWARE_CAN_INTERFACE}" \
   "$@"

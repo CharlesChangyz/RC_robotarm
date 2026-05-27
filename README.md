@@ -108,7 +108,6 @@ rc_moveit/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.real.yaml
 
 重点确认：
 
-- `can_interface`：例如 `can0`
 - `dm_sn`：USB2CANFD 设备序列号
 - `motor_id_j1` 到 `motor_id_j4`：各关节电机 CAN ID
 - `unloaded_*`、`payload_*` 两套控制默认值
@@ -416,7 +415,6 @@ rc_moveit/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.real.yaml
 
 Important fields:
 
-- `can_interface`: for example `can0`
 - `dm_sn`: USB2CANFD device serial number
 - `motor_id_j1` to `motor_id_j4`: motor CAN IDs
 - `unloaded_*` and `payload_*` control defaults

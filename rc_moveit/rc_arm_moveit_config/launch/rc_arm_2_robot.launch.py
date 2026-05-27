@@ -3,6 +3,8 @@ from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchD
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -18,6 +20,11 @@ def generate_launch_description():
         'config',
         'rc_arm_2',
         'rc_arm_2_controllers.yaml',
+    ])
+    default_action_sets_file = PathJoinSubstitution([
+        FindPackageShare('rc_arm2_middleware'),
+        'config',
+        'action_sets.yaml',
     ])
 
     declared_arguments = [
@@ -38,8 +45,17 @@ def generate_launch_description():
         DeclareLaunchArgument('tf_target_parent_frame', default_value='world', description='目标 TF 的父坐标系'),
         DeclareLaunchArgument('tf_target_child_frame', default_value='rc_arm_2_target', description='目标 TF 的子坐标系（目标坐标来源）'),
         DeclareLaunchArgument('tf_target_pose_topic', default_value='/rc_arm_2/target_pose', description='TF 桥接输出的 Pose 话题'),
+        DeclareLaunchArgument('use_arm2_middleware', default_value='true', description='是否启动 arm2 middleware 动作集执行节点'),
+        DeclareLaunchArgument('middleware_action_sets_file', default_value=default_action_sets_file, description='arm2 middleware 动作集 YAML'),
+        DeclareLaunchArgument('middleware_target_point_topic', default_value='/arm2/middleware/target_point', description='middleware 缓存目标点的话题'),
+        DeclareLaunchArgument('middleware_run_action_set_topic', default_value='/arm2/middleware/run_action_set', description='middleware 执行动作集的话题'),
         DeclareLaunchArgument('middleware_motion_target_topic', default_value='/arm2/middleware/motion_target', description='middleware 发送笛卡尔目标点的话题'),
         DeclareLaunchArgument('middleware_motion_result_topic', default_value='/arm2/middleware/motion_execution', description='executor 返回 middleware 单次运动结果的话题'),
+        DeclareLaunchArgument('middleware_can_bridge_enabled', default_value='false', description='是否启用 middleware 的 SocketCAN 动作触发桥'),
+        DeclareLaunchArgument('middleware_can_interface', default_value='can0', description='middleware SocketCAN 接口名，例如 can0 / vcan0'),
+        DeclareLaunchArgument('middleware_can_command_base_id', default_value='32', description='CAN 命令基 ID；0x21 -> 1 对应 base=32'),
+        DeclareLaunchArgument('middleware_can_complete_id', default_value='48', description='动作成功完成后的 CAN 回传 ID；默认 0x30'),
+        DeclareLaunchArgument('middleware_can_poll_rate_hz', default_value='100.0', description='middleware 轮询 SocketCAN 的频率'),
         DeclareLaunchArgument('use_target_pose_moveit_executor', default_value='true', description='是否启用 target_pose -> MoveIt 规划执行链路'),
         DeclareLaunchArgument('target_pose_executor_group', default_value='arm', description='target_pose 执行器的 MoveIt 规划组'),
         DeclareLaunchArgument('target_pose_executor_joint_names', default_value='j1_joint,j2_joint,j3_joint,j4_joint', description='target_pose 执行器使用的关节顺序'),
@@ -111,6 +127,26 @@ def generate_launch_description():
         ],
         output='screen',
         condition=IfCondition(LaunchConfiguration('use_tf_target_bridge')),
+    )
+
+    arm2_middleware = Node(
+        package='rc_arm2_middleware',
+        executable='arm2_middleware',
+        name='arm2_middleware',
+        output='screen',
+        parameters=[{
+            'action_sets_file': ParameterValue(LaunchConfiguration('middleware_action_sets_file'), value_type=str),
+            'target_point_topic': ParameterValue(LaunchConfiguration('middleware_target_point_topic'), value_type=str),
+            'run_action_set_topic': ParameterValue(LaunchConfiguration('middleware_run_action_set_topic'), value_type=str),
+            'motion_target_topic': ParameterValue(LaunchConfiguration('middleware_motion_target_topic'), value_type=str),
+            'motion_execution_topic': ParameterValue(LaunchConfiguration('middleware_motion_result_topic'), value_type=str),
+            'can_bridge_enabled': ParameterValue(LaunchConfiguration('middleware_can_bridge_enabled'), value_type=bool),
+            'can_interface': ParameterValue(LaunchConfiguration('middleware_can_interface'), value_type=str),
+            'can_command_base_id': ParameterValue(LaunchConfiguration('middleware_can_command_base_id'), value_type=int),
+            'can_complete_id': ParameterValue(LaunchConfiguration('middleware_can_complete_id'), value_type=int),
+            'can_poll_rate_hz': ParameterValue(LaunchConfiguration('middleware_can_poll_rate_hz'), value_type=float),
+        }],
+        condition=IfCondition(LaunchConfiguration('use_arm2_middleware')),
     )
 
     target_pose_executor = ExecuteProcess(
@@ -232,5 +268,5 @@ def generate_launch_description():
     )
 
     return LaunchDescription(
-        declared_arguments + [include_robot, tf_target_bridge, target_pose_executor, payload_scene_sync, position_printer, torque_printer]
+        declared_arguments + [include_robot, tf_target_bridge, arm2_middleware, target_pose_executor, payload_scene_sync, position_printer, torque_printer]
     )

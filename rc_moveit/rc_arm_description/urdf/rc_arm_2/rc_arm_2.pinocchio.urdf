@@ -152,8 +152,6 @@
     <hardware>
       <plugin>rc_arm_hardware/RsA3HardwareInterface</plugin>
       <param name="backend">real</param>
-      <param name="can_interface">can0</param>
-      <param name="host_can_id">253</param>
       <param name="external_feedback_topic">/rc_arm_2/mujoco_joint_states</param>
       <param name="external_feedback_timeout">0.2</param>
       <param name="mujoco_command_topic">/rc_arm_2/mujoco_joint_command</param>

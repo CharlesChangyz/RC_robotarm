@@ -129,9 +129,6 @@ private:
   
   // 后端模式
   BackendMode backend_mode_;
-  std::string can_interface_;
-  uint8_t host_can_id_;
-  bool can_enabled_;
   std::string backend_name_;
 
   // dmbot_serial 实机后端
