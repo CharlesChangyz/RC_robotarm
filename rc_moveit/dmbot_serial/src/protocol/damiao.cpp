@@ -757,7 +757,8 @@ namespace damiao
             uint16_t q_uint = (uint16_t(value.data[1]) << 8) | value.data[2];
             uint16_t dq_uint = (uint16_t(value.data[3]) << 4) | (value.data[4] >> 4);
             uint16_t tau_uint = (uint16_t(value.data[4] & 0xf) << 8) | value.data[5];
-            laser_distance = (uint16_t(value.data[6]) << 8) | value.data[7];
+            // laser_distance = (uint16_t(value.data[6]) << 8) | value.data[7];
+            laser_distance = 1000;
             
             // if (motors.find(canID) == motors.end())
             // {

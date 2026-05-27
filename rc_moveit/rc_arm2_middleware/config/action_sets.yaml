@@ -113,4 +113,4 @@ action_sets:
       - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [0.0, 0.0, 0.0]
-        target_spin: 0.0
+        target_spin: 90.0
