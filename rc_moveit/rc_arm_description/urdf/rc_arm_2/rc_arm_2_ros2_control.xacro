@@ -23,6 +23,10 @@
           <param name="vacuum_activate_topic">${hardware_config.vacuum_activate_topic}</param>
           <param name="payload_command_topic">${hardware_config.payload_command_topic}</param>
           <param name="payload_active_topic">${hardware_config.payload_active_topic}</param>
+          <param name="j5_command_topic">${hardware_config.j5_command_topic}</param>
+          <param name="j5_position_topic">${hardware_config.j5_position_topic}</param>
+          <param name="j5_kp">${hardware_config.j5_kp}</param>
+          <param name="j5_kd">${hardware_config.j5_kd}</param>
           <param name="payload_frame">${hardware_config.payload_frame}</param>
           <param name="payload_mass">${hardware_config.payload_mass}</param>
           <param name="payload_diaginertia_x">${hardware_config.payload_diaginertia_x}</param>

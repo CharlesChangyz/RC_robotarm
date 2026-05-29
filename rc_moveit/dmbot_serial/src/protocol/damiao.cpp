@@ -314,6 +314,17 @@ namespace damiao
         usb_hw->send_data();
     }
 
+    void Motor_Control::CtrlMotors_2(float pos, float vel, float kp, float kd, float tff)
+    {
+        uint8_t motorData[8] = {0};
+        MitCtrl(pos, vel, kp, kd, tff, motorData);
+        std::vector<uint8_t> data = {motorData[0], motorData[1], motorData[2], motorData[3], motorData[4], motorData[5], motorData[6], motorData[7]};
+        can_tx_type tx_msg;
+        usb_hw->fillFDCANFrame(data, tx_msg, 0xA1);
+        usb_hw->set_tx_frame(&tx_msg);      
+        usb_hw->send_data();
+    }
+
     void Motor_Control::enable_motor()
     {
         std::vector<uint8_t> enable_data = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}; // enable首字母是e，所以末数据是fe，随意制定，与电机协议无关

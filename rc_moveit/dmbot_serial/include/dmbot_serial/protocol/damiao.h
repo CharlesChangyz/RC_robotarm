@@ -235,6 +235,7 @@ namespace damiao
         float uint2float(int value, float min, float max, int bits);
         void MitCtrl(float pos, float vel, float kp, float kd, float tff, uint8_t data[8]);
         void CtrlMotors(float pos[6], float vel[6], float kp[6], float kd[6], float tff[6]);
+        void CtrlMotors_2(float pos, float vel, float kp, float kd, float tff);
         void enable_motor();
         void disable_motor();
         void enable_vacuum_gripper();

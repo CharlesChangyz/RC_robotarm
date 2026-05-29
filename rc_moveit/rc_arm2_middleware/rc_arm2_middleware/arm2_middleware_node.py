@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from ament_index_python.packages import get_package_share_directory
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool, Int32, UInt32
+from std_msgs.msg import Bool, Float64, Int32, UInt32
 import yaml
 
 from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPoint
@@ -45,6 +45,7 @@ class ActionStep:
     target_spin_deg: float = 0.0
     offset_xyz: Optional[Tuple[float, float, float]] = None
     xyz: Optional[Tuple[float, float, float]] = None
+    j5_target_pos: Optional[float] = None
     enabled: Optional[bool] = None
 
 
@@ -76,6 +77,9 @@ class ActiveRun:
     desired_payload_active: Optional[bool] = None
     last_target_offset_command: Optional[TargetPoint] = None
     target_offset_publish_count: int = 0
+    waiting_motion_succeeded: bool = False
+    waiting_j5_target_pos: Optional[float] = None
+    last_j5_command_pos: Optional[float] = None
     had_failures: bool = False
     results: List[StepResult] = field(default_factory=list)
 
@@ -106,6 +110,9 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("vacuum_topic", "/rc_arm_2/vacuum_activate")
         self.declare_parameter("payload_command_topic", "/rc_arm_2/payload_active_command")
         self.declare_parameter("payload_active_topic", "/rc_arm_2/payload_active")
+        self.declare_parameter("j5_command_topic", "/rc_arm_2/j5/command_position")
+        self.declare_parameter("j5_position_topic", "/rc_arm_2/j5/actual_position")
+        self.declare_parameter("j5_position_tolerance", 0.02)
         self.declare_parameter("laser_distance_topic", "/rc_arm_2/laser_distance")
         self.declare_parameter("laser_distance_threshold", 50)
         self.declare_parameter("motion_wait_timeout_sec", 30.0)
@@ -126,6 +133,11 @@ class Arm2MiddlewareNode(Node):
         self._vacuum_topic = str(self.get_parameter("vacuum_topic").value)
         self._payload_command_topic = str(self.get_parameter("payload_command_topic").value)
         self._payload_active_topic = str(self.get_parameter("payload_active_topic").value)
+        self._j5_command_topic = str(self.get_parameter("j5_command_topic").value)
+        self._j5_position_topic = str(self.get_parameter("j5_position_topic").value)
+        self._j5_position_tolerance = max(
+            0.0, float(self.get_parameter("j5_position_tolerance").value)
+        )
         self._laser_distance_topic = str(self.get_parameter("laser_distance_topic").value)
         self._laser_distance_threshold = int(self.get_parameter("laser_distance_threshold").value)
         self._motion_wait_timeout = max(0.0, float(self.get_parameter("motion_wait_timeout_sec").value))
@@ -143,6 +155,7 @@ class Arm2MiddlewareNode(Node):
         self._state = MiddlewareState.IDLE
         self._cached_target_point: Optional[TargetPoint] = None
         self._payload_active = False
+        self._latest_j5_position: Optional[float] = None
         self._latest_laser_distance: Optional[int] = None
         self._latest_laser_distance_received_ns: Optional[int] = None
         self._active_run: Optional[ActiveRun] = None
@@ -157,9 +170,11 @@ class Arm2MiddlewareNode(Node):
         self._motion_target_pub = self.create_publisher(Arm2TargetPoint, self._motion_target_topic, 10)
         self._vacuum_pub = self.create_publisher(Bool, self._vacuum_topic, 10)
         self._payload_command_pub = self.create_publisher(Bool, self._payload_command_topic, 10)
+        self._j5_command_pub = self.create_publisher(Float64, self._j5_command_topic, 10)
         self.create_subscription(Arm2TargetPoint, self._target_point_topic, self._on_target_point, 20)
         self.create_subscription(Int32, self._run_action_set_topic, self._on_run_action_set, 10)
         self.create_subscription(Bool, self._payload_active_topic, self._on_payload_active, 10)
+        self.create_subscription(Float64, self._j5_position_topic, self._on_j5_position, 20)
         self.create_subscription(UInt32, self._laser_distance_topic, self._on_laser_distance, 20)
         self.create_subscription(
             Arm2MotionExecution,
@@ -173,8 +188,8 @@ class Arm2MiddlewareNode(Node):
 
         self.get_logger().info(
             "arm2_middleware ready: action_sets_file=%s action_sets=%s target_point=%s run_action_set=%s motion_target=%s "
-            "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s laser_distance=%s "
-            "laser_threshold=%d laser_wait_timeout=%.2f tracking_publish_rate=%.2f can_bridge=%d can_interface=%s "
+            "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s j5_command=%s j5_position=%s "
+            "j5_tolerance=%.4f laser_distance=%s laser_threshold=%d laser_wait_timeout=%.2f tracking_publish_rate=%.2f can_bridge=%d can_interface=%s "
             "can_command_base_id=0x%X can_complete_id=0x%X"
             % (
                 self._action_sets_file,
@@ -186,6 +201,9 @@ class Arm2MiddlewareNode(Node):
                 self._vacuum_topic,
                 self._payload_command_topic,
                 self._payload_active_topic,
+                self._j5_command_topic,
+                self._j5_position_topic,
+                self._j5_position_tolerance,
                 self._laser_distance_topic,
                 self._laser_distance_threshold,
                 self._laser_wait_timeout,
@@ -285,12 +303,30 @@ class Arm2MiddlewareNode(Node):
                 offset_xyz=self._parse_xyz(raw_step.get("offset_xyz"), "offset_xyz"),
             )
 
+        if step_type in {"move_target_offset_mf", "move_target_offset_mrl"}:
+            return ActionStep(
+                step_type=step_type,
+                label=label,
+                target_spin_deg=target_spin_deg,
+                offset_xyz=self._parse_xyz(raw_step.get("offset_xyz"), "offset_xyz"),
+                j5_target_pos=float(raw_step["j5_target_pos"]),
+            )
+
         if step_type == "move_fixed_pose":
             return ActionStep(
                 step_type=step_type,
                 label=label,
                 target_spin_deg=target_spin_deg,
                 xyz=self._parse_xyz(raw_step.get("xyz"), "xyz"),
+            )
+
+        if step_type in {"move_fixed_pose_mf", "move_fixed_pose_mrl"}:
+            return ActionStep(
+                step_type=step_type,
+                label=label,
+                target_spin_deg=target_spin_deg,
+                xyz=self._parse_xyz(raw_step.get("xyz"), "xyz"),
+                j5_target_pos=float(raw_step["j5_target_pos"]),
             )
 
         raise ValueError(f"unsupported step type: {step_type}")
@@ -380,6 +416,16 @@ class Arm2MiddlewareNode(Node):
                 f"payload_active matched {self._payload_active}",
             )
 
+    def _on_j5_position(self, msg: Float64) -> None:
+        self._latest_j5_position = float(msg.data)
+        run = self._active_run
+        if run is None or self._state != MiddlewareState.WAITING_MOTION_RESULT:
+            return
+        if not self._is_j5_wait_step(run.current_step):
+            return
+        if run.waiting_motion_succeeded and self._is_j5_at_target(run.waiting_j5_target_pos):
+            self._complete_current_step(self._j5_joint_wait_success_detail(run))
+
     def _on_motion_execution(self, msg: Arm2MotionExecution) -> None:
         execution_id = int(msg.execution_id)
         if execution_id > self._latest_motion_execution_id:
@@ -415,9 +461,28 @@ class Arm2MiddlewareNode(Node):
             return
 
         if msg.status == Arm2MotionExecution.STATUS_SUCCEEDED:
-            self._complete_current_step(
-                f"motion execution_id={execution_id} succeeded detail={msg.detail}",
-            )
+            if self._is_j5_wait_step(run.current_step):
+                run.waiting_motion_succeeded = True
+                if self._is_j5_at_target(run.waiting_j5_target_pos):
+                    self._complete_current_step(self._j5_joint_wait_success_detail(run, execution_id, msg.detail))
+                else:
+                    self.get_logger().info(
+                        "motion execution_id=%d succeeded, waiting for J5 target=%.4f actual=%s tolerance=%.4f"
+                        % (
+                            execution_id,
+                            float(run.waiting_j5_target_pos),
+                            (
+                                f"{self._latest_j5_position:.4f}"
+                                if self._latest_j5_position is not None
+                                else "none"
+                            ),
+                            self._j5_position_tolerance,
+                        )
+                    )
+            else:
+                self._complete_current_step(
+                    f"motion execution_id={execution_id} succeeded detail={msg.detail}",
+                )
             return
 
         if msg.status == Arm2MotionExecution.STATUS_FAILED:
@@ -432,7 +497,10 @@ class Arm2MiddlewareNode(Node):
 
         if self._state == MiddlewareState.WAITING_MOTION_RESULT:
             timeout_sec = self._motion_wait_timeout
-            timeout_detail = f"motion wait timeout after {timeout_sec:.2f} sec"
+            if self._is_j5_wait_step(run.current_step):
+                timeout_detail = self._j5_joint_wait_timeout_detail(timeout_sec)
+            else:
+                timeout_detail = f"motion wait timeout after {timeout_sec:.2f} sec"
         elif self._state == MiddlewareState.TRACKING_TARGET_OFFSET:
             self._refresh_target_offset_target(run)
             laser_distance = self._latest_laser_distance
@@ -537,6 +605,26 @@ class Arm2MiddlewareNode(Node):
             self._refresh_target_offset_target(run)
             return
 
+        if step.step_type in {"move_target_offset_mf", "move_target_offset_mrl"}:
+            if self._cached_target_point is None:
+                self._fail_action_set(f"{step.step_type} requested before target point was received")
+                return
+            x = self._cached_target_point.x + float(step.offset_xyz[0])
+            y = self._cached_target_point.y + float(step.offset_xyz[1])
+            z = self._cached_target_point.z + float(step.offset_xyz[2])
+            if step.step_type.endswith("_mf"):
+                x = 0.0
+            else:
+                y = 0.0
+            self._enter_motion_wait(
+                "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
+                % (step.step_type, x, y, z, step.target_spin_deg, float(step.j5_target_pos)),
+                j5_target_pos=step.j5_target_pos,
+            )
+            self._publish_motion_target(x, y, z, step.target_spin_deg)
+            self._publish_j5_target(step.j5_target_pos)
+            return
+
         if step.step_type == "move_fixed_pose":
             x, y, z = step.xyz
             self._enter_motion_wait(
@@ -545,9 +633,24 @@ class Arm2MiddlewareNode(Node):
             self._publish_motion_target(x, y, z, step.target_spin_deg)
             return
 
+        if step.step_type in {"move_fixed_pose_mf", "move_fixed_pose_mrl"}:
+            x, y, z = step.xyz
+            if step.step_type.endswith("_mf"):
+                x = 0.0
+            else:
+                y = 0.0
+            self._enter_motion_wait(
+                "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
+                % (step.step_type, x, y, z, step.target_spin_deg, float(step.j5_target_pos)),
+                j5_target_pos=step.j5_target_pos,
+            )
+            self._publish_motion_target(x, y, z, step.target_spin_deg)
+            self._publish_j5_target(step.j5_target_pos)
+            return
+
         self._fail_action_set(f"unsupported step type at runtime: {step.step_type}")
 
-    def _enter_motion_wait(self, detail: str) -> None:
+    def _enter_motion_wait(self, detail: str, j5_target_pos: Optional[float] = None) -> None:
         run = self._active_run
         if run is None:
             self._fail_action_set("internal error: missing active run when entering motion wait")
@@ -559,6 +662,9 @@ class Arm2MiddlewareNode(Node):
         run.desired_payload_active = None
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
+        run.waiting_motion_succeeded = False
+        run.waiting_j5_target_pos = j5_target_pos
+        run.last_j5_command_pos = j5_target_pos
         self._set_state(MiddlewareState.WAITING_MOTION_RESULT, detail)
 
     def _enter_target_offset_tracking(self, detail: str) -> None:
@@ -573,6 +679,9 @@ class Arm2MiddlewareNode(Node):
         run.desired_payload_active = None
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
+        run.waiting_motion_succeeded = False
+        run.waiting_j5_target_pos = None
+        run.last_j5_command_pos = None
         self._set_state(MiddlewareState.TRACKING_TARGET_OFFSET, detail)
 
     def _enter_payload_wait(self, detail: str, desired: bool) -> None:
@@ -587,6 +696,9 @@ class Arm2MiddlewareNode(Node):
         run.desired_payload_active = bool(desired)
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
+        run.waiting_motion_succeeded = False
+        run.waiting_j5_target_pos = None
+        run.last_j5_command_pos = None
         self._set_state(MiddlewareState.WAITING_PAYLOAD_ACTIVE, detail)
 
     def _refresh_target_offset_target(self, run: ActiveRun) -> None:
@@ -675,6 +787,68 @@ class Arm2MiddlewareNode(Node):
             f"published payload_active={enabled} on {self._payload_command_topic}"
         )
 
+    def _publish_j5_target(self, target_pos: Optional[float]) -> None:
+        if target_pos is None:
+            return
+        msg = Float64()
+        msg.data = float(target_pos)
+        self._j5_command_pub.publish(msg)
+        self.get_logger().info(
+            "published j5 target=%.4f on %s"
+            % (float(target_pos), self._j5_command_topic)
+        )
+
+    def _is_j5_wait_step(self, step: Optional[ActionStep]) -> bool:
+        return step is not None and step.step_type in {
+            "move_target_offset_mf",
+            "move_target_offset_mrl",
+            "move_fixed_pose_mf",
+            "move_fixed_pose_mrl",
+        }
+
+    def _is_j5_at_target(self, target_pos: Optional[float]) -> bool:
+        if target_pos is None or self._latest_j5_position is None:
+            return False
+        return abs(self._latest_j5_position - float(target_pos)) <= self._j5_position_tolerance
+
+    def _j5_joint_wait_success_detail(
+        self,
+        run: ActiveRun,
+        execution_id: Optional[int] = None,
+        motion_detail: str = "",
+    ) -> str:
+        detail = (
+            "motion execution_id=%s succeeded detail=%s j5 target=%.4f actual=%.4f tolerance=%.4f"
+            % (
+                execution_id if execution_id is not None else run.waiting_execution_id,
+                motion_detail,
+                float(run.waiting_j5_target_pos),
+                float(self._latest_j5_position),
+                self._j5_position_tolerance,
+            )
+        )
+        return detail
+
+    def _j5_joint_wait_timeout_detail(self, timeout_sec: float) -> str:
+        run = self._active_run
+        actual = "none" if self._latest_j5_position is None else f"{self._latest_j5_position:.4f}"
+        target = "none"
+        motion_succeeded = False
+        if run is not None:
+            if run.waiting_j5_target_pos is not None:
+                target = f"{float(run.waiting_j5_target_pos):.4f}"
+            motion_succeeded = bool(run.waiting_motion_succeeded)
+        return (
+            "motion+j5 wait timeout after %.2f sec motion_succeeded=%s j5_target=%s j5_actual=%s tolerance=%.4f"
+            % (
+                timeout_sec,
+                motion_succeeded,
+                target,
+                actual,
+                self._j5_position_tolerance,
+            )
+        )
+
     def _complete_current_step(self, detail: str) -> None:
         run = self._active_run
         if run is None:
@@ -685,6 +859,9 @@ class Arm2MiddlewareNode(Node):
         run.desired_payload_active = None
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
+        run.waiting_motion_succeeded = False
+        run.waiting_j5_target_pos = None
+        run.last_j5_command_pos = None
         self._record_step_result(True, detail)
         run.step_index += 1
         self._start_next_step()
@@ -726,6 +903,9 @@ class Arm2MiddlewareNode(Node):
         run.desired_payload_active = None
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
+        run.waiting_motion_succeeded = False
+        run.waiting_j5_target_pos = None
+        run.last_j5_command_pos = None
         if run.current_step is not None:
             self._record_step_result(False, detail)
         self._set_state(

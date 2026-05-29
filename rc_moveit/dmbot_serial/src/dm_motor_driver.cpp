@@ -10,6 +10,7 @@ namespace dmbot_serial
 namespace
 {
 constexpr size_t kDriverSlotCount = 6;
+constexpr size_t kJ5FeedbackIndex = 4;
 }
 
 DmMotorDriver::DmMotorDriver(
@@ -145,6 +146,22 @@ bool DmMotorDriver::writeCommands(
   return true;
 }
 
+bool DmMotorDriver::writeJ5Command(double position, double kp, double kd)
+{
+  std::lock_guard<std::mutex> lock(driver_mutex_);
+  if (!motor_control_) {
+    return false;
+  }
+
+  motor_control_->CtrlMotors_2(
+    static_cast<float>(position),
+    0.0f,
+    static_cast<float>(kp),
+    static_cast<float>(kd),
+    0.0f);
+  return true;
+}
+
 std::vector<MotorState> DmMotorDriver::readStates() const
 {
   std::lock_guard<std::mutex> lock(driver_mutex_);
@@ -165,6 +182,16 @@ std::vector<MotorState> DmMotorDriver::readStates() const
   }
 
   return states;
+}
+
+double DmMotorDriver::readJ5Position() const
+{
+  std::lock_guard<std::mutex> lock(driver_mutex_);
+  if (!motor_control_) {
+    return 0.0;
+  }
+
+  return motor_control_->current_motor_pos[kJ5FeedbackIndex];
 }
 
 uint32_t DmMotorDriver::readLaserDistance() const

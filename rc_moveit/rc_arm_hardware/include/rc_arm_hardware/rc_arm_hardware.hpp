@@ -172,6 +172,8 @@ private:
   std::string vacuum_activate_topic_;
   std::string payload_command_topic_;
   std::string payload_active_topic_;
+  std::string j5_command_topic_;
+  std::string j5_position_topic_;
   std::string payload_frame_;
   double payload_mass_;
   std::array<double, 3> payload_diaginertia_;
@@ -181,6 +183,11 @@ private:
   std::string mujoco_payload_site_name_;
   std::array<double, 3> mujoco_payload_initial_pos_;
   std::atomic<bool> payload_active_;
+  double j5_kp_;
+  double j5_kd_;
+  double latest_j5_command_;
+  double latest_j5_position_;
+  bool j5_command_received_;
   
   // 参考轨迹缓存
   std::vector<double> smoothed_positions_;     // 当前执行参考位置
@@ -322,6 +329,7 @@ private:
   void publishPayloadActiveState();
   void vacuumActivateCallback(const std_msgs::msg::Bool::SharedPtr msg);
   void payloadActiveCommandCallback(const std_msgs::msg::Bool::SharedPtr msg);
+  void j5CommandCallback(const std_msgs::msg::Float64::SharedPtr msg);
   void configureLoadedPinocchioModel();
   
   // 零力矩模式服务回调
@@ -349,10 +357,12 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j2_qd_actual_pub_;        // j2 当前实际反馈速度
   rclcpp::Publisher<std_msgs::msg::UInt32>::SharedPtr laser_distance_pub_;       // 激光测距值
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr payload_active_pub_;         // 统一负载状态
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j5_position_pub_;         // J5 实际位置
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr mujoco_command_pub_; // MuJoCo 命令输出
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr external_feedback_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr vacuum_activate_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr payload_command_sub_;
+  rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr j5_command_sub_;
 
   // 外部反馈回调
   void externalFeedbackCallback(const sensor_msgs::msg::JointState::SharedPtr msg);

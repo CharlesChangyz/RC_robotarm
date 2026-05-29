@@ -62,6 +62,8 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , vacuum_activate_topic_("/rc_arm_2/vacuum_activate")
   , payload_command_topic_("/rc_arm_2/payload_active_command")
   , payload_active_topic_("/rc_arm_2/payload_active")
+  , j5_command_topic_("/rc_arm_2/j5/command_position")
+  , j5_position_topic_("/rc_arm_2/j5/actual_position")
   , payload_frame_("end_effector")
   , payload_mass_(0.63)
   , payload_diaginertia_{0.02, 0.02, 0.02}
@@ -71,6 +73,11 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , mujoco_payload_site_name_("attachment_site")
   , mujoco_payload_initial_pos_{0.30, 0.0, 0.20}
   , payload_active_(false)
+  , j5_kp_(0.0)
+  , j5_kd_(0.0)
+  , latest_j5_command_(0.0)
+  , latest_j5_position_(0.0)
+  , j5_command_received_(false)
   , control_mode_(ControlMode::POSITION)
   , use_mock_hardware_(false)
   , external_feedback_enabled_(false)
@@ -131,9 +138,17 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   if (info_.hardware_parameters.count("payload_active_topic")) {
     payload_active_topic_ = info_.hardware_parameters.at("payload_active_topic");
   }
+  if (info_.hardware_parameters.count("j5_command_topic")) {
+    j5_command_topic_ = info_.hardware_parameters.at("j5_command_topic");
+  }
+  if (info_.hardware_parameters.count("j5_position_topic")) {
+    j5_position_topic_ = info_.hardware_parameters.at("j5_position_topic");
+  }
   if (info_.hardware_parameters.count("payload_frame")) {
     payload_frame_ = info_.hardware_parameters.at("payload_frame");
   }
+  j5_kp_ = getDoubleParamOr(info_, "j5_kp", j5_kp_);
+  j5_kd_ = getDoubleParamOr(info_, "j5_kd", j5_kd_);
   payload_mass_ = getDoubleParamOr(
     info_, "payload_mass", payload_mass_);
   payload_diaginertia_[0] = getDoubleParamOr(info_, "payload_diaginertia_x", payload_diaginertia_[0]);
@@ -359,6 +374,12 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
               payload_command_topic_.c_str(),
               payload_active_topic_.c_str());
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
+              "  J5：command_topic=%s，position_topic=%s，kp=%.3f，kd=%.3f",
+              j5_command_topic_.c_str(),
+              j5_position_topic_.c_str(),
+              j5_kp_,
+              j5_kd_);
+  RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "  Pinocchio：gravity=%s, inverse_dynamics=%s",
               use_pinocchio_gravity_ ? "启用" : "禁用",
               use_pinocchio_inverse_dynamics_ ? "启用" : "禁用");
@@ -388,6 +409,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   j2_qd_actual_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>("/debug/j2_qd_actual", 10);
   laser_distance_pub_ = debug_node_->create_publisher<std_msgs::msg::UInt32>("/rc_arm_2/laser_distance", 10);
   payload_active_pub_ = debug_node_->create_publisher<std_msgs::msg::Bool>(payload_active_topic_, 10);
+  j5_position_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>(j5_position_topic_, 10);
   mujoco_command_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>(mujoco_command_topic_, 10);
   vacuum_activate_sub_ = debug_node_->create_subscription<std_msgs::msg::Bool>(
     vacuum_activate_topic_,
@@ -397,6 +419,10 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
     payload_command_topic_,
     10,
     std::bind(&RsA3HardwareInterface::payloadActiveCommandCallback, this, std::placeholders::_1));
+  j5_command_sub_ = debug_node_->create_subscription<std_msgs::msg::Float64>(
+    j5_command_topic_,
+    10,
+    std::bind(&RsA3HardwareInterface::j5CommandCallback, this, std::placeholders::_1));
 
   if (external_feedback_enabled_) {
     external_feedback_sub_ = debug_node_->create_subscription<sensor_msgs::msg::JointState>(
@@ -933,6 +959,16 @@ void RsA3HardwareInterface::externalFeedbackCallback(
   }
 }
 
+void RsA3HardwareInterface::j5CommandCallback(const std_msgs::msg::Float64::SharedPtr msg)
+{
+  if (!msg) {
+    return;
+  }
+
+  latest_j5_command_ = msg->data;
+  j5_command_received_ = true;
+}
+
 
 hardware_interface::return_type RsA3HardwareInterface::read(
   const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/)
@@ -940,6 +976,7 @@ hardware_interface::return_type RsA3HardwareInterface::read(
   if (!use_mock_hardware_ && backend_mode_ == BackendMode::REAL && dm_driver_) {
     const auto motor_states = dm_driver_->readStates();
     const uint32_t laser_distance = dm_driver_->readLaserDistance();
+    latest_j5_position_ = dm_driver_->readJ5Position();
     for (size_t i = 0; i < joint_configs_.size() && i < motor_states.size(); ++i) {
       const auto & config = joint_configs_[i];
       const auto & state = motor_states[i];
@@ -956,6 +993,11 @@ hardware_interface::return_type RsA3HardwareInterface::read(
       std_msgs::msg::UInt32 msg;
       msg.data = laser_distance;
       laser_distance_pub_->publish(msg);
+    }
+    if (j5_position_pub_) {
+      std_msgs::msg::Float64 msg;
+      msg.data = latest_j5_position_;
+      j5_position_pub_->publish(msg);
     }
   } else {
     bool used_external_feedback = false;
@@ -1273,6 +1315,13 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       if (warn_counter++ % 1000 == 0) {
         RCLCPP_WARN(rclcpp::get_logger("RsA3HardwareInterface"),
                     "向 dmbot_serial 后端发送控制包失败");
+      }
+    }
+    if (j5_command_received_ && !dm_driver_->writeJ5Command(latest_j5_command_, j5_kp_, j5_kd_)) {
+      static int j5_warn_counter = 0;
+      if (j5_warn_counter++ % 1000 == 0) {
+        RCLCPP_WARN(rclcpp::get_logger("RsA3HardwareInterface"),
+                    "向 dmbot_serial 后端发送 J5 控制包失败");
       }
     }
   } else if (backend_mode_ == BackendMode::MUJOCO && mujoco_command_pub_ && debug_node_) {

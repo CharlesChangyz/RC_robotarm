@@ -58,8 +58,10 @@ public:
     const std::vector<double> & kp,
     const std::vector<double> & kd,
     const std::vector<double> & effort);
+  bool writeJ5Command(double position, double kp, double kd);
 
   std::vector<MotorState> readStates() const;
+  double readJ5Position() const;
   uint32_t readLaserDistance() const;
 
 private:
