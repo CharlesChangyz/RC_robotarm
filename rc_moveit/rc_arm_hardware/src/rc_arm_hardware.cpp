@@ -64,6 +64,7 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , payload_active_topic_("/rc_arm_2/payload_active")
   , j5_command_topic_("/rc_arm_2/j5/command_position")
   , j5_position_topic_("/rc_arm_2/j5/actual_position")
+  , camera_position_topic_("/rc_arm_2/camera_pos")
   , payload_frame_("end_effector")
   , payload_mass_(0.63)
   , payload_diaginertia_{0.02, 0.02, 0.02}
@@ -77,6 +78,7 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , j5_kd_(0.0)
   , latest_j5_command_(0.0)
   , latest_j5_position_(0.0)
+  , latest_camera_position_(0.0)
   , j5_command_received_(false)
   , control_mode_(ControlMode::POSITION)
   , use_mock_hardware_(false)
@@ -143,6 +145,9 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   }
   if (info_.hardware_parameters.count("j5_position_topic")) {
     j5_position_topic_ = info_.hardware_parameters.at("j5_position_topic");
+  }
+  if (info_.hardware_parameters.count("camera_position_topic")) {
+    camera_position_topic_ = info_.hardware_parameters.at("camera_position_topic");
   }
   if (info_.hardware_parameters.count("payload_frame")) {
     payload_frame_ = info_.hardware_parameters.at("payload_frame");
@@ -410,6 +415,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   laser_distance_pub_ = debug_node_->create_publisher<std_msgs::msg::UInt32>("/rc_arm_2/laser_distance", 10);
   payload_active_pub_ = debug_node_->create_publisher<std_msgs::msg::Bool>(payload_active_topic_, 10);
   j5_position_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>(j5_position_topic_, 10);
+  camera_position_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>(camera_position_topic_, 10);
   mujoco_command_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>(mujoco_command_topic_, 10);
   vacuum_activate_sub_ = debug_node_->create_subscription<std_msgs::msg::Bool>(
     vacuum_activate_topic_,
@@ -977,6 +983,7 @@ hardware_interface::return_type RsA3HardwareInterface::read(
     const auto motor_states = dm_driver_->readStates();
     const uint32_t laser_distance = dm_driver_->readLaserDistance();
     latest_j5_position_ = dm_driver_->readJ5Position();
+    latest_camera_position_ = dm_driver_->readCameraPosition();
     for (size_t i = 0; i < joint_configs_.size() && i < motor_states.size(); ++i) {
       const auto & config = joint_configs_[i];
       const auto & state = motor_states[i];
@@ -998,6 +1005,11 @@ hardware_interface::return_type RsA3HardwareInterface::read(
       std_msgs::msg::Float64 msg;
       msg.data = latest_j5_position_;
       j5_position_pub_->publish(msg);
+    }
+    if (camera_position_pub_) {
+      std_msgs::msg::Float64 msg;
+      msg.data = latest_camera_position_;
+      camera_position_pub_->publish(msg);
     }
   } else {
     bool used_external_feedback = false;

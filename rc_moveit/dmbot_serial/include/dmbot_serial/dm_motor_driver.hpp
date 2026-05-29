@@ -61,6 +61,7 @@ public:
   bool writeJ5Command(double position, double kp, double kd);
 
   std::vector<MotorState> readStates() const;
+  double readCameraPosition() const;
   double readJ5Position() const;
   uint32_t readLaserDistance() const;
 

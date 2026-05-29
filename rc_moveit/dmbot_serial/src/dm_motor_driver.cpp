@@ -10,6 +10,7 @@ namespace dmbot_serial
 namespace
 {
 constexpr size_t kDriverSlotCount = 6;
+constexpr size_t kCameraFeedbackIndex = 5;
 constexpr size_t kJ5FeedbackIndex = 4;
 }
 
@@ -182,6 +183,16 @@ std::vector<MotorState> DmMotorDriver::readStates() const
   }
 
   return states;
+}
+
+double DmMotorDriver::readCameraPosition() const
+{
+  std::lock_guard<std::mutex> lock(driver_mutex_);
+  if (!motor_control_) {
+    return 0.0;
+  }
+
+  return motor_control_->current_motor_pos[kCameraFeedbackIndex];
 }
 
 double DmMotorDriver::readJ5Position() const

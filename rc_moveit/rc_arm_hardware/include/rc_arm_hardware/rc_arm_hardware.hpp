@@ -174,6 +174,7 @@ private:
   std::string payload_active_topic_;
   std::string j5_command_topic_;
   std::string j5_position_topic_;
+  std::string camera_position_topic_;
   std::string payload_frame_;
   double payload_mass_;
   std::array<double, 3> payload_diaginertia_;
@@ -187,6 +188,7 @@ private:
   double j5_kd_;
   double latest_j5_command_;
   double latest_j5_position_;
+  double latest_camera_position_;
   bool j5_command_received_;
   
   // 参考轨迹缓存
@@ -358,6 +360,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::UInt32>::SharedPtr laser_distance_pub_;       // 激光测距值
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr payload_active_pub_;         // 统一负载状态
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j5_position_pub_;         // J5 实际位置
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr camera_position_pub_;     // Camera 实际位置
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr mujoco_command_pub_; // MuJoCo 命令输出
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr external_feedback_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr vacuum_activate_sub_;
