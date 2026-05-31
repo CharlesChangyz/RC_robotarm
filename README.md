@@ -448,7 +448,7 @@ source rc_moveit/install/setup.bash
 python3 demo/tf_target_cli_publisher.py
 ```
 
-The GUI uses `j4 world` semantics: `0 deg` means the tool is level in the arm's radial vertical plane. It keeps `Editing target`, `Last sent target`, and `Actual current pose` separate, publishes only on `Send`, and supports `Reset to current`, `Home`, `Send if changed only`, `Vacuum ON/OFF`, MuJoCo / Real start-stop buttons, and approximate reachability feedback. This GUI/executor chain no longer calls MoveIt's `/compute_ik`; `/compute_ik` remains available for teleop and other chains.
+The GUI uses `j4 world` semantics: `0 deg` means the tool is level in the arm's radial vertical plane. It keeps `Editing target`, `Last sent target`, and `Actual current pose` separate, publishes only on `Send`, and supports `Reset to current`, `Home`, `Send if changed only`, `Vacuum ON/OFF`, MuJoCo / Real start-stop buttons, and approximate reachability feedback. `Run Action Set` publishes only the action-set ID; it does not overwrite the middleware target point supplied by an external vision publisher. This GUI/executor chain no longer calls MoveIt's `/compute_ik`; `/compute_ik` remains available for teleop and other chains.
 
 Common target executor options:
 

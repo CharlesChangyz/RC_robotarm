@@ -114,3 +114,108 @@ action_sets:
         label: move_to_default_pose
         offset_xyz: [0.0, 0.0, 0.0]
         target_spin: 90.0
+
+  - id: 4
+    name: test_sequence
+    steps:
+      - type: move_target_offset_noj5
+        label: move_to_default_pose
+        offset_xyz: [0.0, 0.0, 0.0]
+        target_spin: 90.0
+
+      - type: move_target_offset_noj5
+        label: move_to_default_pose
+        offset_xyz: [0.0, 0.2, 0.0]
+        target_spin: 90.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, 0.2, 0.8]
+        target_spin: 90.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, -0.2, 0.8]
+        target_spin: 90.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, -0.36, 0.45]
+        target_spin: 0.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, -0.2, 0.8]
+        target_spin: 50.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, 0.2, 0.8]
+        target_spin: 50.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, 0.11, 0.23]
+        target_spin: 0.0
+
+  - id: 5
+    name: test_sequence
+    steps:
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_target_offset_noj5
+        label: move_to_default_pose
+        offset_xyz: [0.0, -0.1, 0.0]
+        target_spin: 90.0
+
+      - type: move_target_offset_noj5
+        label: move_to_default_pose
+        offset_xyz: [0.0, 0.1, 0.0]
+        target_spin: 90.0
+
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, 0.2, 0.8]
+        target_spin: 90.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, -0.2, 0.8]
+        target_spin: 90.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, -0.36, 0.45]
+        target_spin: 0.0
+
+      - type: set_payload_active
+        label: payload_off
+        enabled: false  
+        
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, -0.2, 0.8]
+        target_spin: 50.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, 0.2, 0.8]
+        target_spin: 50.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.0, 0.11, 0.23]
+        target_spin: 0.0
+
+      
+

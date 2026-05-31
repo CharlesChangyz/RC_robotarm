@@ -43,9 +43,6 @@ from std_msgs.msg import Bool, Int32
 from tf2_msgs.msg import TFMessage
 import tf2_ros
 
-from arm_msgs.msg import Arm2TargetPoint
-
-
 ROOT_DIR = Path(__file__).resolve().parent.parent
 RC_MOVEIT_DIR = ROOT_DIR / "rc_moveit"
 sys.path.insert(0, str(ROOT_DIR / "rc_moveit" / "rc_arm_moveit_config" / "launch"))
@@ -139,7 +136,6 @@ class RosBackend(QObject):
         self._tf_pub = None
         self._vacuum_pub = None
         self._payload_command_pub = None
-        self._middleware_target_pub = None
         self._middleware_run_pub = None
         self._payload_sub = None
         self._joint_state_sub = None
@@ -152,10 +148,10 @@ class RosBackend(QObject):
         self._pending_send: Optional[Tuple[TargetState, bool]] = None
         self._pending_vacuum: Optional[bool] = None
         self._pending_payload_active: Optional[bool] = None
-        self._pending_middleware_command: Optional[Tuple[TargetState, int]] = None
+        self._pending_middleware_command: Optional[int] = None
         self._pending_reachability: Optional[TargetState] = None
         self._last_actual_emit = 0.0
-        self._last_middleware_sent: Optional[Tuple[TargetState, int]] = None
+        self._last_middleware_sent: Optional[int] = None
         self._last_middleware_sent_time = 0.0
         self._latest_joint_map: Dict[str, float] = {}
         self._last_solver_solution: Optional[Dict[str, float]] = None
@@ -167,9 +163,6 @@ class RosBackend(QObject):
         self._tf_pub = self._node.create_publisher(TFMessage, self._args.tf_topic, 10)
         self._vacuum_pub = self._node.create_publisher(Bool, self._args.vacuum_topic, 10)
         self._payload_command_pub = self._node.create_publisher(Bool, self._args.payload_command_topic, 10)
-        self._middleware_target_pub = self._node.create_publisher(
-            Arm2TargetPoint, self._args.middleware_target_topic, 10
-        )
         self._middleware_run_pub = self._node.create_publisher(
             Int32, self._args.middleware_run_action_set_topic, 10
         )
@@ -214,10 +207,10 @@ class RosBackend(QObject):
         with self._lock:
             self._pending_reachability = state
 
-    @Slot(object, int)
-    def queue_run_action_set(self, state: object, action_set_id: int) -> None:
+    @Slot(int)
+    def queue_run_action_set(self, action_set_id: int) -> None:
         with self._lock:
-            self._pending_middleware_command = (state, int(action_set_id))
+            self._pending_middleware_command = int(action_set_id)
 
     def _on_payload_state(self, msg: Bool) -> None:
         self.payload_state_updated.emit(bool(msg.data))
@@ -337,15 +330,14 @@ class RosBackend(QObject):
         with self._lock:
             pending = self._pending_middleware_command
             self._pending_middleware_command = None
-        if pending is None or self._middleware_target_pub is None or self._middleware_run_pub is None:
+        if pending is None or self._middleware_run_pub is None:
             return
 
-        state, action_set_id = pending
+        action_set_id = pending
         now = time.monotonic()
         if (
             self._last_middleware_sent is not None
-            and self._last_middleware_sent[1] == action_set_id
-            and self._last_middleware_sent[0].almost_equal(state)
+            and self._last_middleware_sent == action_set_id
             and now - self._last_middleware_sent_time < 0.75
         ):
             self.last_middleware_status.emit(
@@ -355,20 +347,10 @@ class RosBackend(QObject):
             )
             return
 
-        target_msg = Arm2TargetPoint()
-        target_msg.xyz.x = float(state.x)
-        target_msg.xyz.y = float(state.y)
-        target_msg.xyz.z = float(state.z)
-        target_msg.target_spin_deg = math.degrees(float(state.j4_rad))
-        self._middleware_target_pub.publish(target_msg)
-
         run_msg = Int32()
         run_msg.data = int(action_set_id)
         self._middleware_run_pub.publish(run_msg)
-        self._last_middleware_sent = (
-            TargetState(state.x, state.y, state.z, state.j4_rad),
-            action_set_id,
-        )
+        self._last_middleware_sent = action_set_id
         self._last_middleware_sent_time = now
 
         # A middleware run can leave the manual ghost target unchanged but still
@@ -378,9 +360,8 @@ class RosBackend(QObject):
         self.last_sent_updated.emit(None)
 
         self.last_middleware_status.emit(
-            "published middleware target + action_set={} to {} / {}".format(
+            "published action_set={} to {}".format(
                 action_set_id,
-                self._args.middleware_target_topic,
                 self._args.middleware_run_action_set_topic,
             )
         )
@@ -1180,9 +1161,6 @@ class TargetPublisherWindow(QMainWindow):
         self._backend.queue_send_target(self._editing_target, self._send_if_changed.isChecked())
 
     def _run_action_set(self) -> None:
-        self._editing_target = self._read_editing_target()
-        if not self._validate_motion_target("Last middleware command"):
-            return
         duplicates = self._find_duplicate_nodes(
             ["/arm2_middleware", "/rc_arm_target_pose_moveit_executor"]
         )
@@ -1204,7 +1182,7 @@ class TargetPublisherWindow(QMainWindow):
         ):
             return
         action_set_id = self._action_set_spin.value()
-        self._backend.queue_run_action_set(self._editing_target, action_set_id)
+        self._backend.queue_run_action_set(action_set_id)
 
     def _validate_motion_target(self, label_name: str) -> bool:
         if not self._actual_pose_ready:
@@ -1436,7 +1414,7 @@ def parse_args():
     parser.add_argument("--payload-command-topic", default="/rc_arm_2/payload_active_command")
     parser.add_argument("--payload-active-topic", default="/rc_arm_2/payload_active")
     parser.add_argument("--joint-state-topic", default="/joint_states")
-    parser.add_argument("--middleware-target-topic", default="/arm2/middleware/target_point")
+    parser.add_argument("--middleware-target-topic", default="/arm2/middleware/target_point", help=argparse.SUPPRESS)
     parser.add_argument("--middleware-run-action-set-topic", default="/arm2/middleware/run_action_set")
     parser.add_argument("--urdf-path", default="")
     parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
