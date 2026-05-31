@@ -4,6 +4,7 @@
 import argparse
 import collections
 import math
+import signal
 import shlex
 import subprocess
 import sys
@@ -587,6 +588,7 @@ class TargetPublisherWindow(QMainWindow):
         self._actual_pose_ready = False
         self._syncing_editor = False
         self._wheel_drag_origin: Dict[str, float] = {}
+        self._shutdown_started = False
 
         self.setWindowTitle("RC Arm TF Target Publisher")
         self.resize(1080, 760)
@@ -1408,12 +1410,18 @@ class TargetPublisherWindow(QMainWindow):
             return
         self._log_view.appendPlainText(text)
 
-    def closeEvent(self, event) -> None:  # noqa: N802
+    def shutdown(self) -> None:
+        if self._shutdown_started:
+            return
+        self._shutdown_started = True
         self._mujoco_stack.stop()
         self._mujoco_bridge.stop()
         self._real_stack.stop()
         self._middleware_stack.stop()
         self._backend.stop()
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self.shutdown()
         super().closeEvent(event)
 
 
@@ -1440,8 +1448,17 @@ def main() -> None:
     args = parse_args()
     app = QApplication(sys.argv)
     window = TargetPublisherWindow(args)
+    app.aboutToQuit.connect(window.shutdown)
+    signal.signal(signal.SIGINT, lambda *_args: app.quit())
     window.show()
-    sys.exit(app.exec())
+    signal_timer = QTimer()
+    signal_timer.start(200)
+    signal_timer.timeout.connect(lambda: None)
+    try:
+        exit_code = app.exec()
+    finally:
+        window.shutdown()
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
