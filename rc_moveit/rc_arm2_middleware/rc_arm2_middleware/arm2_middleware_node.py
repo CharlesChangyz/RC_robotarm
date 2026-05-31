@@ -295,7 +295,7 @@ class Arm2MiddlewareNode(Node):
                 enabled=bool(raw_step["enabled"]),
             )
 
-        if step_type == "move_target_offset":
+        if step_type in {"move_target_offset", "move_target_offset_noj5"}:
             return ActionStep(
                 step_type=step_type,
                 label=label,
@@ -603,6 +603,22 @@ class Arm2MiddlewareNode(Node):
                 )
             )
             self._refresh_target_offset_target(run)
+            return
+
+        if step.step_type == "move_target_offset_noj5":
+            if self._cached_target_point is None:
+                self._fail_action_set(
+                    "move_target_offset_noj5 requested before target point was received"
+                )
+                return
+            x = self._cached_target_point.x + float(step.offset_xyz[0])
+            y = self._cached_target_point.y + float(step.offset_xyz[1])
+            z = self._cached_target_point.z + float(step.offset_xyz[2])
+            self._enter_motion_wait(
+                "waiting on move_target_offset_noj5 x=%.4f y=%.4f z=%.4f spin=%.2f"
+                % (x, y, z, step.target_spin_deg),
+            )
+            self._publish_motion_target(x, y, z, step.target_spin_deg)
             return
 
         if step.step_type in {"move_target_offset_mf", "move_target_offset_mrl"}:

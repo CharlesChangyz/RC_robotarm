@@ -110,7 +110,7 @@ action_sets:
   - id: 3
     name: test_sequence
     steps:
-      - type: move_target_offset
+      - type: move_target_offset_noj5
         label: move_to_default_pose
         offset_xyz: [0.0, 0.0, 0.0]
         target_spin: 90.0
