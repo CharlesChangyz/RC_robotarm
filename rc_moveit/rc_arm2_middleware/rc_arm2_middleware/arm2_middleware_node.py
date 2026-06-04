@@ -6,8 +6,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-import socket
-import struct
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from ament_index_python.packages import get_package_share_directory
@@ -16,7 +14,12 @@ from rclpy.node import Node
 from std_msgs.msg import Bool, Float64, Int32, UInt32
 import yaml
 
-from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPoint
+from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPoint, CanFrame
+from rc_arm2_middleware.dm_serial_action_bridge import (
+    DmSerialActionBridge,
+    RawCanFrame,
+    resolve_allowed_action_set_ids,
+)
 
 
 class MiddlewareState(str, Enum):
@@ -119,11 +122,12 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("payload_wait_timeout_sec", 5.0)
         self.declare_parameter("laser_wait_timeout_sec", 30.0)
         self.declare_parameter("tracking_publish_rate_hz", 10.0)
-        self.declare_parameter("can_bridge_enabled", False)
-        self.declare_parameter("can_interface", "can0")
-        self.declare_parameter("can_command_base_id", 0x20)
-        self.declare_parameter("can_complete_id", 0x30)
-        self.declare_parameter("can_poll_rate_hz", 100.0)
+        self.declare_parameter("dm_serial_bridge_enabled", True)
+        self.declare_parameter("dm_serial_rx_topic", "/rc_arm_2/dm_serial_rx")
+        self.declare_parameter("dm_serial_tx_topic", "/rc_arm_2/dm_serial_tx")
+        self.declare_parameter("dm_serial_command_base_id", 0x30)
+        self.declare_parameter("dm_serial_complete_id", 0x40)
+        self.declare_parameter("dm_serial_allowed_action_set_ids", "")
 
         self._action_sets_file = Path(self.get_parameter("action_sets_file").value)
         self._target_point_topic = str(self.get_parameter("target_point_topic").value)
@@ -146,11 +150,18 @@ class Arm2MiddlewareNode(Node):
         self._tracking_publish_rate_hz = max(
             0.1, float(self.get_parameter("tracking_publish_rate_hz").value)
         )
-        self._can_bridge_enabled = bool(self.get_parameter("can_bridge_enabled").value)
-        self._can_interface = str(self.get_parameter("can_interface").value)
-        self._can_command_base_id = int(self.get_parameter("can_command_base_id").value)
-        self._can_complete_id = int(self.get_parameter("can_complete_id").value)
-        self._can_poll_rate_hz = max(1.0, float(self.get_parameter("can_poll_rate_hz").value))
+        self._dm_serial_bridge_enabled = bool(
+            self.get_parameter("dm_serial_bridge_enabled").value
+        )
+        self._dm_serial_rx_topic = str(self.get_parameter("dm_serial_rx_topic").value)
+        self._dm_serial_tx_topic = str(self.get_parameter("dm_serial_tx_topic").value)
+        self._dm_serial_command_base_id = int(
+            self.get_parameter("dm_serial_command_base_id").value
+        )
+        self._dm_serial_complete_id = int(self.get_parameter("dm_serial_complete_id").value)
+        self._dm_serial_allowed_action_set_ids = self.get_parameter(
+            "dm_serial_allowed_action_set_ids"
+        ).value
 
         self._state = MiddlewareState.IDLE
         self._cached_target_point: Optional[TargetPoint] = None
@@ -161,16 +172,19 @@ class Arm2MiddlewareNode(Node):
         self._active_run: Optional[ActiveRun] = None
         self._latest_motion_execution_id = 0
         self._action_sets_mtime_ns: Optional[int] = None
-        self._can_socket: Optional[socket.socket] = None
+        self._dm_serial_bridge: Optional[DmSerialActionBridge] = None
+        self._dm_serial_tx_pub = None
 
         self._action_sets = self._load_action_sets(self._action_sets_file)
-        if self._can_bridge_enabled:
-            self._init_can_bridge()
+        self._refresh_dm_serial_bridge()
 
         self._motion_target_pub = self.create_publisher(Arm2TargetPoint, self._motion_target_topic, 10)
         self._vacuum_pub = self.create_publisher(Bool, self._vacuum_topic, 10)
         self._payload_command_pub = self.create_publisher(Bool, self._payload_command_topic, 10)
         self._j5_command_pub = self.create_publisher(Float64, self._j5_command_topic, 10)
+        if self._dm_serial_bridge_enabled:
+            self._dm_serial_tx_pub = self.create_publisher(CanFrame, self._dm_serial_tx_topic, 10)
+            self.create_subscription(CanFrame, self._dm_serial_rx_topic, self._on_dm_serial_frame, 50)
         self.create_subscription(Arm2TargetPoint, self._target_point_topic, self._on_target_point, 20)
         self.create_subscription(Int32, self._run_action_set_topic, self._on_run_action_set, 10)
         self.create_subscription(Bool, self._payload_active_topic, self._on_payload_active, 10)
@@ -183,14 +197,13 @@ class Arm2MiddlewareNode(Node):
             20,
         )
         self.create_timer(1.0 / self._tracking_publish_rate_hz, self._on_timer)
-        if self._can_bridge_enabled:
-            self.create_timer(1.0 / self._can_poll_rate_hz, self._poll_can_bridge)
 
         self.get_logger().info(
             "arm2_middleware ready: action_sets_file=%s action_sets=%s target_point=%s run_action_set=%s motion_target=%s "
             "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s j5_command=%s j5_position=%s "
-            "j5_tolerance=%.4f laser_distance=%s laser_threshold=%d laser_wait_timeout=%.2f tracking_publish_rate=%.2f can_bridge=%d can_interface=%s "
-            "can_command_base_id=0x%X can_complete_id=0x%X"
+            "j5_tolerance=%.4f laser_distance=%s laser_threshold=%d laser_wait_timeout=%.2f tracking_publish_rate=%.2f "
+            "dm_serial_bridge=%d dm_serial_rx=%s dm_serial_tx=%s dm_serial_command_base_id=0x%X "
+            "dm_serial_complete_id=0x%X dm_serial_allowed_action_set_ids=%s"
             % (
                 self._action_sets_file,
                 sorted(self._action_sets.keys()),
@@ -208,10 +221,12 @@ class Arm2MiddlewareNode(Node):
                 self._laser_distance_threshold,
                 self._laser_wait_timeout,
                 self._tracking_publish_rate_hz,
-                1 if self._can_bridge_enabled else 0,
-                self._can_interface,
-                self._can_command_base_id,
-                self._can_complete_id,
+                1 if self._dm_serial_bridge_enabled else 0,
+                self._dm_serial_rx_topic,
+                self._dm_serial_tx_topic,
+                self._dm_serial_command_base_id,
+                self._dm_serial_complete_id,
+                str(self._dm_serial_allowed_action_set_ids),
             )
         )
 
@@ -237,7 +252,6 @@ class Arm2MiddlewareNode(Node):
         return action_sets
 
     def destroy_node(self) -> bool:
-        self._close_can_bridge()
         return super().destroy_node()
 
     def _reload_action_sets_if_changed(self) -> None:
@@ -261,7 +275,7 @@ class Arm2MiddlewareNode(Node):
             return
 
         self._action_sets = reloaded
-        self._configure_can_filters()
+        self._refresh_dm_serial_bridge()
         self.get_logger().info(
             "reloaded action sets from %s ids=%s"
             % (self._action_sets_file, sorted(self._action_sets.keys()))
@@ -557,8 +571,8 @@ class Arm2MiddlewareNode(Node):
                     for result in run.results
                 ]
             )
-            if run.trigger_source == "can":
-                self._send_can_completion(run.action_set.action_id)
+            if run.trigger_source == "dm_serial":
+                self._send_dm_serial_completion(run.action_set.action_id)
             self._active_run = None
             self._set_state(MiddlewareState.IDLE, "ready for next action set")
             return
@@ -931,124 +945,59 @@ class Arm2MiddlewareNode(Node):
         self._active_run = None
         self._set_state(MiddlewareState.IDLE, "ready for next action set")
 
-    def _init_can_bridge(self) -> None:
-        self._close_can_bridge()
-        try:
-            can_socket = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
-            can_socket.bind((self._can_interface,))
-            can_socket.setblocking(False)
-        except OSError as exc:
-            raise RuntimeError(
-                f"failed to initialize CAN bridge on {self._can_interface}: {exc}"
-            ) from exc
-
-        self._can_socket = can_socket
-        self._configure_can_filters()
-        self.get_logger().info(
-            "CAN bridge enabled on %s with action_ids=%s"
-            % (self._can_interface, sorted(self._action_sets.keys()))
+    def _refresh_dm_serial_bridge(self) -> None:
+        allowed_action_set_ids = resolve_allowed_action_set_ids(
+            self._action_sets.keys(),
+            self._dm_serial_allowed_action_set_ids,
+        )
+        self._dm_serial_bridge = DmSerialActionBridge(
+            action_set_ids=allowed_action_set_ids,
+            command_base_id=self._dm_serial_command_base_id,
+            complete_id=self._dm_serial_complete_id,
         )
 
-    def _close_can_bridge(self) -> None:
-        if self._can_socket is None:
-            return
-        try:
-            self._can_socket.close()
-        finally:
-            self._can_socket = None
-
-    def _configure_can_filters(self) -> None:
-        if self._can_socket is None:
+    def _on_dm_serial_frame(self, msg: CanFrame) -> None:
+        if not self._dm_serial_bridge_enabled or self._dm_serial_bridge is None:
             return
 
-        filters: List[bytes] = []
-        for action_id in sorted(self._action_sets.keys()):
-            can_id = self._can_id_for_action_set(action_id)
-            if can_id is None:
-                self.get_logger().warn(
-                    "skipping CAN filter for action_set=%d because mapped can_id is out of range"
-                    % action_id
-                )
-                continue
-            filters.append(struct.pack("=II", can_id, socket.CAN_SFF_MASK))
-
-        if not filters:
-            self.get_logger().warn("CAN bridge has no valid receive filters configured")
-            return
-
-        self._can_socket.setsockopt(
-            socket.SOL_CAN_RAW,
-            socket.CAN_RAW_FILTER,
-            b"".join(filters),
+        dlc = max(0, min(int(msg.dlc), 64))
+        frame = RawCanFrame(
+            can_id=int(msg.id),
+            dlc=dlc,
+            data=list(msg.data[:dlc]),
+            is_extended=bool(msg.is_extended),
+            is_remote=bool(msg.is_remote),
+            is_fd=bool(msg.is_fd),
         )
-
-    def _poll_can_bridge(self) -> None:
-        if self._can_socket is None:
-            return
-
-        while True:
-            try:
-                frame_data = self._can_socket.recv(16)
-            except BlockingIOError:
-                return
-            except OSError as exc:
-                self.get_logger().warn(f"CAN bridge receive failed: {exc}")
-                return
-
-            if len(frame_data) < 16:
-                self.get_logger().warn(
-                    "ignoring short CAN frame on %s length=%d"
-                    % (self._can_interface, len(frame_data))
-                )
-                continue
-
-            can_id_raw, can_dlc, _payload = struct.unpack("=IB3x8s", frame_data[:16])
-            if can_id_raw & getattr(socket, "CAN_EFF_FLAG", 0):
-                continue
-            if can_id_raw & getattr(socket, "CAN_RTR_FLAG", 0):
-                continue
-            can_id = can_id_raw & socket.CAN_SFF_MASK
-            action_id = self._action_set_id_from_can_id(can_id)
-            if action_id is None:
-                continue
-
-            self.get_logger().info(
-                "received CAN command id=0x%X dlc=%d -> action_set=%d"
-                % (can_id, can_dlc, action_id)
-            )
-            self._try_start_action_set(action_id, source="can", can_id=can_id)
-
-    def _can_id_for_action_set(self, action_id: int) -> Optional[int]:
-        can_id = self._can_command_base_id + int(action_id)
-        if 0 <= can_id <= socket.CAN_SFF_MASK:
-            return can_id
-        return None
-
-    def _action_set_id_from_can_id(self, can_id: int) -> Optional[int]:
-        action_id = int(can_id) - self._can_command_base_id
-        if action_id < 1:
-            return None
-        if action_id not in self._action_sets:
-            return None
-        return action_id
-
-    def _send_can_completion(self, action_set_id: int) -> None:
-        if self._can_socket is None:
-            return
-
-        frame = struct.pack("=IB3x8s", self._can_complete_id, 0, b"\x00" * 8)
-        try:
-            self._can_socket.send(frame)
-        except OSError as exc:
-            self.get_logger().warn(
-                "failed to send CAN completion id=0x%X for action_set=%d: %s"
-                % (self._can_complete_id, action_set_id, exc)
-            )
+        action_id = self._dm_serial_bridge.action_set_id_from_frame(frame)
+        if action_id is None:
             return
 
         self.get_logger().info(
-            "sent CAN completion id=0x%X for action_set=%d on %s"
-            % (self._can_complete_id, action_set_id, self._can_interface)
+            "received DM serial command id=0x%X dlc=%d -> action_set=%d"
+            % (frame.can_id, frame.dlc, action_id)
+        )
+        self._try_start_action_set(action_id, source="dm_serial", can_id=frame.can_id)
+
+    def _send_dm_serial_completion(self, action_set_id: int) -> None:
+        if self._dm_serial_bridge is None or self._dm_serial_tx_pub is None:
+            return
+
+        frame = self._dm_serial_bridge.completion_frame()
+        msg = CanFrame()
+        msg.id = frame.can_id
+        msg.is_extended = frame.is_extended
+        msg.is_remote = frame.is_remote
+        msg.is_fd = frame.is_fd
+        msg.dlc = frame.dlc
+        msg.data = [0] * 64
+        for index, value in enumerate(frame.data[: frame.dlc]):
+            msg.data[index] = value
+        self._dm_serial_tx_pub.publish(msg)
+
+        self.get_logger().info(
+            "sent DM serial completion id=0x%X for action_set=%d on %s"
+            % (frame.can_id, action_set_id, self._dm_serial_tx_topic)
         )
 
 

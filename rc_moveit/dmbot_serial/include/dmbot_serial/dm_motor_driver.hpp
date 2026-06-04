@@ -1,7 +1,9 @@
 #ifndef DMBOT_SERIAL__DM_MOTOR_DRIVER_HPP_
 #define DMBOT_SERIAL__DM_MOTOR_DRIVER_HPP_
 
+#include <array>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -33,6 +35,16 @@ struct MotorState
   bool valid{false};
 };
 
+struct RawCanFrame
+{
+  uint32_t id{0};
+  bool is_extended{false};
+  bool is_remote{false};
+  bool is_fd{true};
+  uint8_t dlc{0};
+  std::array<uint8_t, 64> data{};
+};
+
 class DmMotorDriver
 {
 public:
@@ -59,6 +71,8 @@ public:
     const std::vector<double> & kd,
     const std::vector<double> & effort);
   bool writeJ5Command(double position, double kp, double kd);
+  void setRawFrameCallback(std::function<void(const RawCanFrame &)> callback);
+  bool sendRawFrame(const RawCanFrame & frame);
 
   std::vector<MotorState> readStates() const;
   double readCameraPosition() const;
@@ -76,6 +90,8 @@ private:
   std::vector<damiao::DmActData> init_data_;
   std::shared_ptr<damiao::Motor_Control> motor_control_;
   mutable std::mutex driver_mutex_;
+  mutable std::mutex raw_frame_callback_mutex_;
+  std::function<void(const RawCanFrame &)> raw_frame_callback_;
 };
 
 }  // namespace dmbot_serial

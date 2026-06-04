@@ -216,6 +216,3 @@ action_sets:
         label: move_to_default_pose
         xyz: [0.0, 0.11, 0.23]
         target_spin: 0.0
-
-      
-

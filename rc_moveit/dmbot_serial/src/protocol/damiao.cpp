@@ -1,5 +1,7 @@
 #include "dmbot_serial/protocol/damiao.h"
 
+#include <algorithm>
+
 namespace damiao
 {
 
@@ -376,6 +378,24 @@ namespace damiao
         usb_hw->set_tx_frame(&tx_msg);
         usb_hw->send_data();
     }
+
+    void Motor_Control::setRawFrameCallback(std::function<void(const RawCanFrame &)> callback)
+    {
+        std::lock_guard<std::mutex> lock(raw_frame_callback_mutex_);
+        raw_frame_callback_ = std::move(callback);
+    }
+
+    bool Motor_Control::sendRawFrame(const RawCanFrame & frame)
+    {
+        if (!usb_hw || frame.dlc > frame.data.size())
+        {
+            return false;
+        }
+
+        std::vector<uint8_t> data(frame.data.begin(), frame.data.begin() + frame.dlc);
+        usb_hw->fdcanFrameSend(data, frame.id);
+        return true;
+    }
     /********************************************************************************************************************************************************************* */
     /********************************************************************************************************************************************************************* */
     /********************************************************************************************************************************************************************* */
@@ -745,6 +765,24 @@ namespace damiao
         uint32_t canID = value.head.id;
         //std::cout<<"canID:"<<canID<<std::endl;
 
+        RawCanFrame raw_frame{};
+        raw_frame.id = canID;
+        raw_frame.is_extended = value.head.id_type != 0;
+        raw_frame.is_remote = value.head.fram_type != 0;
+        raw_frame.is_fd = value.head.can_type != 0;
+        raw_frame.dlc = std::min<uint8_t>(
+            value.head.dlc, static_cast<uint8_t>(raw_frame.data.size()));
+        std::copy(value.data, value.data + raw_frame.dlc, raw_frame.data.begin());
+        std::function<void(const RawCanFrame &)> raw_callback;
+        {
+            std::lock_guard<std::mutex> lock(raw_frame_callback_mutex_);
+            raw_callback = raw_frame_callback_;
+        }
+        if (raw_callback)
+        {
+            raw_callback(raw_frame);
+        }
+
         if (read_write_save == true && motors.find(canID) != motors.end())
         { 
             //std::cout<<"1"<<std::endl;
@@ -761,6 +799,10 @@ namespace damiao
         }
         else
         {
+            if (canID < 0x200)
+            {
+                return;
+            }
             //std::cout<<"2"<<std::endl;
             // if (value.data[0] == 0xAB)
             // {
@@ -778,6 +820,10 @@ namespace damiao
             // }
             auto m = motors[canID];
             uint8_t motor_id = canID - 0x200;
+            if (motor_id >= MOTOR_NUM)
+            {
+                return;
+            }
             
     
             float receive_q = uint_to_float(q_uint, P_MIN_4340, P_MAX_4340, 16);

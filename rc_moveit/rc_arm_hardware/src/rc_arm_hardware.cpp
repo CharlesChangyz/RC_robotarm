@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
+#include "arm_msgs/msg/can_frame.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/u_int32.hpp"
@@ -45,6 +46,30 @@ double getDoubleParamOr(
   }
   return std::stod(it->second);
 }
+
+arm_msgs::msg::CanFrame toCanFrameMsg(const dmbot_serial::RawCanFrame & frame)
+{
+  arm_msgs::msg::CanFrame msg;
+  msg.id = frame.id;
+  msg.is_extended = frame.is_extended;
+  msg.is_remote = frame.is_remote;
+  msg.is_fd = frame.is_fd;
+  msg.dlc = frame.dlc;
+  msg.data = frame.data;
+  return msg;
+}
+
+dmbot_serial::RawCanFrame fromCanFrameMsg(const arm_msgs::msg::CanFrame & msg)
+{
+  dmbot_serial::RawCanFrame frame{};
+  frame.id = msg.id;
+  frame.is_extended = msg.is_extended;
+  frame.is_remote = msg.is_remote;
+  frame.is_fd = msg.is_fd;
+  frame.dlc = std::min<uint8_t>(msg.dlc, static_cast<uint8_t>(frame.data.size()));
+  frame.data = msg.data;
+  return frame;
+}
 }  // namespace
 
 RsA3HardwareInterface::RsA3HardwareInterface()
@@ -65,6 +90,8 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , j5_command_topic_("/rc_arm_2/j5/command_position")
   , j5_position_topic_("/rc_arm_2/j5/actual_position")
   , camera_position_topic_("/rc_arm_2/camera_pos")
+  , dm_serial_rx_topic_("/rc_arm_2/dm_serial_rx")
+  , dm_serial_tx_topic_("/rc_arm_2/dm_serial_tx")
   , payload_frame_("end_effector")
   , payload_mass_(0.63)
   , payload_diaginertia_{0.02, 0.02, 0.02}
@@ -148,6 +175,12 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   }
   if (info_.hardware_parameters.count("camera_position_topic")) {
     camera_position_topic_ = info_.hardware_parameters.at("camera_position_topic");
+  }
+  if (info_.hardware_parameters.count("dm_serial_rx_topic")) {
+    dm_serial_rx_topic_ = info_.hardware_parameters.at("dm_serial_rx_topic");
+  }
+  if (info_.hardware_parameters.count("dm_serial_tx_topic")) {
+    dm_serial_tx_topic_ = info_.hardware_parameters.at("dm_serial_tx_topic");
   }
   if (info_.hardware_parameters.count("payload_frame")) {
     payload_frame_ = info_.hardware_parameters.at("payload_frame");
@@ -416,6 +449,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   payload_active_pub_ = debug_node_->create_publisher<std_msgs::msg::Bool>(payload_active_topic_, 10);
   j5_position_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>(j5_position_topic_, 10);
   camera_position_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>(camera_position_topic_, 10);
+  dm_serial_rx_pub_ = debug_node_->create_publisher<arm_msgs::msg::CanFrame>(dm_serial_rx_topic_, 50);
   mujoco_command_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>(mujoco_command_topic_, 10);
   vacuum_activate_sub_ = debug_node_->create_subscription<std_msgs::msg::Bool>(
     vacuum_activate_topic_,
@@ -429,6 +463,10 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
     j5_command_topic_,
     10,
     std::bind(&RsA3HardwareInterface::j5CommandCallback, this, std::placeholders::_1));
+  dm_serial_tx_sub_ = debug_node_->create_subscription<arm_msgs::msg::CanFrame>(
+    dm_serial_tx_topic_,
+    50,
+    std::bind(&RsA3HardwareInterface::dmSerialTxCallback, this, std::placeholders::_1));
 
   if (external_feedback_enabled_) {
     external_feedback_sub_ = debug_node_->create_subscription<sensor_msgs::msg::JointState>(
@@ -759,6 +797,13 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_configure(
 
   dm_driver_ = std::make_unique<dmbot_serial::DmMotorDriver>(
     dm_serial_number_, dm_nominal_baud_, dm_data_baud_, motor_configs);
+  dm_driver_->setRawFrameCallback(
+    [this](const dmbot_serial::RawCanFrame & frame)
+    {
+      if (dm_serial_rx_pub_) {
+        dm_serial_rx_pub_->publish(toCanFrameMsg(frame));
+      }
+    });
 
   if (dm_startup_delay_sec_ > 0.0) {
     RCLCPP_INFO(
@@ -973,6 +1018,25 @@ void RsA3HardwareInterface::j5CommandCallback(const std_msgs::msg::Float64::Shar
 
   latest_j5_command_ = msg->data;
   j5_command_received_ = true;
+}
+
+void RsA3HardwareInterface::dmSerialTxCallback(const arm_msgs::msg::CanFrame::SharedPtr msg)
+{
+  if (!msg) {
+    return;
+  }
+
+  if (backend_mode_ != BackendMode::REAL || !dm_driver_) {
+    return;
+  }
+
+  if (!dm_driver_->sendRawFrame(fromCanFrameMsg(*msg))) {
+    RCLCPP_WARN(
+      rclcpp::get_logger("RsA3HardwareInterface"),
+      "发送 dm_serial 原始帧失败：id=0x%X dlc=%u",
+      msg->id,
+      msg->dlc);
+  }
 }
 
 

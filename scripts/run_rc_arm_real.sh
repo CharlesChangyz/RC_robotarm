@@ -20,27 +20,35 @@ HARDWARE_CONFIG_FILE="${HARDWARE_CONFIG_FILE:-${WORKSPACE_DIR}/rc_arm_descriptio
 CONTROLLERS_FILE="${CONTROLLERS_FILE:-${WORKSPACE_DIR}/rc_arm_description/config/rc_arm_2/rc_arm_2_controllers.yaml}"
 USE_RVIZ="${USE_RVIZ:-false}"
 USE_TF_TARGET_BRIDGE="${USE_TF_TARGET_BRIDGE:-true}"
+USE_DM_SERIAL_FRAME_BRIDGE="${USE_DM_SERIAL_FRAME_BRIDGE:-false}"
 USE_TARGET_POSE_MOVEIT_EXECUTOR="${USE_TARGET_POSE_MOVEIT_EXECUTOR:-true}"
 USE_ARM2_MIDDLEWARE="${USE_ARM2_MIDDLEWARE:-true}"
-MIDDLEWARE_CAN_BRIDGE_ENABLED="${MIDDLEWARE_CAN_BRIDGE_ENABLED:-false}"
-MIDDLEWARE_CAN_INTERFACE="${MIDDLEWARE_CAN_INTERFACE:-can0}"
+MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED="${MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED:-true}"
+MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS="${MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS:-}"
 
 echo "[run_rc_arm_real] workspace: ${WORKSPACE_DIR}"
 echo "[run_rc_arm_real] hardware_config_file=${HARDWARE_CONFIG_FILE}"
 echo "[run_rc_arm_real] controllers_file=${CONTROLLERS_FILE}"
 echo "[run_rc_arm_real] use_rviz=${USE_RVIZ}"
+echo "[run_rc_arm_real] use_dm_serial_frame_bridge=${USE_DM_SERIAL_FRAME_BRIDGE}"
 echo "[run_rc_arm_real] use_arm2_middleware=${USE_ARM2_MIDDLEWARE}"
-echo "[run_rc_arm_real] middleware_can_bridge_enabled=${MIDDLEWARE_CAN_BRIDGE_ENABLED}"
-echo "[run_rc_arm_real] middleware_can_interface=${MIDDLEWARE_CAN_INTERFACE}"
+echo "[run_rc_arm_real] middleware_dm_serial_bridge_enabled=${MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED}"
+echo "[run_rc_arm_real] middleware_dm_serial_allowed_action_set_ids=${MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS}"
 echo "[run_rc_arm_real] payload and unloaded defaults are read directly from ${HARDWARE_CONFIG_FILE}"
 
-exec ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py \
-  hardware_config_file:="${HARDWARE_CONFIG_FILE}" \
-  controllers_file:="${CONTROLLERS_FILE}" \
-  use_rviz:="${USE_RVIZ}" \
-  use_tf_target_bridge:="${USE_TF_TARGET_BRIDGE}" \
-  use_target_pose_moveit_executor:="${USE_TARGET_POSE_MOVEIT_EXECUTOR}" \
-  use_arm2_middleware:="${USE_ARM2_MIDDLEWARE}" \
-  middleware_can_bridge_enabled:="${MIDDLEWARE_CAN_BRIDGE_ENABLED}" \
-  middleware_can_interface:="${MIDDLEWARE_CAN_INTERFACE}" \
-  "$@"
+LAUNCH_ARGS=(
+  "hardware_config_file:=${HARDWARE_CONFIG_FILE}"
+  "controllers_file:=${CONTROLLERS_FILE}"
+  "use_rviz:=${USE_RVIZ}"
+  "use_tf_target_bridge:=${USE_TF_TARGET_BRIDGE}"
+  "use_dm_serial_frame_bridge:=${USE_DM_SERIAL_FRAME_BRIDGE}"
+  "use_target_pose_moveit_executor:=${USE_TARGET_POSE_MOVEIT_EXECUTOR}"
+  "use_arm2_middleware:=${USE_ARM2_MIDDLEWARE}"
+  "middleware_dm_serial_bridge_enabled:=${MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED}"
+)
+
+if [[ -n "${MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS}" ]]; then
+  LAUNCH_ARGS+=("middleware_dm_serial_allowed_action_set_ids:=${MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS}")
+fi
+
+exec ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py "${LAUNCH_ARGS[@]}" "$@"

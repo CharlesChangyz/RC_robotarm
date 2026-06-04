@@ -14,6 +14,7 @@ find_package(pluginlib REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(arm_msgs REQUIRED)
 find_package(dmbot_serial REQUIRED)
 
 # Pinocchio for dynamics computation
@@ -40,6 +41,7 @@ ament_target_dependencies(${PROJECT_NAME}
   sensor_msgs
   std_msgs
   std_srvs
+  arm_msgs
   dmbot_serial
 )
 

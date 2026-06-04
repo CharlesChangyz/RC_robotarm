@@ -18,6 +18,7 @@
 #include "hardware_interface/hardware_info.hpp"
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
+#include "arm_msgs/msg/can_frame.hpp"
 #include "rclcpp/macros.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/state.hpp"
@@ -175,6 +176,8 @@ private:
   std::string j5_command_topic_;
   std::string j5_position_topic_;
   std::string camera_position_topic_;
+  std::string dm_serial_rx_topic_;
+  std::string dm_serial_tx_topic_;
   std::string payload_frame_;
   double payload_mass_;
   std::array<double, 3> payload_diaginertia_;
@@ -332,6 +335,7 @@ private:
   void vacuumActivateCallback(const std_msgs::msg::Bool::SharedPtr msg);
   void payloadActiveCommandCallback(const std_msgs::msg::Bool::SharedPtr msg);
   void j5CommandCallback(const std_msgs::msg::Float64::SharedPtr msg);
+  void dmSerialTxCallback(const arm_msgs::msg::CanFrame::SharedPtr msg);
   void configureLoadedPinocchioModel();
   
   // 零力矩模式服务回调
@@ -361,11 +365,13 @@ private:
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr payload_active_pub_;         // 统一负载状态
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j5_position_pub_;         // J5 实际位置
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr camera_position_pub_;     // Camera 实际位置
+  rclcpp::Publisher<arm_msgs::msg::CanFrame>::SharedPtr dm_serial_rx_pub_;        // DM USB2CANFD 原始接收帧
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr mujoco_command_pub_; // MuJoCo 命令输出
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr external_feedback_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr vacuum_activate_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr payload_command_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr j5_command_sub_;
+  rclcpp::Subscription<arm_msgs::msg::CanFrame>::SharedPtr dm_serial_tx_sub_;
 
   // 外部反馈回调
   void externalFeedbackCallback(const sensor_msgs::msg::JointState::SharedPtr msg);

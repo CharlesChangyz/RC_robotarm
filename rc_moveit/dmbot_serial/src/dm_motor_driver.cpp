@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <exception>
+#include <utility>
 
 namespace dmbot_serial
 {
@@ -12,6 +13,30 @@ namespace
 constexpr size_t kDriverSlotCount = 6;
 constexpr size_t kCameraFeedbackIndex = 5;
 constexpr size_t kJ5FeedbackIndex = 4;
+
+RawCanFrame fromDamiaoFrame(const damiao::RawCanFrame & frame)
+{
+  RawCanFrame converted{};
+  converted.id = frame.id;
+  converted.is_extended = frame.is_extended;
+  converted.is_remote = frame.is_remote;
+  converted.is_fd = frame.is_fd;
+  converted.dlc = frame.dlc;
+  converted.data = frame.data;
+  return converted;
+}
+
+damiao::RawCanFrame toDamiaoFrame(const RawCanFrame & frame)
+{
+  damiao::RawCanFrame converted{};
+  converted.id = frame.id;
+  converted.is_extended = frame.is_extended;
+  converted.is_remote = frame.is_remote;
+  converted.is_fd = frame.is_fd;
+  converted.dlc = frame.dlc;
+  converted.data = frame.data;
+  return converted;
+}
 }
 
 DmMotorDriver::DmMotorDriver(
@@ -59,6 +84,19 @@ bool DmMotorDriver::connect()
     motor_control_.reset();
     return false;
   }
+
+  motor_control_->setRawFrameCallback(
+    [this](const damiao::RawCanFrame & frame)
+    {
+      std::function<void(const RawCanFrame &)> callback;
+      {
+        std::lock_guard<std::mutex> callback_lock(raw_frame_callback_mutex_);
+        callback = raw_frame_callback_;
+      }
+      if (callback) {
+        callback(fromDamiaoFrame(frame));
+      }
+    });
 
   return static_cast<bool>(motor_control_);
 }
@@ -161,6 +199,22 @@ bool DmMotorDriver::writeJ5Command(double position, double kp, double kd)
     static_cast<float>(kd),
     0.0f);
   return true;
+}
+
+void DmMotorDriver::setRawFrameCallback(std::function<void(const RawCanFrame &)> callback)
+{
+  std::lock_guard<std::mutex> lock(raw_frame_callback_mutex_);
+  raw_frame_callback_ = std::move(callback);
+}
+
+bool DmMotorDriver::sendRawFrame(const RawCanFrame & frame)
+{
+  std::lock_guard<std::mutex> lock(driver_mutex_);
+  if (!motor_control_) {
+    return false;
+  }
+
+  return motor_control_->sendRawFrame(toDamiaoFrame(frame));
 }
 
 std::vector<MotorState> DmMotorDriver::readStates() const

@@ -87,13 +87,24 @@ ament_target_dependencies(debugger_node_cpp
   arm_msgs
 )
 
+add_executable(dm_serial_frame_bridge
+  src/dm_serial_frame_bridge.cpp
+)
+target_link_libraries(dm_serial_frame_bridge
+  motor
+)
+ament_target_dependencies(dm_serial_frame_bridge
+  rclcpp
+  arm_msgs
+)
+
 install(
   DIRECTORY include/
   DESTINATION include
 )
 
 install(
-  TARGETS motor dmbot_serial_driver test_motor dev_sn usb2canfd_dm_node_cpp debugger_node_cpp
+  TARGETS motor dmbot_serial_driver test_motor dev_sn usb2canfd_dm_node_cpp debugger_node_cpp dm_serial_frame_bridge
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

@@ -40,6 +40,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument('use_rviz', default_value='true', description='是否启动带 MoveIt 插件的 RViz2'),
         DeclareLaunchArgument('use_tf_target_bridge', default_value='true', description='是否启动 TF->Pose 目标桥接（放在 rc_moveit 中订阅 TF）'),
+        DeclareLaunchArgument('use_dm_serial_frame_bridge', default_value='false', description='是否启动 dmserial 原始帧 topic 桥'),
+        DeclareLaunchArgument('dm_serial_bridge_sn', default_value='9940F4E149D904A69924737E3DE6629F', description='USB2CANFD 设备序列号'),
+        DeclareLaunchArgument('dm_serial_bridge_nom_baud', default_value='1000000', description='dmserial 仲裁域波特率'),
+        DeclareLaunchArgument('dm_serial_bridge_dat_baud', default_value='2000000', description='dmserial 数据域波特率'),
+        DeclareLaunchArgument('dm_serial_bridge_rx_topic', default_value='/rc_arm_2/dm_serial_rx', description='dmserial 原始帧接收 topic'),
+        DeclareLaunchArgument('dm_serial_bridge_tx_topic', default_value='/rc_arm_2/dm_serial_tx', description='dmserial 原始帧发送 topic'),
         DeclareLaunchArgument('tf_target_topic', default_value='/tf', description='TF 动态变换话题'),
         DeclareLaunchArgument('tf_target_static_topic', default_value='/tf_static', description='TF 静态变换话题'),
         DeclareLaunchArgument('tf_target_parent_frame', default_value='world', description='目标 TF 的父坐标系'),
@@ -51,11 +57,12 @@ def generate_launch_description():
         DeclareLaunchArgument('middleware_run_action_set_topic', default_value='/arm2/middleware/run_action_set', description='middleware 执行动作集的话题'),
         DeclareLaunchArgument('middleware_motion_target_topic', default_value='/arm2/middleware/motion_target', description='middleware 发送笛卡尔目标点的话题'),
         DeclareLaunchArgument('middleware_motion_result_topic', default_value='/arm2/middleware/motion_execution', description='executor 返回 middleware 单次运动结果的话题'),
-        DeclareLaunchArgument('middleware_can_bridge_enabled', default_value='false', description='是否启用 middleware 的 SocketCAN 动作触发桥'),
-        DeclareLaunchArgument('middleware_can_interface', default_value='can0', description='middleware SocketCAN 接口名，例如 can0 / vcan0'),
-        DeclareLaunchArgument('middleware_can_command_base_id', default_value='32', description='CAN 命令基 ID；0x21 -> 1 对应 base=32'),
-        DeclareLaunchArgument('middleware_can_complete_id', default_value='48', description='动作成功完成后的 CAN 回传 ID；默认 0x30'),
-        DeclareLaunchArgument('middleware_can_poll_rate_hz', default_value='100.0', description='middleware 轮询 SocketCAN 的频率'),
+        DeclareLaunchArgument('middleware_dm_serial_bridge_enabled', default_value='true', description='是否启用 middleware 的 dmserial 动作触发桥'),
+        DeclareLaunchArgument('middleware_dm_serial_rx_topic', default_value='/rc_arm_2/dm_serial_rx', description='hardware 发布的 dmserial 原始接收帧 topic'),
+        DeclareLaunchArgument('middleware_dm_serial_tx_topic', default_value='/rc_arm_2/dm_serial_tx', description='middleware 回传 dmserial 原始帧 topic'),
+        DeclareLaunchArgument('middleware_dm_serial_command_base_id', default_value='48', description='dmserial 命令基 ID；0x31 -> action1 对应 base=0x30'),
+        DeclareLaunchArgument('middleware_dm_serial_complete_id', default_value='64', description='动作成功完成后的 dmserial 回传 ID；默认 0x40'),
+        DeclareLaunchArgument('middleware_dm_serial_allowed_action_set_ids', default_value='', description='允许 dmserial 触发的 action set ID，逗号分隔；留空表示允许所有 action set'),
         DeclareLaunchArgument('use_target_pose_moveit_executor', default_value='true', description='是否启用 target_pose -> MoveIt 规划执行链路'),
         DeclareLaunchArgument('target_pose_executor_group', default_value='arm', description='target_pose 执行器的 MoveIt 规划组'),
         DeclareLaunchArgument('target_pose_executor_joint_names', default_value='j1_joint,j2_joint,j3_joint,j4_joint', description='target_pose 执行器使用的关节顺序'),
@@ -129,6 +136,21 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_tf_target_bridge')),
     )
 
+    dm_serial_frame_bridge = Node(
+        package='dmbot_serial',
+        executable='dm_serial_frame_bridge',
+        name='dm_serial_frame_bridge',
+        output='screen',
+        parameters=[{
+            'sn': ParameterValue(LaunchConfiguration('dm_serial_bridge_sn'), value_type=str),
+            'nom_baud': ParameterValue(LaunchConfiguration('dm_serial_bridge_nom_baud'), value_type=int),
+            'dat_baud': ParameterValue(LaunchConfiguration('dm_serial_bridge_dat_baud'), value_type=int),
+            'rx_topic': ParameterValue(LaunchConfiguration('dm_serial_bridge_rx_topic'), value_type=str),
+            'tx_topic': ParameterValue(LaunchConfiguration('dm_serial_bridge_tx_topic'), value_type=str),
+        }],
+        condition=IfCondition(LaunchConfiguration('use_dm_serial_frame_bridge')),
+    )
+
     arm2_middleware = Node(
         package='rc_arm2_middleware',
         executable='arm2_middleware',
@@ -140,11 +162,12 @@ def generate_launch_description():
             'run_action_set_topic': ParameterValue(LaunchConfiguration('middleware_run_action_set_topic'), value_type=str),
             'motion_target_topic': ParameterValue(LaunchConfiguration('middleware_motion_target_topic'), value_type=str),
             'motion_execution_topic': ParameterValue(LaunchConfiguration('middleware_motion_result_topic'), value_type=str),
-            'can_bridge_enabled': ParameterValue(LaunchConfiguration('middleware_can_bridge_enabled'), value_type=bool),
-            'can_interface': ParameterValue(LaunchConfiguration('middleware_can_interface'), value_type=str),
-            'can_command_base_id': ParameterValue(LaunchConfiguration('middleware_can_command_base_id'), value_type=int),
-            'can_complete_id': ParameterValue(LaunchConfiguration('middleware_can_complete_id'), value_type=int),
-            'can_poll_rate_hz': ParameterValue(LaunchConfiguration('middleware_can_poll_rate_hz'), value_type=float),
+            'dm_serial_bridge_enabled': ParameterValue(LaunchConfiguration('middleware_dm_serial_bridge_enabled'), value_type=bool),
+            'dm_serial_rx_topic': ParameterValue(LaunchConfiguration('middleware_dm_serial_rx_topic'), value_type=str),
+            'dm_serial_tx_topic': ParameterValue(LaunchConfiguration('middleware_dm_serial_tx_topic'), value_type=str),
+            'dm_serial_command_base_id': ParameterValue(LaunchConfiguration('middleware_dm_serial_command_base_id'), value_type=int),
+            'dm_serial_complete_id': ParameterValue(LaunchConfiguration('middleware_dm_serial_complete_id'), value_type=int),
+            'dm_serial_allowed_action_set_ids': ParameterValue(LaunchConfiguration('middleware_dm_serial_allowed_action_set_ids'), value_type=str),
         }],
         condition=IfCondition(LaunchConfiguration('use_arm2_middleware')),
     )
@@ -268,5 +291,14 @@ def generate_launch_description():
     )
 
     return LaunchDescription(
-        declared_arguments + [include_robot, tf_target_bridge, arm2_middleware, target_pose_executor, payload_scene_sync, position_printer, torque_printer]
+        declared_arguments + [
+            include_robot,
+            tf_target_bridge,
+            dm_serial_frame_bridge,
+            arm2_middleware,
+            target_pose_executor,
+            payload_scene_sync,
+            position_printer,
+            torque_printer,
+        ]
     )

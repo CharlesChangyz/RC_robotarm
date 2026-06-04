@@ -9,6 +9,8 @@
 #include <variant>
 #include <cstdint>
 #include <cmath>
+#include <functional>
+#include <mutex>
 #include <thread>
 #include <atomic>
 #include <signal.h>
@@ -137,6 +139,16 @@ namespace damiao
         uint16_t mst_id;
     };
 
+    struct RawCanFrame
+    {
+        uint32_t id = 0;
+        bool is_extended = false;
+        bool is_remote = false;
+        bool is_fd = true;
+        uint8_t dlc = 0;
+        std::array<uint8_t, 64> data{};
+    };
+
     class Motor
     {
     private:
@@ -240,6 +252,8 @@ namespace damiao
         void disable_motor();
         void enable_vacuum_gripper();
         void disable_vacuum_gripper();
+        void setRawFrameCallback(std::function<void(const RawCanFrame &)> callback);
+        bool sendRawFrame(const RawCanFrame & frame);
 
         float current_motor_pos[MOTOR_NUM];
         float current_motor_vel[MOTOR_NUM];
@@ -308,6 +322,8 @@ namespace damiao
 
         std::vector<DmActData> *data_ptr_;
         std::shared_ptr<usb_class> usb_hw;
+        std::mutex raw_frame_callback_mutex_;
+        std::function<void(const RawCanFrame &)> raw_frame_callback_;
 
         std::atomic<bool> read_write_save{false};
         //
