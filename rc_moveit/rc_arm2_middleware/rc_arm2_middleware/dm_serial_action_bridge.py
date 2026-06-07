@@ -1,4 +1,9 @@
-"""Helpers for mapping DM-serial raw CAN frames to middleware action sets."""
+"""Helpers for mapping DM-serial raw CAN frames to middleware action sets.
+
+Default protocol:
+- command `0x4xx` maps to action set `0xXX`
+- completion returns fixed id `0x500`
+"""
 
 from __future__ import annotations
 

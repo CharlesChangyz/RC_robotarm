@@ -125,8 +125,8 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("dm_serial_bridge_enabled", True)
         self.declare_parameter("dm_serial_rx_topic", "/rc_arm_2/dm_serial_rx")
         self.declare_parameter("dm_serial_tx_topic", "/rc_arm_2/dm_serial_tx")
-        self.declare_parameter("dm_serial_command_base_id", 0x30)
-        self.declare_parameter("dm_serial_complete_id", 0x40)
+        self.declare_parameter("dm_serial_command_base_id", 0x400)
+        self.declare_parameter("dm_serial_complete_id", 0x500)
         self.declare_parameter("dm_serial_allowed_action_set_ids", "")
 
         self._action_sets_file = Path(self.get_parameter("action_sets_file").value)
