@@ -78,7 +78,7 @@ def generate_launch_description():
         DeclareLaunchArgument('target_pose_executor_middleware_preempt_interval_sec', default_value='0.25', description='middleware 目标最小抢断间隔（s）'),
         DeclareLaunchArgument('target_pose_executor_middleware_preempt_pos_threshold', default_value='0.01', description='middleware 目标位置变化小于此值时不抢断（m）'),
         DeclareLaunchArgument('target_pose_executor_middleware_preempt_rot_threshold', default_value='0.08', description='middleware 目标姿态变化小于此值时不抢断（rad）'),
-        DeclareLaunchArgument('target_pose_executor_j4_axis', default_value='x', description='目标姿态中 j4 对应的旋转轴（x/y/z）'),
+        DeclareLaunchArgument('target_pose_executor_j4_axis', default_value='y', description='目标姿态中 j4 对应的旋转轴（x/y/z）'),
         DeclareLaunchArgument('target_pose_executor_joint_state_topic', default_value='/joint_states', description='target_pose 执行器读取当前关节角用于分支选择的话题'),
         DeclareLaunchArgument('target_pose_executor_urdf_path', default_value='', description='target_pose 执行器共享 4DOF 几何 helper 的 URDF/Xacro 路径，留空则自动查找'),
         DeclareLaunchArgument('target_pose_executor_status_log_period', default_value='1.0', description='target_pose 执行器状态心跳打印周期（秒，<=0 关闭）'),

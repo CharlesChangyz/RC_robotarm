@@ -53,8 +53,6 @@ from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E40
 SCRIPT_RUN_MUJOCO = ROOT_DIR / "scripts" / "run_rc_arm_mujoco.sh"
 SCRIPT_RUN_MUJOCO_BRIDGE = ROOT_DIR / "scripts" / "run_rc_arm_mujoco_bridge.sh"
 SCRIPT_RUN_REAL = ROOT_DIR / "scripts" / "run_rc_arm_real.sh"
-J4_WORLD_MIN_DEG = 0.0
-J4_WORLD_MAX_DEG = 120.0
 AUTO_CLEANUP_WAIT_SEC = 1.0
 WHEEL_CONTINUOUS_INTERVAL_MS = 50
 PROJECT_ROS_CLEANUP_PATTERNS = (
@@ -558,6 +556,9 @@ class TargetPublisherWindow(QMainWindow):
             urdf_path=args.urdf_path or None,
             j4_axis=args.j4_axis,
         )
+        j4_lower, j4_upper = self._kinematics.joint_limit("j4_joint")
+        self._j4_world_min_deg = math.degrees(j4_lower)
+        self._j4_world_max_deg = math.degrees(j4_upper)
         home_x, home_y, home_z, home_pitch = self._kinematics.zero_home_pose()
         self._editing_target = TargetState(home_x, home_y, home_z, home_pitch)
         self._last_sent: Optional[TargetState] = None
@@ -831,7 +832,7 @@ class TargetPublisherWindow(QMainWindow):
             spin = QDoubleSpinBox()
             spin.setDecimals(4 if field_key != "j4" else 2)
             if field_key == "j4":
-                spin.setRange(J4_WORLD_MIN_DEG, J4_WORLD_MAX_DEG)
+                spin.setRange(self._j4_world_min_deg, self._j4_world_max_deg)
             else:
                 spin.setRange(-10.0, 10.0)
             spin.valueChanged.connect(self._on_editing_changed)
@@ -1018,7 +1019,10 @@ class TargetPublisherWindow(QMainWindow):
         self._update_status_labels()
 
     def _read_editing_target(self) -> TargetState:
-        j4_deg = max(J4_WORLD_MIN_DEG, min(J4_WORLD_MAX_DEG, self._field_spins["j4"].value()))
+        j4_deg = max(
+            self._j4_world_min_deg,
+            min(self._j4_world_max_deg, self._field_spins["j4"].value()),
+        )
         return TargetState(
             x=self._field_spins["x"].value(),
             y=self._field_spins["y"].value(),
@@ -1194,13 +1198,13 @@ class TargetPublisherWindow(QMainWindow):
             self._append_log(text)
             return False
         if not (
-            math.radians(J4_WORLD_MIN_DEG) - 1.0e-9
+            math.radians(self._j4_world_min_deg) - 1.0e-9
             <= self._editing_target.j4_rad
-            <= math.radians(J4_WORLD_MAX_DEG) + 1.0e-9
+            <= math.radians(self._j4_world_max_deg) + 1.0e-9
         ):
-            text = "blocked: j4 world must stay within [{:.0f}, {:.0f}] deg".format(
-                J4_WORLD_MIN_DEG,
-                J4_WORLD_MAX_DEG,
+            text = "blocked: j4 world must stay within URDF limits [{:.1f}, {:.1f}] deg".format(
+                self._j4_world_min_deg,
+                self._j4_world_max_deg,
             )
             if label_name == "Last middleware command":
                 self._middleware_status_label.setText(text)
@@ -1210,9 +1214,9 @@ class TargetPublisherWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "Invalid j4 World Range",
-                "j4 world target must stay within {:.0f} to {:.0f} deg.".format(
-                    J4_WORLD_MIN_DEG,
-                    J4_WORLD_MAX_DEG,
+                "j4 world target must stay within URDF limits {:.1f} to {:.1f} deg.".format(
+                    self._j4_world_min_deg,
+                    self._j4_world_max_deg,
                 ),
             )
             return False
@@ -1417,7 +1421,7 @@ def parse_args():
     parser.add_argument("--middleware-target-topic", default="/arm2/middleware/target_point", help=argparse.SUPPRESS)
     parser.add_argument("--middleware-run-action-set-topic", default="/arm2/middleware/run_action_set")
     parser.add_argument("--urdf-path", default="")
-    parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
+    parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="y")
     parser.add_argument("--reachability-step", type=float, default=0.05)
     return parser.parse_args()
 

@@ -157,9 +157,9 @@ class TargetPoseMoveItExecutor(Node):
         self._acc_scale = max(0.01, min(1.0, float(acc_scale)))
         self._joint_tolerance = max(1.0e-4, float(joint_tolerance))
         self._avoid_collisions = bool(avoid_collisions)
-        self._j4_axis = str(j4_axis).strip().lower() if str(j4_axis).strip() else "x"
+        self._j4_axis = str(j4_axis).strip().lower() if str(j4_axis).strip() else "y"
         if self._j4_axis not in {"x", "y", "z"}:
-            self._j4_axis = "x"
+            self._j4_axis = "y"
         self._status_log_period = max(0.0, float(status_log_period))
 
         self._status_base_frame = _normalize_frame_id(status_base_frame)
@@ -954,7 +954,7 @@ def parse_args():
     parser.add_argument("--check-period", type=float, default=0.05)
     parser.add_argument("--avoid-collisions", action="store_true")
     parser.add_argument("--avoid-collisions-enabled", default="true")
-    parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="x")
+    parser.add_argument("--j4-axis", choices=["x", "y", "z"], default="y")
     parser.add_argument("--status-log-period", type=float, default=1.0, help="state log period, <=0 to disable")
     parser.add_argument("--status-base-frame", default="world")
     parser.add_argument("--status-eef-frame", default="end_effector")

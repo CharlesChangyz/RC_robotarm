@@ -161,13 +161,13 @@ class RcArmWorldPitchKinematics:
         self,
         urdf_path: Optional[str] = None,
         joint_names: Optional[Iterable[str]] = None,
-        j4_axis: str = "x",
+        j4_axis: str = "y",
     ) -> None:
         self._urdf_path = Path(urdf_path) if urdf_path else self.default_urdf_path()
         self._joint_names = list(joint_names or ("j1_joint", "j2_joint", "j3_joint", "j4_joint"))
-        self._j4_axis = (j4_axis or "x").strip().lower()
+        self._j4_axis = (j4_axis or "y").strip().lower()
         if self._j4_axis not in {"x", "y", "z"}:
-            self._j4_axis = "x"
+            self._j4_axis = "y"
 
         self._joint_specs, self._fixed_end_effector = self._load_joint_specs(self._urdf_path)
         self._name_to_index = {name: idx for idx, name in enumerate(self._joint_names)}
@@ -206,6 +206,10 @@ class RcArmWorldPitchKinematics:
 
     def zero_home_joint_map(self) -> Dict[str, float]:
         return {name: 0.0 for name in self._joint_names}
+
+    def joint_limit(self, joint_name: str) -> Tuple[float, float]:
+        spec = self._joint_specs[joint_name]
+        return (float(spec.lower), float(spec.upper))
 
     def joint_vector(self, joints: Sequence[float] | Dict[str, float]) -> np.ndarray:
         if isinstance(joints, dict):

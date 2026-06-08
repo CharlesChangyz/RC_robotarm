@@ -7,42 +7,41 @@
   <xacro:include filename="rc_arm_2_ros2_control.xacro"/>
 
   <material name="dark_gray">
-    <color rgba="0.3 0.3 0.3 1.0"/>
+    <color rgba="0.294117647058824 0.258823529411765 0.250980392156863 1.0"/>
   </material>
   <material name="light_gray">
-    <color rgba="0.85 0.85 0.85 1.0"/>
+    <color rgba="1.0 1.0 1.0 1.0"/>
   </material>
-  <material name="blue_gray">
-    <color rgba="0.75 0.8 0.9 1.0"/>
+  <material name="d435_gray">
+    <color rgba="0.64706 0.61961 0.58824 1.0"/>
   </material>
 
   <link name="world"/>
 
   <joint name="world_to_base_link" type="fixed">
-    <!-- Place the world origin on the j1 rotation axis while preserving base_link axes. -->
-    <origin xyz="0 0.00169679105026498 -0.0135" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
     <parent link="world"/>
     <child link="base_link"/>
   </joint>
 
   <link name="base_link">
     <inertial>
-      <origin xyz="-0.0188823543579507 -0.056778161374344 0.0186316009957921" rpy="0 0 0"/>
-      <mass value="0.382585168766289"/>
+      <origin xyz="-0.00441433736643499 -0.0432311956776563 -0.068308183900563" rpy="0 0 0"/>
+      <mass value="0.72407291102659"/>
       <inertia
-        ixx="0.00082815416350795"
-        ixy="-7.29640465452341E-05"
-        ixz="1.99037630868571E-10"
-        iyy="0.000576119793831662"
-        iyz="3.09456703607723E-09"
-        izz="0.00139690479026751"/>
+        ixx="0.000998899624008477"
+        ixy="-3.86015725416923E-05"
+        ixz="-2.77589357014807E-10"
+        iyy="0.000692512396214957"
+        iyz="-8.20453007076033E-08"
+        izz="0.00166922984591189"/>
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
         <mesh filename="package://rc_arm_description/meshes/rc_arm_2/base_link.STL"/>
       </geometry>
-      <material name="dark_gray"/>
+      <material name="light_gray"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -54,22 +53,22 @@
 
   <link name="l1">
     <inertial>
-      <origin xyz="-0.00218169653363401 0.00954899868424938 0.0424398037727069" rpy="0 0 0"/>
-      <mass value="0.445365070024422"/>
+      <origin xyz="-0.00222237166108684 0.00885087067187082 -0.0317916897635089" rpy="0 0 0"/>
+      <mass value="0.52431151622391"/>
       <inertia
-        ixx="0.000349710703636588"
-        ixy="-8.74801250935224E-07"
-        ixz="5.7841876423728E-06"
-        iyy="0.000494944126340276"
-        iyz="-8.50815789238056E-08"
-        izz="0.000494784132001916"/>
+        ixx="0.000370535471565083"
+        ixy="-8.73479144461298E-07"
+        ixz="5.75460544520931E-06"
+        iyy="0.000514553128486087"
+        iyz="-7.95196928215877E-08"
+        izz="0.000529861347394945"/>
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
         <mesh filename="package://rc_arm_description/meshes/rc_arm_2/l1.STL"/>
       </geometry>
-      <material name="light_gray"/>
+      <material name="dark_gray"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -80,32 +79,31 @@
   </link>
 
   <joint name="j1_joint" type="revolute">
-    <!-- Shift the semantic zero of j1 90deg to the left. -->
-    <origin xyz="0 -0.00169679105026498 0.0135" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
     <parent link="base_link"/>
     <child link="l1"/>
     <axis xyz="0 0 -1"/>
-    <limit lower="-1.865" upper="2.365" effort="14.0" velocity="12.0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="14.0" velocity="12.0"/>
   </joint>
 
   <link name="l2">
     <inertial>
-      <origin xyz="-0.09612108825745 -0.0492047953769805 0.152550503428174" rpy="0 0 0"/>
-      <mass value="0.66066950131522"/>
+      <origin xyz="-0.00307167634317969 0.00830900318964806 0.19079096260025" rpy="0 0 0"/>
+      <mass value="0.805789127434329"/>
       <inertia
-        ixx="0.00370138700167397"
-        ixy="1.25377482841611E-05"
-        ixz="0.00212590021931993"
-        iyy="0.00510682905939535"
-        iyz="-1.74886949186245E-05"
-        izz="0.00150230118954672"/>
+        ixx="0.00501805334459747"
+        ixy="1.62680727626169E-06"
+        ixz="-1.2217709768696E-05"
+        iyy="0.00513993794775083"
+        iyz="-2.16203064804181E-05"
+        izz="0.000226026483229217"/>
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
         <mesh filename="package://rc_arm_description/meshes/rc_arm_2/l2.STL"/>
       </geometry>
-      <material name="blue_gray"/>
+      <material name="dark_gray"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -116,24 +114,24 @@
   </link>
 
   <joint name="j2_joint" type="revolute">
-    <origin xyz="0 0.0573000000000001 0.071" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 -0.549778714378223 0"/>
     <parent link="l1"/>
     <child link="l2"/>
-    <axis xyz="0 1 0"/>
-    <limit lower="0.0" upper="1.85" effort="14.0" velocity="12.0"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="-1.8586" upper="0.0" effort="14.0" velocity="12.0"/>
   </joint>
 
   <link name="l3">
     <inertial>
-      <origin xyz="0.179461336363371 -0.0547822826914877 -0.119425228144451" rpy="0 0 0"/>
-      <mass value="0.366439493147188"/>
+      <origin xyz="0.187860682821295 0.000714874382660379 -0.000410190060658594" rpy="0 0 0"/>
+      <mass value="0.475080482114449"/>
       <inertia
-        ixx="0.000328823125447746"
-        ixy="8.56658575293569E-07"
-        ixz="0.000345338078938459"
-        iyy="0.000835932856081032"
-        iyz="-6.12931618014208E-07"
-        izz="0.000619560605110811"/>
+        ixx="0.000108426112879256"
+        ixy="1.05495989102581E-06"
+        ixz="9.45702709656538E-07"
+        iyy="0.000847092409319451"
+        iyz="-4.27029906629534E-08"
+        izz="0.000853139815278739"/>
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -151,24 +149,24 @@
   </link>
 
   <joint name="j3_joint" type="revolute">
-    <origin xyz="-0.229899368475058 -0.00250000000000023 0.375161672315776" rpy="0 0 0"/>
+    <origin xyz="0 0 0.44" rpy="0 1.1345 0"/>
     <parent link="l2"/>
     <child link="l3"/>
     <axis xyz="0 -1 0"/>
-    <limit lower="0.0" upper="2.13861" effort="14.0" velocity="12.0"/>
+    <limit lower="0.0" upper="2.2689" effort="14.0" velocity="12.0"/>
   </joint>
 
   <link name="l4">
     <inertial>
-      <origin xyz="0.0124065274807902 -0.0173865596838172 0.0296215915855369" rpy="0 0 0"/>
-      <mass value="0.0723669216572841"/>
+      <origin xyz="0.0162773246607396 -0.00280743297355511 0.0122653945348589" rpy="0 0 0"/>
+      <mass value="0.0966784318090299"/>
       <inertia
-        ixx="4.93092728814008E-06"
-        ixy="9.58295916234749E-07"
-        ixz="-5.07024039279827E-12"
-        iyy="1.25530593705886E-05"
-        iyz="-4.97267313424938E-12"
-        izz="1.33062083909566E-05"/>
+        ixx="1.44622211990179E-05"
+        ixy="1.98448618650059E-10"
+        ixz="-4.87127671370866E-07"
+        iyy="1.45392433584464E-05"
+        iyz="3.43930662788767E-12"
+        izz="5.53662467279481E-06"/>
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -186,11 +184,11 @@
   </link>
 
   <joint name="j4_joint" type="revolute">
-    <origin xyz="0.329384899716621 -0.0272999999999999 -0.218015109198307" rpy="1.5707963267949 0 0"/>
+    <origin xyz="0.395 0 0" rpy="0 -0.58469 0"/>
     <parent link="l3"/>
     <child link="l4"/>
-    <axis xyz="0 0 -1"/>
-    <limit lower="-3.14159265358979" upper="3.14159265358979" effort="6.0" velocity="20.0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="6.0" velocity="20.0"/>
   </joint>
 
   <link name="end_effector"/>
@@ -199,6 +197,42 @@
     <parent link="l4"/>
     <child link="end_effector"/>
     <origin xyz="0.01 0 0.0275" rpy="0 0 0"/>
+  </joint>
+
+  <link name="camera_d435_link">
+    <inertial>
+      <origin xyz="-0.018635 0.0077196 -0.017946" rpy="0 0 0"/>
+      <mass value="0.07123"/>
+      <inertia
+        ixx="1.2039E-05"
+        ixy="6.1017E-07"
+        ixz="1.0854E-06"
+        iyy="3.3258E-05"
+        iyz="-4.841E-07"
+        izz="4.1072E-05"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rc_arm_description/meshes/rc_arm_2/d435.STL"/>
+      </geometry>
+      <material name="d435_gray"/>
+    </visual>
+  </link>
+
+  <joint name="l2_to_camera_d435" type="fixed">
+    <origin xyz="0.01648 0.1068 0.44728" rpy="3.1416 -1.315 0"/>
+    <parent link="l2"/>
+    <child link="camera_d435_link"/>
+  </joint>
+
+  <link name="camera_d435_optical_frame"/>
+
+  <joint name="camera_d435_link_to_optical_frame" type="fixed">
+    <!-- Placeholder optical frame; verify against the RealSense driver TF before using camera data. -->
+    <origin xyz="0 0 0" rpy="-1.5707963267948966 0 -1.5707963267948966"/>
+    <parent link="camera_d435_link"/>
+    <child link="camera_d435_optical_frame"/>
   </joint>
 
   <xacro:rc_arm_2_ros2_control
