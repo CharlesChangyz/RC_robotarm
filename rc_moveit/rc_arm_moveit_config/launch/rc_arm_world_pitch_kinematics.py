@@ -296,13 +296,19 @@ class RcArmWorldPitchKinematics:
             )
             if not result.success:
                 continue
-            residual = self._residual(result.x, target_xyz, target_pitch)
+            candidate = result.x.copy()
+            candidate[0] = self._nearest_equivalent_within_limits(
+                joint_index=0,
+                angle_rad=float(candidate[0]),
+                seed_angle_rad=float(seed[0]),
+            )
+            residual = self._residual(candidate, target_xyz, target_pitch)
             pos_error = float(np.linalg.norm(residual[:3]))
             pitch_error = abs(float(residual[3]))
             if pos_error > 2.0e-3 or pitch_error > math.radians(0.6):
                 continue
 
-            seed_metric = float(np.linalg.norm(result.x - seed_reference))
+            seed_metric = float(np.linalg.norm(candidate - seed_reference))
             total_cost = pos_error + 0.05 * pitch_error
             if (
                 best is None
@@ -312,13 +318,46 @@ class RcArmWorldPitchKinematics:
                     and seed_metric < float(best_seed_metric) - 1.0e-9
                 )
             ):
-                best = result.x.copy()
+                best = candidate
                 best_cost = total_cost
                 best_seed_metric = seed_metric
 
         if best is None:
             return None
         return self.joint_map(best)
+
+    def _nearest_equivalent_within_limits(
+        self,
+        joint_index: int,
+        angle_rad: float,
+        seed_angle_rad: Optional[float],
+        margin: float = 1.0e-9,
+    ) -> float:
+        if seed_angle_rad is None:
+            return float(angle_rad)
+
+        lower = float(self.lower_limits[joint_index])
+        upper = float(self.upper_limits[joint_index])
+        period = 2.0 * math.pi
+        candidates: List[float] = []
+
+        min_k = math.ceil((lower - angle_rad - margin) / period)
+        max_k = math.floor((upper - angle_rad + margin) / period)
+        for k in range(min_k, max_k + 1):
+            candidate = float(angle_rad + k * period)
+            if lower - margin <= candidate <= upper + margin:
+                candidates.append(candidate)
+
+        if not candidates:
+            return float(np.clip(angle_rad, lower, upper))
+
+        return min(
+            candidates,
+            key=lambda candidate: (
+                abs(candidate - seed_angle_rad),
+                abs(candidate - angle_rad),
+            ),
+        )
 
     def _raw_world_pitch(self, joints_vec: np.ndarray) -> float:
         transform = self.forward_transform(joints_vec)
