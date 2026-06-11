@@ -61,6 +61,18 @@ source install/setup.bash
 
 如果后续修改了 `rc_moveit` 下的包，请重新执行 `colcon build --symlink-install` 并重新 source。
 
+本项目默认使用 ROS 2 domain `55`。项目启动脚本会自动加载 `config/ros_domain.env`；手动运行 `ros2` 命令或 launch 文件时，请在同一终端里加载：
+
+```bash
+source config/ros_domain.env
+```
+
+如需临时接入其它 domain，可先导出环境变量再启动：
+
+```bash
+ROS_DOMAIN_ID=0 ./scripts/run_rc_arm_mujoco.sh
+```
+
 如果你切换过 Python 解释器，例如之前在 `.venv` 中配置过、之后又改回系统 Python，先清理 CMake 缓存再重建，避免 `Python3_EXECUTABLE` 继续指向旧解释器：
 
 ```bash
@@ -367,6 +379,18 @@ source install/setup.bash
 ```
 
 Rebuild and source again after changing packages under `rc_moveit`.
+
+This project defaults to ROS 2 domain `55`. The project launch scripts load `config/ros_domain.env` automatically. For manual `ros2` commands or launch files, source it in the same terminal:
+
+```bash
+source config/ros_domain.env
+```
+
+To temporarily join another domain, export the environment variable before launching:
+
+```bash
+ROS_DOMAIN_ID=0 ./scripts/run_rc_arm_mujoco.sh
+```
 
 If you previously configured the workspace with a different Python interpreter, clear the CMake cache before rebuilding so `Python3_EXECUTABLE` does not keep pointing at the old interpreter:
 

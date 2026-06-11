@@ -14,11 +14,13 @@ fi
 
 source /opt/ros/humble/setup.bash
 source "${WORKSPACE_DIR}/install/setup.bash"
+source "${REPO_ROOT}/config/ros_domain.env"
 set -u
 
 HARDWARE_CONFIG_FILE="${HARDWARE_CONFIG_FILE:-${WORKSPACE_DIR}/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.mujoco.yaml}"
 
 echo "[run_rc_arm_mujoco_bridge] workspace: ${WORKSPACE_DIR}"
+echo "[run_rc_arm_mujoco_bridge] ros_domain_id=${ROS_DOMAIN_ID}"
 echo "[run_rc_arm_mujoco_bridge] hardware_config_file=${HARDWARE_CONFIG_FILE}"
 echo "[run_rc_arm_mujoco_bridge] payload and unloaded defaults are read directly from ${HARDWARE_CONFIG_FILE}"
 

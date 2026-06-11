@@ -14,6 +14,7 @@ fi
 
 source /opt/ros/humble/setup.bash
 source "${WORKSPACE_DIR}/install/setup.bash"
+source "${REPO_ROOT}/config/ros_domain.env"
 set -u
 
 HARDWARE_CONFIG_FILE="${HARDWARE_CONFIG_FILE:-${WORKSPACE_DIR}/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.real.yaml}"
@@ -27,6 +28,7 @@ MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED="${MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED:-true
 MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS="${MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS:-}"
 
 echo "[run_rc_arm_real] workspace: ${WORKSPACE_DIR}"
+echo "[run_rc_arm_real] ros_domain_id=${ROS_DOMAIN_ID}"
 echo "[run_rc_arm_real] hardware_config_file=${HARDWARE_CONFIG_FILE}"
 echo "[run_rc_arm_real] controllers_file=${CONTROLLERS_FILE}"
 echo "[run_rc_arm_real] use_rviz=${USE_RVIZ}"
