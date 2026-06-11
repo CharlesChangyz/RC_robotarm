@@ -48,6 +48,7 @@ echo "[run_rc_arm_mujoco] make sure your MuJoCo side publishes JointState and co
 echo "[run_rc_arm_mujoco] payload and unloaded defaults are read directly from ${HARDWARE_CONFIG_FILE}"
 
 LAUNCH_ARGS=(
+  "ros_domain_id:=${ROS_DOMAIN_ID}"
   "hardware_config_file:=${HARDWARE_CONFIG_FILE}"
   "controllers_file:=${CONTROLLERS_FILE}"
   "use_rviz:=${USE_RVIZ}"

@@ -39,6 +39,7 @@ echo "[run_rc_arm_real] middleware_dm_serial_allowed_action_set_ids=${MIDDLEWARE
 echo "[run_rc_arm_real] payload and unloaded defaults are read directly from ${HARDWARE_CONFIG_FILE}"
 
 LAUNCH_ARGS=(
+  "ros_domain_id:=${ROS_DOMAIN_ID}"
   "hardware_config_file:=${HARDWARE_CONFIG_FILE}"
   "controllers_file:=${CONTROLLERS_FILE}"
   "use_rviz:=${USE_RVIZ}"

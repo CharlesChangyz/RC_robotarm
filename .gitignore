@@ -37,3 +37,5 @@ env/
 log/
 install/
 lib/
+test/
+**/test/

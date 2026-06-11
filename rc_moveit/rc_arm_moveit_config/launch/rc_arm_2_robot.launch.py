@@ -1,8 +1,8 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -37,6 +37,11 @@ def generate_launch_description():
             'controllers_file',
             default_value=default_controllers_file,
             description='ros2_control 控制器配置 YAML',
+        ),
+        DeclareLaunchArgument(
+            'ros_domain_id',
+            default_value=EnvironmentVariable('ROS_DOMAIN_ID', default_value='55'),
+            description='ROS_DOMAIN_ID shared by all child nodes and helper processes',
         ),
         DeclareLaunchArgument('use_rviz', default_value='true', description='是否启动带 MoveIt 插件的 RViz2'),
         DeclareLaunchArgument('use_tf_target_bridge', default_value='true', description='是否启动 TF->Pose 目标桥接（放在 rc_moveit 中订阅 TF）'),
@@ -290,8 +295,14 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_position_printer')),
     )
 
+    set_ros_domain = SetEnvironmentVariable(
+        name='ROS_DOMAIN_ID',
+        value=LaunchConfiguration('ros_domain_id'),
+    )
+
     return LaunchDescription(
         declared_arguments + [
+            set_ros_domain,
             include_robot,
             tf_target_bridge,
             dm_serial_frame_bridge,
