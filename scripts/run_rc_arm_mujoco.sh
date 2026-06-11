@@ -27,6 +27,14 @@ USE_ARM2_MIDDLEWARE="${USE_ARM2_MIDDLEWARE:-true}"
 MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED="${MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED:-true}"
 MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS="${MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS:-}"
 
+for arg in "$@"; do
+  case "${arg}" in
+    use_rviz:=*)
+      USE_RVIZ="${arg#use_rviz:=}"
+      ;;
+  esac
+done
+
 echo "[run_rc_arm_mujoco] workspace: ${WORKSPACE_DIR}"
 echo "[run_rc_arm_mujoco] ros_domain_id=${ROS_DOMAIN_ID}"
 echo "[run_rc_arm_mujoco] hardware_config_file=${HARDWARE_CONFIG_FILE}"

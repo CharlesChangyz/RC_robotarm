@@ -17,6 +17,10 @@ mujoco_command_topic: /rc_arm_2/mujoco_joint_command
 vacuum_activate_topic: /rc_arm_2/vacuum_activate
 payload_command_topic: /rc_arm_2/payload_active_command
 payload_active_topic: /rc_arm_2/payload_active
+j5_command_topic: /rc_arm_2/j5/command_position
+j5_position_topic: /rc_arm_2/j5/actual_position
+j5_kp: 0.0
+j5_kd: 0.0
 payload_frame: end_effector
 
 # USB2CANFD 设备序列号；
