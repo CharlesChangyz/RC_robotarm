@@ -15,12 +15,12 @@ action_sets:
       - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2, 0.0, 0.8]
-        target_spin: 90.0
+        target_spin: 180.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.2, 0.0, 0.8]
-        target_spin: 90.0
+        target_spin: 180.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
@@ -44,20 +44,15 @@ action_sets:
 
 
   - id: 2
-    name: place_sequence
+    name: catch_200_KFS_test
     steps:
-      - type: move_fixed_pose
-        label: move_to_staging_pose
-        xyz: [-0.02, 0.35, 0.22]
-        target_spin: 90.0
-
       - type: set_vacuum
         label: vacuum_on
         enabled: true
       
       - type: move_fixed_pose
-        label: move_to_staging_pose
-        xyz: [-0.02, 0.75, 0.22]
+        label: move_to_default_pose
+        xyz: [0.5, 0.0, 0.2]
         target_spin: 90.0
 
       - type: set_payload_active
@@ -65,31 +60,41 @@ action_sets:
         enabled: true
 
       - type: move_fixed_pose
-        label: move_to_staging_pose
-        xyz: [-0.02, 0.35, 0.7]
-        target_spin: 90.0
+        label: move_to_default_pose
+        xyz: [0.2, 0.0, 0.8]
+        target_spin: 180.0
 
       - type: move_fixed_pose
-        label: move_to_staging_pose
-        xyz: [-0.02, -0.35, 0.7]
-        target_spin: 90.0
+        label: move_to_default_pose
+        xyz: [-0.2, 0.0, 0.8]
+        target_spin: 180.0
 
       - type: move_fixed_pose
-        label: move_to_staging_pose
-        xyz: [-0.02, -0.65, 0.05]
-        target_spin: 90.0  
+        label: move_to_default_pose
+        xyz: [-0.36, 0.0, 0.45]
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off
-        enabled: false  
-        
+        enabled: false
+      
       - type: set_vacuum
         label: vacuum_off
         enabled: false
 
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [0.19, 0.0, 0.24]
+        xyz: [-0.2, 0.0, 0.8]
+        target_spin: 50.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.2, 0.0, 0.8]
+        target_spin: 50.0
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [0.2, 0.0, 0.19]
         target_spin: 0.0
 
   - id: 3
