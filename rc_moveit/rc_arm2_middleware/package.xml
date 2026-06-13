@@ -9,6 +9,9 @@
 
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
   <depend>arm_msgs</depend>
 
   <exec_depend>ament_index_python</exec_depend>

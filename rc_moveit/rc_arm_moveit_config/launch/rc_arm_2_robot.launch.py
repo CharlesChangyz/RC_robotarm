@@ -62,6 +62,12 @@ def generate_launch_description():
         DeclareLaunchArgument('middleware_run_action_set_topic', default_value='/arm2/middleware/run_action_set', description='middleware 执行动作集的话题'),
         DeclareLaunchArgument('middleware_motion_target_topic', default_value='/arm2/middleware/motion_target', description='middleware 发送笛卡尔目标点的话题'),
         DeclareLaunchArgument('middleware_motion_result_topic', default_value='/arm2/middleware/motion_execution', description='executor 返回 middleware 单次运动结果的话题'),
+        DeclareLaunchArgument('use_camera_target_point_bridge', default_value='false', description='是否启动相机目标点到 middleware target_point 的 TF 桥接节点'),
+        DeclareLaunchArgument('camera_target_point_input_topic', default_value='/arm2/camera_raw_dat', description='相机发布的 Arm2TargetPoint 原始话题'),
+        DeclareLaunchArgument('camera_target_point_output_topic', default_value='/arm2/middleware/target_point', description='桥接后发布给 middleware 的 Arm2TargetPoint 话题'),
+        DeclareLaunchArgument('camera_target_point_source_frame', default_value='camera_d435_optical_frame', description='相机目标点输入坐标系'),
+        DeclareLaunchArgument('camera_target_point_target_frame', default_value='world', description='相机目标点输出坐标系'),
+        DeclareLaunchArgument('camera_target_point_tf_timeout_sec', default_value='0.2', description='相机目标点 TF 查询超时秒数'),
         DeclareLaunchArgument('middleware_dm_serial_bridge_enabled', default_value='true', description='是否启用 middleware 的 dmserial 动作触发桥'),
         DeclareLaunchArgument('middleware_dm_serial_rx_topic', default_value='/rc_arm_2/dm_serial_rx', description='hardware 发布的 dmserial 原始接收帧 topic'),
         DeclareLaunchArgument('middleware_dm_serial_tx_topic', default_value='/rc_arm_2/dm_serial_tx', description='middleware 回传 dmserial 原始帧 topic'),
@@ -175,6 +181,21 @@ def generate_launch_description():
             'dm_serial_allowed_action_set_ids': ParameterValue(LaunchConfiguration('middleware_dm_serial_allowed_action_set_ids'), value_type=str),
         }],
         condition=IfCondition(LaunchConfiguration('use_arm2_middleware')),
+    )
+
+    camera_target_point_bridge = Node(
+        package='rc_arm2_middleware',
+        executable='camera_target_point_bridge',
+        name='camera_target_point_bridge',
+        output='screen',
+        parameters=[{
+            'input_topic': ParameterValue(LaunchConfiguration('camera_target_point_input_topic'), value_type=str),
+            'output_topic': ParameterValue(LaunchConfiguration('camera_target_point_output_topic'), value_type=str),
+            'source_frame': ParameterValue(LaunchConfiguration('camera_target_point_source_frame'), value_type=str),
+            'target_frame': ParameterValue(LaunchConfiguration('camera_target_point_target_frame'), value_type=str),
+            'tf_timeout_sec': ParameterValue(LaunchConfiguration('camera_target_point_tf_timeout_sec'), value_type=float),
+        }],
+        condition=IfCondition(LaunchConfiguration('use_camera_target_point_bridge')),
     )
 
     target_pose_executor = ExecuteProcess(
@@ -306,6 +327,7 @@ def generate_launch_description():
             include_robot,
             tf_target_bridge,
             dm_serial_frame_bridge,
+            camera_target_point_bridge,
             arm2_middleware,
             target_pose_executor,
             payload_scene_sync,

@@ -198,9 +198,9 @@ class RcArmWorldPitchKinematics:
 
     def zero_home_pose(self) -> Tuple[float, float, float, float]:
         return (
-            0.2,
-            0.0,
-            0.19,
+            float(self._zero_position[0]),
+            float(self._zero_position[1]),
+            float(self._zero_position[2]),
             0.0,
         )
 

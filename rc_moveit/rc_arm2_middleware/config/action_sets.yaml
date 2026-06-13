@@ -14,13 +14,13 @@ action_sets:
 
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [0.2, 0.0, 0.8]
-        target_spin: 180.0
+        xyz: [0.2, 0.0, 0.6]
+        target_spin: 90.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [-0.2, 0.0, 0.8]
-        target_spin: 180.0
+        xyz: [-0.2, 0.0, 0.6]
+        target_spin: 90.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
@@ -29,12 +29,12 @@ action_sets:
 
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [-0.2, 0.0, 0.8]
+        xyz: [-0.2, 0.0, 0.6]
         target_spin: 50.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [0.2, 0.0, 0.8]
+        xyz: [0.2, 0.0, 0.6]
         target_spin: 50.0
 
       - type: move_fixed_pose
