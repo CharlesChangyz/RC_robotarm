@@ -629,7 +629,10 @@ class Arm2MiddlewareNode(Node):
             x = self._cached_target_point.x + float(step.offset_xyz[0])
             y = self._cached_target_point.y + float(step.offset_xyz[1])
             z = self._cached_target_point.z + float(step.offset_xyz[2])
-            target_spin_deg = self._cached_target_point.target_spin_deg
+            if(self._cached_target_point.z <0.1):
+                target_spin_deg = 0.0
+            else:
+                target_spin_deg = 90.0
             self._enter_motion_wait(
                 "waiting on move_target_offset_noj5 x=%.4f y=%.4f z=%.4f spin=%.2f"
                 % (x, y, z, target_spin_deg),
@@ -648,7 +651,10 @@ class Arm2MiddlewareNode(Node):
                 x = 0.0
             else:
                 y = 0.0
-            target_spin_deg = self._cached_target_point.target_spin_deg
+            if self._cached_target_point.z <0.1:
+                target_spin_deg = 0.0
+            else:
+                target_spin_deg = 90.0
             self._enter_motion_wait(
                 "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
                 % (step.step_type, x, y, z, target_spin_deg, float(step.j5_target_pos)),
