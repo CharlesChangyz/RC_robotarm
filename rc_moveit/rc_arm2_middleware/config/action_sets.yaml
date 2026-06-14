@@ -7,20 +7,20 @@ action_sets:
   - id: 1
     name: test_sequence
     steps:
-      - type: move_fixed_pose
+      - type: move_target_offset_noj5
         label: move_to_default_pose
-        xyz: [0.5, 0.0, 0.2]
+        offset_xyz: [0.0, 0.0, 0.0]
         target_spin: 90.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2, 0.0, 0.6]
-        target_spin: 90.0
+        target_spin: 150.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.2, 0.0, 0.6]
-        target_spin: 90.0
+        target_spin: 150.0
 
       - type: move_fixed_pose
         label: move_to_default_pose

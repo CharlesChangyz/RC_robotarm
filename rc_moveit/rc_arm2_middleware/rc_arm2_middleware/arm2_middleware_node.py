@@ -605,13 +605,14 @@ class Arm2MiddlewareNode(Node):
             if self._cached_target_point is None:
                 self._fail_action_set("move_target_offset requested before target point was received")
                 return
+            target_spin_deg = self._cached_target_point.target_spin_deg
             self._enter_target_offset_tracking(
                 "tracking target_offset offset=(%.4f, %.4f, %.4f) spin=%.2f threshold=%d timeout=%.2f"
                 % (
                     float(step.offset_xyz[0]),
                     float(step.offset_xyz[1]),
                     float(step.offset_xyz[2]),
-                    step.target_spin_deg,
+                    target_spin_deg,
                     self._laser_distance_threshold,
                     self._laser_wait_timeout,
                 )
@@ -628,11 +629,12 @@ class Arm2MiddlewareNode(Node):
             x = self._cached_target_point.x + float(step.offset_xyz[0])
             y = self._cached_target_point.y + float(step.offset_xyz[1])
             z = self._cached_target_point.z + float(step.offset_xyz[2])
+            target_spin_deg = self._cached_target_point.target_spin_deg
             self._enter_motion_wait(
                 "waiting on move_target_offset_noj5 x=%.4f y=%.4f z=%.4f spin=%.2f"
-                % (x, y, z, step.target_spin_deg),
+                % (x, y, z, target_spin_deg),
             )
-            self._publish_motion_target(x, y, z, step.target_spin_deg)
+            self._publish_motion_target(x, y, z, target_spin_deg)
             return
 
         if step.step_type in {"move_target_offset_mf", "move_target_offset_mrl"}:
@@ -646,12 +648,13 @@ class Arm2MiddlewareNode(Node):
                 x = 0.0
             else:
                 y = 0.0
+            target_spin_deg = self._cached_target_point.target_spin_deg
             self._enter_motion_wait(
                 "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
-                % (step.step_type, x, y, z, step.target_spin_deg, float(step.j5_target_pos)),
+                % (step.step_type, x, y, z, target_spin_deg, float(step.j5_target_pos)),
                 j5_target_pos=step.j5_target_pos,
             )
-            self._publish_motion_target(x, y, z, step.target_spin_deg)
+            self._publish_motion_target(x, y, z, target_spin_deg)
             self._publish_j5_target(step.j5_target_pos)
             return
 
@@ -740,12 +743,13 @@ class Arm2MiddlewareNode(Node):
         x = target_point.x + float(step.offset_xyz[0])
         y = target_point.y + float(step.offset_xyz[1])
         z = target_point.z + float(step.offset_xyz[2])
-        self._publish_motion_target(x, y, z, step.target_spin_deg)
+        target_spin_deg = target_point.target_spin_deg
+        self._publish_motion_target(x, y, z, target_spin_deg)
         run.last_target_offset_command = TargetPoint(
             x=float(x),
             y=float(y),
             z=float(z),
-            target_spin_deg=float(step.target_spin_deg),
+            target_spin_deg=float(target_spin_deg),
         )
         run.target_offset_publish_count += 1
         self.get_logger().info(
@@ -755,7 +759,7 @@ class Arm2MiddlewareNode(Node):
                 x,
                 y,
                 z,
-                step.target_spin_deg,
+                target_spin_deg,
                 self._latest_laser_distance if self._latest_laser_distance is not None else "none",
             )
         )
