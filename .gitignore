@@ -33,10 +33,11 @@ env/
 
 # MuJoCo
 *.mjb
+rc_moveit/rc_arm_description/urdf/rc_arm_2/rc_arm_2.pinocchio.urdf
 
 log/
 install/
 lib/
 test/
-**/test/
 .marscode/
+tmp/

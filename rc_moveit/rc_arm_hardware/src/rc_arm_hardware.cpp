@@ -9,12 +9,14 @@
 #include <chrono>
 #include <cmath>
 #include <cctype>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <sstream>
 #include <vector>
 #include <unistd.h>
 
+#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "arm_msgs/msg/can_frame.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -45,6 +47,19 @@ double getDoubleParamOr(
     return fallback_value;
   }
   return std::stod(it->second);
+}
+
+std::string resolvePackageRelativePath(
+  const std::string & path,
+  const std::string & package_name)
+{
+  const std::filesystem::path configured_path(path);
+  if (configured_path.empty() || configured_path.is_absolute()) {
+    return configured_path.string();
+  }
+
+  return (std::filesystem::path(ament_index_cpp::get_package_share_directory(package_name)) /
+          configured_path).string();
 }
 
 arm_msgs::msg::CanFrame toCanFrameMsg(const dmbot_serial::RawCanFrame & frame)
@@ -303,7 +318,8 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
     use_pinocchio_inverse_dynamics_ = parseBoolParam(info_.hardware_parameters.at("use_pinocchio_inverse_dynamics"));
   }
   if (info_.hardware_parameters.count("urdf_path")) {
-    urdf_path_ = info_.hardware_parameters.at("urdf_path");
+    urdf_path_ = resolvePackageRelativePath(
+      info_.hardware_parameters.at("urdf_path"), "rc_arm_description");
   }
   // 解析关节配置
   if (!parseJointConfig(info)) {

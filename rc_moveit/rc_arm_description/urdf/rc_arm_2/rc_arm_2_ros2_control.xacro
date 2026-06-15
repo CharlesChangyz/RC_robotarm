@@ -4,7 +4,6 @@
   <xacro:macro name="rc_arm_2_ros2_control" params="use_mock_hardware hardware_config_file">
     <xacro:property name="hardware_config_path" value="${hardware_config_file}"/>
     <xacro:property name="hardware_config" value="${xacro.load_yaml(hardware_config_path)}"/>
-    <xacro:property name="description_package_share" value="${hardware_config_path.rsplit('/config/', 1)[0]}"/>
 
 
     <ros2_control name="RcArm2System" type="system">
@@ -67,7 +66,7 @@
           <param name="use_pinocchio_gravity">${hardware_config.use_pinocchio_gravity}</param>
           <param name="gravity_feedforward_ratio">${hardware_config.gravity_feedforward_ratio}</param>
           <param name="use_pinocchio_inverse_dynamics">${hardware_config.use_pinocchio_inverse_dynamics}</param>
-          <param name="urdf_path">${description_package_share}/${hardware_config.urdf_path}</param>
+          <param name="urdf_path">${hardware_config.urdf_path}</param>
           <param name="limit_margin">${hardware_config.limit_margin}</param>
           <param name="limit_stop_margin">${hardware_config.limit_stop_margin}</param>
           <param name="limit_decel_factor">${hardware_config.limit_decel_factor}</param>

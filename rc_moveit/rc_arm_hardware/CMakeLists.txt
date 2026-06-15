@@ -7,6 +7,7 @@ endif()
 
 # Find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(hardware_interface REQUIRED)
@@ -28,12 +29,15 @@ add_library(${PROJECT_NAME} SHARED
   src/rc_arm_hardware.cpp
 )
 
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
 ament_target_dependencies(${PROJECT_NAME}
+  ament_index_cpp
   rclcpp
   rclcpp_lifecycle
   hardware_interface
