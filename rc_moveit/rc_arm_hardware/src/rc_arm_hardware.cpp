@@ -93,7 +93,6 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , dm_serial_number_("9940F4E149D904A69924737E3DE6629F")
   , dm_nominal_baud_(1000000)
   , dm_data_baud_(2000000)
-  , dm_control_mode_(0)
   , dm_startup_delay_sec_(0.0)
   , dm_enable_retry_count_(3)
   , dm_enable_retry_interval_sec_(1.0)
@@ -122,7 +121,6 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , latest_j5_position_(0.0)
   , latest_camera_position_(0.0)
   , j5_command_received_(false)
-  , control_mode_(ControlMode::POSITION)
   , use_mock_hardware_(false)
   , external_feedback_enabled_(false)
   , external_feedback_topic_("/rc_arm_2/feedback_joint_states")
@@ -246,9 +244,6 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   }
   if (info_.hardware_parameters.count("dm_dat_baud")) {
     dm_data_baud_ = static_cast<uint32_t>(std::stoul(info_.hardware_parameters.at("dm_dat_baud")));
-  }
-  if (info_.hardware_parameters.count("dm_control_mode")) {
-    dm_control_mode_ = std::stoi(info_.hardware_parameters.at("dm_control_mode"));
   }
   dm_startup_delay_sec_ = std::max(
     0.0,
@@ -837,11 +832,10 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_configure(
 
   RCLCPP_INFO(
     rclcpp::get_logger("RsA3HardwareInterface"),
-    "实机后端已配置：dmbot_serial(sn=%s, nom=%u, data=%u, control_mode=%d)",
+    "实机后端已配置：dmbot_serial(sn=%s, nom=%u, data=%u)",
     dm_serial_number_.c_str(),
     dm_nominal_baud_,
-    dm_data_baud_,
-    dm_control_mode_);
+    dm_data_baud_);
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 

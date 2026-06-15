@@ -137,7 +137,6 @@ private:
   std::string dm_serial_number_;
   uint32_t dm_nominal_baud_;
   uint32_t dm_data_baud_;
-  int dm_control_mode_;
   double dm_startup_delay_sec_;
   int dm_enable_retry_count_;
   double dm_enable_retry_interval_sec_;
@@ -208,16 +207,7 @@ private:
   double max_acceleration_;                         // 最大加速度限制 (rad/s²)
   bool first_command_;                              // 首条指令标志
   double fallback_control_period_;                  // 异常周期回退值 (s)
-  
-  // Control mode
-  enum class ControlMode
-  {
-    POSITION,    // CSP mode
-    VELOCITY,
-    EFFORT
-  };
-  ControlMode control_mode_;
-  
+
   bool use_mock_hardware_;  // 是否使用仿真/假硬件
 
   // 外部反馈（如 MuJoCo）输入

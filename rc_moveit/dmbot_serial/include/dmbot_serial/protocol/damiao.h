@@ -258,16 +258,7 @@ namespace damiao
         float current_motor_pos[MOTOR_NUM];
         float current_motor_vel[MOTOR_NUM];
         float current_motor_tor[MOTOR_NUM];
-        float current_motor_acc[MOTOR_NUM];
-        float desire_motor_pos[MOTOR_NUM];
-        float desire_motor_vel[MOTOR_NUM];
-        float desire_motor_acc[MOTOR_NUM];
-        float desire_motor_tor[MOTOR_NUM];
-        float min_motor_tor[MOTOR_NUM];
-        float max_motor_tor[MOTOR_NUM];
-        float mit_kp[MOTOR_NUM] = {0};
-        float mit_kd[MOTOR_NUM] = {0};
-
+        
         uint32_t laser_distance = 1000;
 
         /**************************************************************************************************************************** */

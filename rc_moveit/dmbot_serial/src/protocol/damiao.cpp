@@ -818,7 +818,6 @@ namespace damiao
             //     std::cout<<"return"<<std::endl;
             //     return;
             // }
-            auto m = motors[canID];
             uint8_t motor_id = canID - 0x200;
             if (motor_id >= MOTOR_NUM)
             {
@@ -837,9 +836,7 @@ namespace damiao
             //std::cout << "[Rx Motor ID: " << int(motor_id) << "] Pos: " << receive_q << " Vel: " << receive_dq << " Tau: " << receive_tau << std::endl;
            
             //std::cout<< "a" <<std::endl;
-            //std::cout<< "b" <<std::endl;
             //m->receive_data(receive_q, receive_dq, receive_tau);
-            //std::cout<< "c" <<std::endl;
             //m->updateTimeInterval();
 
             // std::cerr<<"motor id is: "<<canID<<": "<<interval<<std::endl;
