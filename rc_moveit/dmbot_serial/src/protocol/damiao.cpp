@@ -804,9 +804,9 @@ namespace damiao
                 return;
             }
             //std::cout<<"2"<<std::endl;
-            // if (value.data[0] == 0xAB)
-            // {
-            // 这是正常返回的位置速度力矩数据
+            if (value.data[0] == 0xAB)
+            {
+            //这是正常返回的位置速度力矩数据
             uint16_t q_uint = (uint16_t(value.data[1]) << 8) | value.data[2];
             uint16_t dq_uint = (uint16_t(value.data[3]) << 4) | (value.data[4] >> 4);
             uint16_t tau_uint = (uint16_t(value.data[4] & 0xf) << 8) | value.data[5];
@@ -840,7 +840,7 @@ namespace damiao
             //m->updateTimeInterval();
 
             // std::cerr<<"motor id is: "<<canID<<": "<<interval<<std::endl;
-            // }
+            }
         }
     }
 
