@@ -23,13 +23,11 @@ dmbot_serial/
 ├── README.md                   # 本文件
 ├── include/dmbot_serial/       # 头文件目录
 │   ├── debugger_node.hpp       # 调试命令发布器
-│   ├── usb2canfd_dm_node.hpp   # 电机驱动主节点
 │   └── protocol/               # 通信协议
 │       ├── damiao.h            # 达妙电机协议定义
 │       └── usb_class.h         # USB 通信类
 ├── src/                        # 源文件目录
 │   ├── debugger_node.cpp       # 调试节点实现
-│   ├── usb2canfd_dm_node.cpp   # 电机驱动节点实现
 │   ├── dev_sn.cpp              # USB 设备序列号查询工具
 │   ├── test.cpp                # 电机功能测试程序
 │   └── protocol/               # 协议实现
@@ -46,30 +44,7 @@ dmbot_serial/
 
 ## 组件说明
 
-### 1. `usb2canfd_dm_node` - 电机驱动主节点
-
-**功能**：核心驱动节点，负责与电机硬件通信
-
-**工作流程**：
-- 初始化 USB-CAN-FD 适配器和电机配置
-- 订阅 ROS 2 话题 `robot_command`（接收控制命令）
-- 将命令转换为 CAN 报文并发送给电机
-- 定期发布电机的关节状态到 `joint_state` 话题
-
-**可配置参数**（通过 ROS 2 参数）：
-- `sn` (string): USB-CAN-FD 设备序列号（默认：9940F4E149D904A69924737E3DE6629F）
-- `nom_baud` (int): CAN 标准帧波特率（默认：1000000）
-- `dat_baud` (int): CAN 数据帧波特率（默认：2000000）
-- `motor_ids` (list): 电机 CAN ID 列表（默认：[1, 2, 3, 4, 5, 6]）
-- `master_ids` (list): 主机 ID 列表（对应各电机）
-- `motor_types` (list): 电机类型（1=DM4310, 3=DM4340）
-- `control_mode` (int): 控制模式（0=MIT, 1=位置-速度, 2=速度, 3=位置-力）
-
-**话题接口**：
-- 订阅：`robot_command` - 接收电机控制命令（arm_msgs::msg::RobotCommand）
-- 发布：`joint_state` - 发送关节状态反馈（sensor_msgs::msg::JointState）
-
-### 2. `debugger_node` - 调试命令发布器
+### 1. `debugger_node` - 调试命令发布器
 
 **功能**：交互式键盘控制界面，用于测试和调试
 
@@ -173,13 +148,9 @@ ros2 run dmbot_serial dev_sn
 
 运行后会显示所有连接的 USB-CAN-FD 设备及其序列号。
 
-#### 2. 启动电机驱动和调试器
+#### 2. 启动调试器
 
 ```bash
-# 启动电机驱动节点
-ros2 run dmbot_serial usb2canfd_dm_node_cpp
-
-# 在另一个终端启动调试器
 ros2 run dmbot_serial debugger_node_cpp
 ```
 
@@ -191,26 +162,7 @@ ros2 run dmbot_serial debugger_node_cpp
 - 按 `0`：发送第 10 个预定义命令
 - 按 `Ctrl+C`：退出
 
-#### 4. 使用自定义参数启动
-
-```bash
-ros2 run dmbot_serial usb2canfd_dm_node_cpp \
-  --ros-args \
-  -p sn:="YOUR_DEVICE_SN" \
-  -p motor_ids:=[1,2,3,4,5,6] \
-  -p control_mode:=0
-```
-
 ### 高级配置
-
-#### 修改电机参数
-
-编辑源文件 [src/usb2canfd_dm_node.cpp](src/usb2canfd_dm_node.cpp) 中的初始化参数：
-
-```cpp
-this->declare_parameter<std::string>("sn", "YOUR_SERIAL_NUMBER");
-this->declare_parameter<int64_t>("control_mode", 0);  // 0=MIT, 1=PosVel, 2=Vel, 3=PosForce
-```
 
 #### 自定义控制命令
 
@@ -287,10 +239,7 @@ float[] effort           # 当前力矩 (Nm)
 1. 验证 CAN ID 是否正确
 2. 检查电机是否上电
 3. 检查 CAN 线路连接
-4. 查看 debug 日志：
-   ```bash
-   ros2 run dmbot_serial usb2canfd_dm_node_cpp --ros-args --log-level DEBUG
-   ```
+4. 查看 `rc_arm_hardware` 和 `dmbot_serial` 相关日志。
 
 ### 问题 3：键盘输入无响应
 
@@ -315,32 +264,9 @@ float[] effort           # 当前力矩 (Nm)
 
 ## 开发和扩展
 
-### 添加新的电机类型
-
-在 [src/usb2canfd_dm_node.cpp](src/usb2canfd_dm_node.cpp) 中添加新的电机类型判断：
-
-```cpp
-if (motor_type_val == 3) {
-    motor_type = damiao::DM4340;
-} else if (motor_type_val == 4) {
-    // 新增电机类型
-    motor_type = damiao::DM_NEW_TYPE;
-}
-```
-
 ### 自定义通信协议
 
 扩展 [include/dmbot_serial/protocol/damiao.h](include/dmbot_serial/protocol/damiao.h) 中的电机通信接口。
-
-### 添加新的控制话题
-
-在 [src/usb2canfd_dm_node.cpp](src/usb2canfd_dm_node.cpp) 中添加新的订阅器：
-
-```cpp
-command_subscriber_v2_ = this->create_subscription<CustomMsg>(
-    "robot_command_v2", 10,
-    std::bind(&Usb2canfdDMNode::command_callback_v2, this, std::placeholders::_1));
-```
 
 ---
 

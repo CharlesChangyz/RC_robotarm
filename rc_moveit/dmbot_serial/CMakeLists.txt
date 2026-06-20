@@ -67,18 +67,6 @@ target_link_libraries(dev_sn PRIVATE
     ${LIBUSB_LIBRARIES}
 )
 
-add_executable(usb2canfd_dm_node_cpp
-  src/usb2canfd_dm_node.cpp
-)
-target_link_libraries(usb2canfd_dm_node_cpp
-  motor
-)
-ament_target_dependencies(usb2canfd_dm_node_cpp
-  rclcpp
-  sensor_msgs
-  arm_msgs
-)
-
 add_executable(debugger_node_cpp
   src/debugger_node.cpp
 )
@@ -104,7 +92,7 @@ install(
 )
 
 install(
-  TARGETS motor dmbot_serial_driver test_motor dev_sn usb2canfd_dm_node_cpp debugger_node_cpp dm_serial_frame_bridge
+  TARGETS motor dmbot_serial_driver test_motor dev_sn debugger_node_cpp dm_serial_frame_bridge
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

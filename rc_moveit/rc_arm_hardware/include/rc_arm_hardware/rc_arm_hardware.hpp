@@ -29,7 +29,7 @@
 #include "std_srvs/srv/set_bool.hpp"
 
 #include "dmbot_serial/dm_motor_driver.hpp"
-#include "rc_arm_hardware/robstride_can_driver.hpp"
+#include "rc_arm_hardware/motor_params.hpp"
 
 // Pinocchio：用于动力学计算
 #include <pinocchio/parsers/urdf.hpp>
