@@ -53,7 +53,6 @@
           <param name="payload_position_kp">${hardware_config.payload_position_kp}</param>
           <param name="payload_position_kd">${hardware_config.payload_position_kd}</param>
           <param name="velocity_limit">${hardware_config.velocity_limit}</param>
-          <param name="max_velocity">${hardware_config.max_velocity}</param>
           <param name="max_acceleration">${hardware_config.max_acceleration}</param>
           <param name="low_stiffness_mode">${hardware_config.low_stiffness_mode}</param>
           <param name="unloaded_low_stiffness_kp">${hardware_config.unloaded_low_stiffness_kp}</param>
@@ -66,9 +65,6 @@
           <param name="gravity_feedforward_ratio">${hardware_config.gravity_feedforward_ratio}</param>
           <param name="use_pinocchio_inverse_dynamics">${hardware_config.use_pinocchio_inverse_dynamics}</param>
           <param name="urdf_path">${hardware_config.urdf_path}</param>
-          <param name="limit_margin">${hardware_config.limit_margin}</param>
-          <param name="limit_stop_margin">${hardware_config.limit_stop_margin}</param>
-          <param name="limit_decel_factor">${hardware_config.limit_decel_factor}</param>
           <param name="fallback_control_period">${hardware_config.fallback_control_period}</param>
         </xacro:unless>
       </hardware>

@@ -60,9 +60,6 @@ unloaded_position_kd: 3.0
 # 硬件层统一速度限制，单位 rad/s
 velocity_limit: 8.0
 
-# 参考轨迹速度上限，供硬件层监测/限幅使用，单位 rad/s
-max_velocity: 40.0
-
 # 参考轨迹加速度上限，供硬件层监测使用，单位 rad/s^2
 max_acceleration: 20.0
 
@@ -146,15 +143,6 @@ use_pinocchio_inverse_dynamics: true
 # Pinocchio 使用的 URDF 路径；
 # 这里写相对 rc_arm_description 包目录的路径
 urdf_path: urdf/rc_arm_2/rc_arm_2.pinocchio.urdf
-
-# 关节接近限位时开始减速的边界，单位 rad
-limit_margin: 0.15
-
-# 关节进入硬停止保护区的边界，单位 rad
-limit_stop_margin: 0.02
-
-# 限位减速系数，范围 0~1，越小减速越明显
-limit_decel_factor: 0.3
 
 # 当 controller_manager 提供的周期异常时，硬件层采用的回退控制周期，单位秒
 fallback_control_period: 0.005
