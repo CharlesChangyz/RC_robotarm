@@ -42,6 +42,15 @@ done
 | `rc_moveit/dmbot_serial/src/debugger_node.cpp:11-282`，`rc_moveit/dmbot_serial/include/dmbot_serial/debugger_node.hpp:13-37`，`rc_moveit/dmbot_serial/CMakeLists.txt:82-88` | `debugger_node_cpp` 发布旧 `robot_command`，仓内只有旧 `usb2canfd_dm_node_cpp` 消费 | 若删除旧 USB2CAN 节点，同步删除 debugger 节点 | 确认它不是保留的台架工具 | 调试链路依附旧入口 |
 done
 | `rc_moveit/dmbot_serial/src/test.cpp:13-143`，`rc_moveit/dmbot_serial/CMakeLists.txt:54-60` | `test_motor` 是硬编码 SN/CAN ID 的单电机测试程序，含大量实验注释 | 从默认构建/安装删除；必要时移入 `tools/` 或 `examples/` | 确认不作为硬件验收步骤 | 生产包混入一次性测试入口 |
+done
+
+
+
+
+
+
+
+
 | `rc_moveit/dmbot_serial/launch/dev_sn.launch:1-7`，`rc_moveit/dmbot_serial/launch/test_motor.launch:1-7` | ROS 1 风格 XML launch 与 `.launch.py` 重复 | 删除 XML 版本，只保留 ROS 2 Python launch | 确认没有脚本调用 XML launch | 同一工具两个入口 |
 | `rc_moveit/dmbot_serial/include/dmbot_serial/protocol/damiao.h:216-218`，`rc_moveit/dmbot_serial/src/protocol/damiao.cpp:138-176` | `Motor_Control(..., simulation_only)` 构造函数仓内无调用 | 删除声明和实现 | 确认外部没有把 `motor` 库当 SDK 用 | 未用 API |
 | `rc_moveit/dmbot_serial/include/dmbot_serial/protocol/damiao.h:221-239`，`rc_moveit/dmbot_serial/src/protocol/damiao.cpp:418-751` | 参数读写、切模式、单电机 MIT/POS/VEL 等旧通用 API 主要服务实验路径 | 若删除 `test_motor`，继续裁掉这些旧 API | 确认外部没有依赖通用达妙 SDK 能力 | 暴露面远大于当前生产路径 |
