@@ -213,9 +213,6 @@ namespace damiao
     public:
         Motor_Control(uint32_t nom_baud, uint32_t dat_baud, std::string sn,
                   std::vector<DmActData> *data_ptr);
-        // simulation_only: if true, skip USB initialization and motor enable
-        Motor_Control(uint32_t nom_baud, uint32_t dat_baud, std::string sn,
-                  std::vector<DmActData> *data_ptr, bool simulation_only);
         ~Motor_Control();
 
         void addMotor(std::shared_ptr<Motor> DM_Motor);

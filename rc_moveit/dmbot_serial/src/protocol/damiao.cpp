@@ -135,46 +135,6 @@ namespace damiao
                   << std::endl;
     }
 
-    // Simulation-only constructor: skip USB and hardware enable steps
-    Motor_Control::Motor_Control(uint32_t nom_baud, uint32_t dat_baud, std::string sn,
-                                 std::vector<DmActData> *data_ptr, bool simulation_only)
-        : data_ptr_(data_ptr)
-    {
-        // register motors (if any) but do not initialize USB or enable hardware when in simulation
-        if (data_ptr_)
-        {
-            for (auto it = data_ptr_->begin(); it != data_ptr_->end(); ++it)
-            { // 遍历该bus下的所有电机
-                std::shared_ptr<Motor> motor = std::make_shared<Motor>(it->motorType, it->mode, it->can_id, it->mst_id);
-                addMotor(motor);
-            }
-        }
-
-        if (!simulation_only)
-        {
-            usb_hw = std::make_shared<usb_class>(nom_baud, dat_baud, sn);
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            usb_hw->setFrameCallback(
-                [this](can_value_type &val)
-                {
-                    this->canframeCallback(val);
-                });
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-            enable_motor();
-
-            std::cout << "**********Motor_Control initialization successful**********" << std::endl
-                      << std::endl;
-        }
-        else
-        {
-            // Simulation mode: do not touch USB hardware
-            usb_hw = nullptr;
-            std::cout << "Motor_Control created in simulation-only mode (no USB init)." << std::endl;
-        }
-    }
-
     Motor_Control::~Motor_Control()
     {
         std::cout << "Enter ~Motor_Control" << std::endl;

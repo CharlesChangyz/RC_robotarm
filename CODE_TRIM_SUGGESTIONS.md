@@ -52,9 +52,18 @@ done
 
 
 | `rc_moveit/dmbot_serial/launch/dev_sn.launch:1-7`，`rc_moveit/dmbot_serial/launch/test_motor.launch:1-7` | ROS 1 风格 XML launch 与 `.launch.py` 重复 | 删除 XML 版本，只保留 ROS 2 Python launch | 确认没有脚本调用 XML launch | 同一工具两个入口 |
+
+done
+
 | `rc_moveit/dmbot_serial/include/dmbot_serial/protocol/damiao.h:216-218`，`rc_moveit/dmbot_serial/src/protocol/damiao.cpp:138-176` | `Motor_Control(..., simulation_only)` 构造函数仓内无调用 | 删除声明和实现 | 确认外部没有把 `motor` 库当 SDK 用 | 未用 API |
+done
+
 | `rc_moveit/dmbot_serial/include/dmbot_serial/protocol/damiao.h:221-239`，`rc_moveit/dmbot_serial/src/protocol/damiao.cpp:418-751` | 参数读写、切模式、单电机 MIT/POS/VEL 等旧通用 API 主要服务实验路径 | 若删除 `test_motor`，继续裁掉这些旧 API | 确认外部没有依赖通用达妙 SDK 能力 | 暴露面远大于当前生产路径 |
+done
+
 | `rc_moveit/arm_msgs/msg/MotorState.msg`，`MotorCommand.msg`，`RobotState.msg`，`RobotCommand.msg`，`MotorMitCmdTau.msg`，`RobotMitCmdTau.msg`，`PointCommand.msg`，`PathCommand.msg` | 多数旧消息只服务旧 `dmbot_serial` 独立节点或完全无仓内消费者 | 若删除旧 USB2CAN/debugger 链路，同步删除旧 msg，只保留 `CanFrame`、`Arm2TargetPoint`、`Arm2MotionExecution` 等活跃消息 | 确认没有外部包订阅/发布这些旧消息 | 消息包是公开接口，旧接口越多维护成本越高 |
+done
+
 | `rc_moveit/rc_arm_teleop/setup.py:33-39` | 注册了 `xbox_teleop_node`、`xbox_servo_node`、`joycon_*`、`master_slave_node`，但源码目录只有 `xbox_teleop_node_rc_arm_2.py` | 删除不存在模块对应 entry points，保留 `xbox_teleop_node_rc_arm_2` | 确认这些模块不是由 overlay 或生成步骤提供 | 安装后暴露坏命令 |
 | `rc_moveit/rc_arm_description/launch/rc_arm_2_display.launch.py:8-20`，`rc_moveit/rc_arm_description/launch/rc_arm_2_control_main.launch.py:8-20` | 平铺 launch 只是 include 子目录入口 | 删除 wrapper，统一使用 `launch/rc_arm_2/display.launch.py` 和 `launch/rc_arm_2/control.launch.py` | 确认 README、脚本、外部命令不再调用旧名字 | 纯兼容别名 |
 | `rc_moveit/rc_arm_moveit_config/launch/rc_arm_2_demo.launch.py:8-20` | 平铺 demo launch 只是 include `launch/rc_arm_2/demo.launch.py` | 删除 wrapper | 确认没有使用 `ros2 launch rc_arm_moveit_config rc_arm_2_demo.launch.py` 的流程 | 纯转发 |

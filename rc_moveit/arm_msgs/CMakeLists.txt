@@ -17,14 +17,6 @@ find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(geometry_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/MotorCommand.msg"
-  "msg/MotorState.msg"
-  "msg/RobotCommand.msg"
-  "msg/RobotState.msg"
-  "msg/MotorMitCmdTau.msg"
-  "msg/RobotMitCmdTau.msg"
-  "msg/PointCommand.msg"
-  "msg/PathCommand.msg"
   "msg/CanFrame.msg"
   "msg/Arm2TargetPoint.msg"
   "msg/Arm2MotionExecution.msg"
