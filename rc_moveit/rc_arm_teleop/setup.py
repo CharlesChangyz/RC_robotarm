@@ -30,13 +30,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'xbox_teleop_node = rc_arm_teleop.xbox_teleop_node:main',
             'xbox_teleop_node_rc_arm_2 = rc_arm_teleop.xbox_teleop_node_rc_arm_2:main',
-            'xbox_servo_node = rc_arm_teleop.xbox_servo_node:main',
-            'joycon_imu_teleop = rc_arm_teleop.joycon_imu_teleop_node:main',
-            'joycon_imu_driver = rc_arm_teleop.joycon_imu_driver:main',
-            'joycon_visualizer = rc_arm_teleop.joycon_visualizer_node:main',
-            'master_slave_node = rc_arm_teleop.master_slave_node:main',
         ],
     },
 )
