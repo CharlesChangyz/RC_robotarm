@@ -39,7 +39,7 @@ from PySide6.QtWidgets import (
 )
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Bool, Int32
+from std_msgs.msg import Bool, Float64, Int32
 from tf2_msgs.msg import TFMessage
 import tf2_ros
 
@@ -116,9 +116,11 @@ class RosBackend(QObject):
     actual_pose_updated = Signal(object)
     reachability_updated = Signal(object)
     payload_state_updated = Signal(bool)
+    j5_position_updated = Signal(object)
     last_sent_updated = Signal(object)
     last_send_status = Signal(str)
     last_vacuum_status = Signal(str)
+    last_j5_status = Signal(str)
     payload_command_status = Signal(str)
     last_middleware_status = Signal(str)
     backend_error = Signal(str)
@@ -135,7 +137,9 @@ class RosBackend(QObject):
         self._vacuum_pub = None
         self._payload_command_pub = None
         self._middleware_run_pub = None
+        self._j5_command_pub = None
         self._payload_sub = None
+        self._j5_position_sub = None
         self._joint_state_sub = None
         self._tf_buffer = None
         self._tf_listener = None
@@ -147,6 +151,7 @@ class RosBackend(QObject):
         self._pending_vacuum: Optional[bool] = None
         self._pending_payload_active: Optional[bool] = None
         self._pending_middleware_command: Optional[int] = None
+        self._pending_j5_command: Optional[float] = None
         self._pending_reachability: Optional[TargetState] = None
         self._last_actual_emit = 0.0
         self._last_middleware_sent: Optional[int] = None
@@ -161,11 +166,15 @@ class RosBackend(QObject):
         self._tf_pub = self._node.create_publisher(TFMessage, self._args.tf_topic, 10)
         self._vacuum_pub = self._node.create_publisher(Bool, self._args.vacuum_topic, 10)
         self._payload_command_pub = self._node.create_publisher(Bool, self._args.payload_command_topic, 10)
+        self._j5_command_pub = self._node.create_publisher(Float64, self._args.j5_command_topic, 10)
         self._middleware_run_pub = self._node.create_publisher(
             Int32, self._args.middleware_run_action_set_topic, 10
         )
         self._payload_sub = self._node.create_subscription(
             Bool, self._args.payload_active_topic, self._on_payload_state, 10
+        )
+        self._j5_position_sub = self._node.create_subscription(
+            Float64, self._args.j5_position_topic, self._on_j5_position, 20
         )
         self._joint_state_sub = self._node.create_subscription(
             JointState, self._args.joint_state_topic, self._on_joint_state, 20
@@ -200,6 +209,11 @@ class RosBackend(QObject):
         with self._lock:
             self._pending_payload_active = enabled
 
+    @Slot(float)
+    def queue_j5_command(self, position_m: float) -> None:
+        with self._lock:
+            self._pending_j5_command = float(position_m)
+
     @Slot(object)
     def queue_reachability(self, state: object) -> None:
         with self._lock:
@@ -212,6 +226,9 @@ class RosBackend(QObject):
 
     def _on_payload_state(self, msg: Bool) -> None:
         self.payload_state_updated.emit(bool(msg.data))
+
+    def _on_j5_position(self, msg: Float64) -> None:
+        self.j5_position_updated.emit(float(msg.data))
 
     def _on_joint_state(self, msg: JointState) -> None:
         if not msg.name or not msg.position:
@@ -230,6 +247,7 @@ class RosBackend(QObject):
                 self._flush_send_request()
                 self._flush_vacuum_request()
                 self._flush_payload_request()
+                self._flush_j5_request()
                 self._flush_middleware_request()
                 self._flush_reachability_request()
             except Exception as exc:  # pragma: no cover
@@ -323,6 +341,22 @@ class RosBackend(QObject):
         msg.data = bool(pending)
         self._payload_command_pub.publish(msg)
         self.payload_command_status.emit("payload command: " + ("ON" if pending else "OFF"))
+
+    def _flush_j5_request(self) -> None:
+        with self._lock:
+            pending = self._pending_j5_command
+            self._pending_j5_command = None
+        if pending is None or self._j5_command_pub is None:
+            return
+        msg = Float64()
+        msg.data = float(pending)
+        self._j5_command_pub.publish(msg)
+        self.last_j5_status.emit(
+            "published J5 target={:.4f} m to {}".format(
+                float(pending),
+                self._args.j5_command_topic,
+            )
+        )
 
     def _flush_middleware_request(self) -> None:
         with self._lock:
@@ -565,6 +599,7 @@ class TargetPublisherWindow(QMainWindow):
         self._actual_pose: Optional[ActualPose] = None
         self._home_target: Optional[TargetState] = TargetState(home_x, home_y, home_z, home_pitch)
         self._payload_active = False
+        self._latest_j5_position: Optional[float] = None
         self._reachability = None
         self._editing_dirty = False
         self._actual_pose_ready = False
@@ -579,9 +614,11 @@ class TargetPublisherWindow(QMainWindow):
         self._backend.actual_pose_updated.connect(self._on_actual_pose)
         self._backend.reachability_updated.connect(self._on_reachability)
         self._backend.payload_state_updated.connect(self._on_payload_state)
+        self._backend.j5_position_updated.connect(self._on_j5_position)
         self._backend.last_sent_updated.connect(self._on_last_sent)
         self._backend.last_send_status.connect(self._set_send_status)
         self._backend.last_vacuum_status.connect(self._set_vacuum_status)
+        self._backend.last_j5_status.connect(self._set_j5_status)
         self._backend.payload_command_status.connect(self._append_log)
         self._backend.last_middleware_status.connect(self._set_middleware_status)
         self._backend.backend_error.connect(self._append_log)
@@ -817,6 +854,15 @@ class TargetPublisherWindow(QMainWindow):
         self._j4_step_spin.setDecimals(1)
         self._j4_step_spin.setRange(0.1, 180.0)
         self._j4_step_spin.setValue(5.0)
+        self._j5_target_spin = QDoubleSpinBox()
+        self._j5_target_spin.setDecimals(4)
+        self._j5_target_spin.setRange(-10.0, 10.0)
+        self._j5_target_spin.setSingleStep(0.001)
+        self._j5_target_spin.setSuffix(" m")
+        self._send_j5_btn = QPushButton("Send J5")
+        self._j5_use_actual_btn = QPushButton("Use actual")
+        self._send_j5_btn.clicked.connect(self._send_j5_command)
+        self._j5_use_actual_btn.clicked.connect(self._use_actual_j5)
 
         self._field_spins = {}
         self._axis_wheels = {}
@@ -871,6 +917,10 @@ class TargetPublisherWindow(QMainWindow):
         layout.addWidget(self._wheel_send_rate_spin, 5, 5)
         layout.addWidget(self._wheel_continuous_send_check, 6, 4, 1, 2)
         layout.addWidget(QLabel("hold for continuous move"), 7, 4, 1, 2)
+        layout.addWidget(QLabel("J5 target (m)"), 6, 0)
+        layout.addWidget(self._j5_target_spin, 6, 2)
+        layout.addWidget(self._send_j5_btn, 6, 3)
+        layout.addWidget(self._j5_use_actual_btn, 7, 2, 1, 2)
 
         self._send_if_changed = QCheckBox("Send if changed only")
         self._send_if_changed.setChecked(True)
@@ -885,10 +935,10 @@ class TargetPublisherWindow(QMainWindow):
         home_btn.clicked.connect(self._reset_to_home)
         self._home_btn = home_btn
 
-        layout.addWidget(self._send_if_changed, 6, 0, 1, 4)
-        layout.addWidget(send_btn, 8, 0, 1, 2)
-        layout.addWidget(reset_btn, 8, 2)
-        layout.addWidget(home_btn, 8, 3)
+        layout.addWidget(self._send_if_changed, 8, 0, 1, 4)
+        layout.addWidget(send_btn, 9, 0, 1, 2)
+        layout.addWidget(reset_btn, 9, 2)
+        layout.addWidget(home_btn, 9, 3)
         return box
 
     def _build_reachability_panel(self) -> QWidget:
@@ -966,6 +1016,8 @@ class TargetPublisherWindow(QMainWindow):
         self._send_status_label = QLabel("idle")
         self._wheel_status_label = QLabel("idle")
         self._vacuum_status_label = QLabel("unknown")
+        self._j5_actual_label = QLabel("waiting")
+        self._j5_command_status_label = QLabel("idle")
         self._middleware_status_label = QLabel("idle")
         self._payload_status_label = QLabel("false")
         self._process_status_label = QLabel("all stopped")
@@ -976,6 +1028,8 @@ class TargetPublisherWindow(QMainWindow):
         layout.addRow("Last send result", self._send_status_label)
         layout.addRow("XYZ wheel", self._wheel_status_label)
         layout.addRow("Last vacuum command", self._vacuum_status_label)
+        layout.addRow("J5 actual (m)", self._j5_actual_label)
+        layout.addRow("Last J5 command (m)", self._j5_command_status_label)
         layout.addRow("Last middleware command", self._middleware_status_label)
         layout.addRow("Payload active", self._payload_status_label)
         layout.addRow("Process status", self._process_status_label)
@@ -1188,6 +1242,17 @@ class TargetPublisherWindow(QMainWindow):
         action_set_id = self._action_set_spin.value()
         self._backend.queue_run_action_set(action_set_id)
 
+    def _send_j5_command(self) -> None:
+        target_m = self._j5_target_spin.value()
+        self._backend.queue_j5_command(target_m)
+        self._j5_command_status_label.setText("queued {:.4f}".format(target_m))
+
+    def _use_actual_j5(self) -> None:
+        if self._latest_j5_position is None:
+            self._j5_command_status_label.setText("blocked: waiting for J5 actual")
+            return
+        self._j5_target_spin.setValue(self._latest_j5_position)
+
     def _validate_motion_target(self, label_name: str) -> bool:
         if not self._actual_pose_ready:
             text = "blocked: waiting for actual pose"
@@ -1297,6 +1362,11 @@ class TargetPublisherWindow(QMainWindow):
         self._payload_active = active
         self._update_status_labels()
 
+    @Slot(object)
+    def _on_j5_position(self, position_m: object) -> None:
+        self._latest_j5_position = float(position_m)
+        self._j5_actual_label.setText("{:.4f}".format(self._latest_j5_position))
+
     @Slot(str)
     def _set_send_status(self, text: str) -> None:
         self._send_status_label.setText(text)
@@ -1306,6 +1376,11 @@ class TargetPublisherWindow(QMainWindow):
     def _set_vacuum_status(self, text: str) -> None:
         self._vacuum_status_label.setText(text)
         self._append_log("vacuum command: " + text)
+
+    @Slot(str)
+    def _set_j5_status(self, text: str) -> None:
+        self._j5_command_status_label.setText(text)
+        self._append_log("J5 command: " + text)
 
     @Slot(str)
     def _set_middleware_status(self, text: str) -> None:
@@ -1417,6 +1492,8 @@ def parse_args():
     parser.add_argument("--vacuum-topic", default="/rc_arm_2/vacuum_activate")
     parser.add_argument("--payload-command-topic", default="/rc_arm_2/payload_active_command")
     parser.add_argument("--payload-active-topic", default="/rc_arm_2/payload_active")
+    parser.add_argument("--j5-command-topic", default="/rc_arm_2/j5/command_position")
+    parser.add_argument("--j5-position-topic", default="/rc_arm_2/j5/actual_position")
     parser.add_argument("--joint-state-topic", default="/joint_states")
     parser.add_argument("--middleware-target-topic", default="/arm2/middleware/target_point", help=argparse.SUPPRESS)
     parser.add_argument("--middleware-run-action-set-topic", default="/arm2/middleware/run_action_set")

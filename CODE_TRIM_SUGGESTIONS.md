@@ -65,7 +65,10 @@ done
 done
 
 | `rc_moveit/rc_arm_teleop/setup.py:33-39` | 注册了 `xbox_teleop_node`、`xbox_servo_node`、`joycon_*`、`master_slave_node`，但源码目录只有 `xbox_teleop_node_rc_arm_2.py` | 删除不存在模块对应 entry points，保留 `xbox_teleop_node_rc_arm_2` | 确认这些模块不是由 overlay 或生成步骤提供 | 安装后暴露坏命令 |
+done
+
 | `rc_moveit/rc_arm_description/launch/rc_arm_2_display.launch.py:8-20`，`rc_moveit/rc_arm_description/launch/rc_arm_2_control_main.launch.py:8-20` | 平铺 launch 只是 include 子目录入口 | 删除 wrapper，统一使用 `launch/rc_arm_2/display.launch.py` 和 `launch/rc_arm_2/control.launch.py` | 确认 README、脚本、外部命令不再调用旧名字 | 纯兼容别名 |
+
 | `rc_moveit/rc_arm_moveit_config/launch/rc_arm_2_demo.launch.py:8-20` | 平铺 demo launch 只是 include `launch/rc_arm_2/demo.launch.py` | 删除 wrapper | 确认没有使用 `ros2 launch rc_arm_moveit_config rc_arm_2_demo.launch.py` 的流程 | 纯转发 |
 | `rc_moveit/rc_arm_teleop/launch/rc_arm_2_sim_teleop.launch.py:8-20`，`rc_moveit/rc_arm_teleop/launch/rc_arm_2_real_teleop.launch.py:50-91` | 平铺 teleop launch 转发到子目录；real 版本还重复声明同一批参数 | 删除平铺 wrapper，统一使用 `launch/rc_arm_2/*.launch.py` | README 当前仍引用旧入口，需同步文档 | 两个入口维护同一功能 |
 | `demo/rc_robotarm_demo.py:1-6`，`demo/rc_robotarm_demo_2.py:352`，`scripts/run_rc_arm_mujoco_bridge.sh:28` | `rc_robotarm_demo.py` 只是导入 `rc_robotarm_demo_2.main` 的薄 wrapper | 合并入口，只保留一个文件名；若保留旧名，明确标注兼容别名 | 当前脚本调用 `demo/rc_robotarm_demo.py` | “哪个 demo 是真入口”不清晰 |

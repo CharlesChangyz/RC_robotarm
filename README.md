@@ -161,7 +161,8 @@ GUI 主要行为：
 - `Home`：回到 URDF/实机零位 FK 对应的固定 `xyz + 0 deg`
 - `Editing target / Last sent target / Actual current pose` 分开显示，避免“改了但没发”的歧义
 - `Reachability`：显示当前编辑点的 `Reachable / Near limit / Unreachable` 状态和近似 `x/y/z` 范围
-- `System Control`：可直接启动 `run_rc_arm_mujoco.sh`、`run_rc_arm_mujoco_bridge.sh`、`run_rc_arm_real.sh`，以及单次发送 `Vacuum ON/OFF`
+- `System Control`：可直接启动 `run_rc_arm_mujoco.sh`、`run_rc_arm_mujoco_bridge.sh`、`run_rc_arm_real.sh`，以及单次发送 `Vacuum ON/OFF`、`Payload ON/OFF`、`Run Action Set` 和独立 J5 目标
+- `J5 target (m)`：单次发布 `std_msgs/Float64` 到 `/rc_arm_2/j5/command_position`，并显示 `/rc_arm_2/j5/actual_position` 当前反馈
 
 这条 GUI 目标链不再调用 MoveIt 的 `/compute_ik`。`/compute_ik` 仍保留给 teleop 等其他链路使用；当前 GUI / target executor 链只把 MoveIt 用在 joint-goal 规划、碰撞检查和执行上。
 
@@ -472,7 +473,7 @@ source rc_moveit/install/setup.bash
 python3 demo/tf_target_cli_publisher.py
 ```
 
-The GUI uses `j4 world` semantics: `0 deg` means the tool is level in the arm's radial vertical plane. It keeps `Editing target`, `Last sent target`, and `Actual current pose` separate, publishes only on `Send`, and supports `Reset to current`, `Home`, `Send if changed only`, `Vacuum ON/OFF`, MuJoCo / Real start-stop buttons, and approximate reachability feedback. `Run Action Set` publishes only the action-set ID; it does not overwrite the middleware target point supplied by an external vision publisher. This GUI/executor chain no longer calls MoveIt's `/compute_ik`; `/compute_ik` remains available for teleop and other chains.
+The GUI uses `j4 world` semantics: `0 deg` means the tool is level in the arm's radial vertical plane. It keeps `Editing target`, `Last sent target`, and `Actual current pose` separate, publishes only on `Send`, and supports `Reset to current`, `Home`, `Send if changed only`, `Vacuum ON/OFF`, payload commands, action-set triggers, independent `J5 target (m)` commands, MuJoCo / Real start-stop buttons, and approximate reachability feedback. `Run Action Set` publishes only the action-set ID; it does not overwrite the middleware target point supplied by an external vision publisher. This GUI/executor chain no longer calls MoveIt's `/compute_ik`; `/compute_ik` remains available for teleop and other chains.
 
 Common target executor options:
 
