@@ -3,6 +3,7 @@
 
 import argparse
 import collections
+import json
 import math
 import signal
 import shlex
@@ -12,7 +13,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import rclpy
 from geometry_msgs.msg import TransformStamped
@@ -32,14 +33,17 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QPlainTextEdit,
+    QScrollArea,
     QSizePolicy,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Bool, Float64, Int32
+from std_msgs.msg import Bool, Float64, Int32, String
+from std_srvs.srv import Trigger
 from tf2_msgs.msg import TFMessage
 import tf2_ros
 
@@ -66,6 +70,130 @@ PROJECT_ROS_CLEANUP_PATTERNS = (
     ("ros2_control_node", "ros2_control_node"),
     ("real launch", "ros2 launch rc_arm_moveit_config rc_arm_2_robot.launch.py"),
 )
+REMOTE_SERVICE_ACTIONS = {
+    "/rc_arm_2/remote/start_mujoco": "start_mujoco",
+    "/rc_arm_2/remote/stop_mujoco": "stop_mujoco",
+    "/rc_arm_2/remote/start_real": "start_real",
+    "/rc_arm_2/remote/stop_real": "stop_real",
+    "/rc_arm_2/remote/start_middleware": "start_middleware",
+    "/rc_arm_2/remote/stop_middleware": "stop_middleware",
+}
+REMOTE_LOG_TOPIC = "/rc_arm_2/remote/log"
+REMOTE_PROCESS_STATUS_TOPIC = "/rc_arm_2/remote/process_status"
+REMOTE_REACHABILITY_REQUEST_TOPIC = "/rc_arm_2/remote/reachability_request"
+REMOTE_REACHABILITY_RESULT_TOPIC = "/rc_arm_2/remote/reachability_result"
+NEON_CONSOLE_STYLESHEET = """
+QMainWindow {
+    background: #030712;
+}
+QScrollArea {
+    background: #030712;
+    border: none;
+}
+QWidget#contentRoot {
+    background: #030712;
+}
+QGroupBox {
+    color: #72f8ff;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 rgba(7, 18, 34, 245),
+        stop:1 rgba(3, 10, 20, 250));
+    border: 1px solid rgba(0, 234, 255, 95);
+    border-radius: 4px;
+    margin-top: 18px;
+    padding: 12px;
+    font: 800 14px "Cascadia Code", "Liberation Mono", monospace;
+    text-transform: uppercase;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 8px;
+    color: #72f8ff;
+    background: #030712;
+}
+QLabel {
+    color: #eafcff;
+    font-size: 15px;
+}
+QFormLayout QLabel {
+    color: #9ab8c6;
+}
+QDoubleSpinBox, QSpinBox {
+    color: #f2fdff;
+    background: #020812;
+    border: 1px solid rgba(0, 234, 255, 110);
+    border-radius: 3px;
+    min-height: 34px;
+    padding: 4px 8px;
+    font: 800 17px "Cascadia Code", "Liberation Mono", monospace;
+}
+QDoubleSpinBox:focus, QSpinBox:focus {
+    border: 1px solid #ff2bf3;
+}
+QCheckBox {
+    color: #9ab8c6;
+    font-size: 15px;
+    spacing: 8px;
+}
+QDial {
+    background: rgba(255, 43, 243, 18);
+}
+QPushButton {
+    min-height: 38px;
+    color: #f2fdff;
+    background: rgba(0, 234, 255, 22);
+    border: 1px solid rgba(0, 234, 255, 110);
+    border-radius: 3px;
+    padding: 7px 10px;
+    font: 800 13px "Segoe UI", Arial, sans-serif;
+    text-transform: uppercase;
+}
+QPushButton:hover {
+    border: 1px solid #00eaff;
+    background: rgba(0, 234, 255, 42);
+}
+QPushButton:disabled {
+    color: #536978;
+    border-color: rgba(83, 105, 120, 80);
+    background: rgba(83, 105, 120, 25);
+}
+QPushButton[role="primary"] {
+    border: 1px solid #00eaff;
+    background: rgba(0, 234, 255, 58);
+}
+QPushButton[role="safe"] {
+    color: #deffe9;
+    border: 1px solid #39ff88;
+    background: rgba(57, 255, 136, 34);
+}
+QPushButton[role="danger"] {
+    color: #ffe1e8;
+    border: 1px solid #ff2f5f;
+    background: rgba(255, 47, 95, 36);
+}
+QPushButton[role="warn"] {
+    color: #fff0b6;
+    border: 1px solid #ffd23f;
+    background: rgba(255, 210, 63, 34);
+}
+QPushButton[role="magenta"] {
+    border: 1px solid #ff2bf3;
+    background: rgba(255, 43, 243, 34);
+}
+QPlainTextEdit#logView {
+    color: #c8fbff;
+    background: #02060c;
+    border: 1px solid rgba(0, 234, 255, 115);
+    border-radius: 3px;
+    padding: 10px;
+    font: 15px "Cascadia Code", "Liberation Mono", monospace;
+}
+"""
+
+
+def set_button_role(button: QPushButton, role: str) -> None:
+    button.setProperty("role", role)
 
 
 def middleware_command() -> List[str]:
@@ -124,6 +252,7 @@ class RosBackend(QObject):
     payload_command_status = Signal(str)
     last_middleware_status = Signal(str)
     backend_error = Signal(str)
+    remote_control_requested = Signal(str)
 
     def __init__(self, args) -> None:
         super().__init__()
@@ -141,6 +270,11 @@ class RosBackend(QObject):
         self._payload_sub = None
         self._j5_position_sub = None
         self._joint_state_sub = None
+        self._remote_reachability_sub = None
+        self._remote_log_pub = None
+        self._remote_process_status_pub = None
+        self._remote_reachability_result_pub = None
+        self._remote_services = []
         self._tf_buffer = None
         self._tf_listener = None
         self._lock = threading.Lock()
@@ -179,6 +313,23 @@ class RosBackend(QObject):
         self._joint_state_sub = self._node.create_subscription(
             JointState, self._args.joint_state_topic, self._on_joint_state, 20
         )
+        self._remote_log_pub = self._node.create_publisher(String, REMOTE_LOG_TOPIC, 50)
+        status_qos = QoSProfile(
+            depth=1,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
+        self._remote_process_status_pub = self._node.create_publisher(
+            String, REMOTE_PROCESS_STATUS_TOPIC, status_qos
+        )
+        self._remote_reachability_result_pub = self._node.create_publisher(
+            String, REMOTE_REACHABILITY_RESULT_TOPIC, 10
+        )
+        self._remote_reachability_sub = self._node.create_subscription(String, REMOTE_REACHABILITY_REQUEST_TOPIC, self._on_remote_reachability_request, 10)
+        self._remote_services = [
+            self._node.create_service(Trigger, service_name, self._make_remote_trigger_handler(action))
+            for service_name, action in REMOTE_SERVICE_ACTIONS.items()
+        ]
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self._node, spin_thread=False)
         self._thread = threading.Thread(target=self._spin_loop, daemon=True)
@@ -238,6 +389,82 @@ class RosBackend(QObject):
             if idx < len(msg.position):
                 mapping[name] = float(msg.position[idx])
         self._latest_joint_map = mapping
+
+    def _make_remote_trigger_handler(
+        self, action: str
+    ) -> Callable[[object, object], object]:
+        def handler(_request, response):
+            self.remote_control_requested.emit(action)
+            response.success = True
+            response.message = "queued {}".format(action)
+            self.publish_remote_log(
+                "remote_service",
+                "info",
+                "queued {}".format(action),
+            )
+            return response
+
+        return handler
+
+    def publish_remote_log(self, source: str, level: str, text: str) -> None:
+        if self._remote_log_pub is None:
+            return
+        msg = String()
+        msg.data = json.dumps(
+            {
+                "stamp": time.time(),
+                "source": str(source),
+                "level": str(level),
+                "text": str(text),
+            },
+            sort_keys=True,
+        )
+        self._remote_log_pub.publish(msg)
+
+    def publish_process_status(self, status: Dict[str, str]) -> None:
+        if self._remote_process_status_pub is None:
+            return
+        msg = String()
+        payload = {"stamp": time.time()}
+        payload.update(status)
+        msg.data = json.dumps(payload, sort_keys=True)
+        self._remote_process_status_pub.publish(msg)
+
+    def _on_remote_reachability_request(self, msg: String) -> None:
+        try:
+            payload = json.loads(msg.data)
+            request_id = str(payload.get("request_id", ""))
+            state = TargetState(
+                x=float(payload["x"]),
+                y=float(payload["y"]),
+                z=float(payload["z"]),
+                j4_rad=float(payload["j4_rad"]),
+            )
+            report = self._compute_reachability(state)
+            result = {
+                "request_id": request_id,
+                "reachable": bool(report["reachable"]),
+                "status": str(report["status"]),
+                "ranges": report["ranges"],
+            }
+        except Exception as exc:
+            result = {
+                "request_id": "",
+                "reachable": False,
+                "status": "Error",
+                "ranges": {},
+                "error": str(exc),
+            }
+        self._publish_remote_reachability_result(result)
+
+    def _publish_remote_reachability_result(self, payload: Dict[str, object]) -> None:
+        if self._remote_reachability_result_pub is None:
+            return
+        msg = String()
+        result = {"stamp": time.time()}
+        result.update(payload)
+        msg.data = json.dumps(result, sort_keys=True)
+        self._remote_reachability_result_pub.publish(msg)
 
     def _spin_loop(self) -> None:
         while not self._stop_event.is_set():
@@ -608,7 +835,9 @@ class TargetPublisherWindow(QMainWindow):
         self._shutdown_started = False
 
         self.setWindowTitle("RC Arm TF Target Publisher")
-        self.resize(1080, 760)
+        self.setMinimumSize(1280, 760)
+        self.resize(1600, 920)
+        self.setStyleSheet(NEON_CONSOLE_STYLESHEET)
 
         self._backend = RosBackend(args)
         self._backend.actual_pose_updated.connect(self._on_actual_pose)
@@ -622,6 +851,7 @@ class TargetPublisherWindow(QMainWindow):
         self._backend.payload_command_status.connect(self._append_log)
         self._backend.last_middleware_status.connect(self._set_middleware_status)
         self._backend.backend_error.connect(self._append_log)
+        self._backend.remote_control_requested.connect(self._on_remote_control_requested)
 
         self._mujoco_stack = ControlProcess(["bash", str(SCRIPT_RUN_MUJOCO)], "MuJoCo stack")
         self._mujoco_bridge = ControlProcess(["bash", str(SCRIPT_RUN_MUJOCO_BRIDGE)], "MuJoCo bridge")
@@ -645,6 +875,7 @@ class TargetPublisherWindow(QMainWindow):
         self._update_status_labels()
         self._startup_cleanup_project_ros_processes()
         self._backend.start()
+        self._refresh_process_buttons()
         self._request_reachability()
 
     def _ros2_env_command(self, ros2_args: List[str]) -> List[str]:
@@ -820,18 +1051,27 @@ class TargetPublisherWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         central = QWidget()
+        central.setObjectName("contentRoot")
         root = QVBoxLayout(central)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(12)
         top = QHBoxLayout()
         bottom = QHBoxLayout()
+        top.setSpacing(12)
+        bottom.setSpacing(12)
         root.addLayout(top, stretch=3)
         root.addLayout(bottom, stretch=2)
-        self.setCentralWidget(central)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setWidget(central)
+        self.setCentralWidget(scroll)
 
-        top.addWidget(self._build_target_editor(), stretch=3)
+        top.addWidget(self._build_target_editor(), stretch=5)
         top.addWidget(self._build_reachability_panel(), stretch=2)
-        top.addWidget(self._build_system_panel(), stretch=2)
-        bottom.addWidget(self._build_status_panel(), stretch=2)
-        bottom.addWidget(self._build_log_panel(), stretch=3)
+        top.addWidget(self._build_system_panel(), stretch=3)
+        bottom.addWidget(self._build_status_panel(), stretch=4)
+        bottom.addWidget(self._build_log_panel(), stretch=6)
 
     def _build_target_editor(self) -> QWidget:
         box = QGroupBox("Target Editor")
@@ -861,6 +1101,7 @@ class TargetPublisherWindow(QMainWindow):
         self._j5_target_spin.setSuffix(" m")
         self._send_j5_btn = QPushButton("Send J5")
         self._j5_use_actual_btn = QPushButton("Use actual")
+        set_button_role(self._send_j5_btn, "magenta")
         self._send_j5_btn.clicked.connect(self._send_j5_command)
         self._j5_use_actual_btn.clicked.connect(self._use_actual_j5)
 
@@ -926,6 +1167,7 @@ class TargetPublisherWindow(QMainWindow):
         self._send_if_changed.setChecked(True)
 
         send_btn = QPushButton("Send")
+        set_button_role(send_btn, "primary")
         send_btn.clicked.connect(self._send_target)
         self._send_btn = send_btn
         reset_btn = QPushButton("Reset to current")
@@ -973,6 +1215,15 @@ class TargetPublisherWindow(QMainWindow):
         vacuum_off = QPushButton("Vacuum OFF")
         payload_on = QPushButton("Payload ON")
         payload_off = QPushButton("Payload OFF")
+        set_button_role(self._start_mujoco_btn, "safe")
+        set_button_role(self._stop_mujoco_btn, "danger")
+        set_button_role(self._start_real_btn, "safe")
+        set_button_role(self._stop_real_btn, "danger")
+        set_button_role(self._start_middleware_btn, "safe")
+        set_button_role(self._stop_middleware_btn, "danger")
+        set_button_role(self._run_action_set_btn, "primary")
+        set_button_role(vacuum_on, "warn")
+        set_button_role(payload_on, "warn")
 
         self._start_mujoco_btn.clicked.connect(self._start_mujoco)
         self._stop_mujoco_btn.clicked.connect(self._stop_mujoco)
@@ -1039,8 +1290,10 @@ class TargetPublisherWindow(QMainWindow):
         box = QGroupBox("Log")
         layout = QVBoxLayout(box)
         self._log_view = QPlainTextEdit()
+        self._log_view.setObjectName("logView")
         self._log_view.setReadOnly(True)
         self._log_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._log_view.setMinimumHeight(300)
         layout.addWidget(self._log_view)
         return box
 
@@ -1460,12 +1713,39 @@ class TargetPublisherWindow(QMainWindow):
             status_parts.append("Middleware running")
         text = ", ".join(status_parts) if status_parts else "all stopped"
         self._process_status_label.setText(text)
+        self._backend.publish_process_status(
+            {
+                "mujoco": "running" if self._mujoco_stack.is_running() else "stopped",
+                "mujoco_bridge": "running" if self._mujoco_bridge.is_running() else "stopped",
+                "real": "running" if real_running else "stopped",
+                "middleware": "running" if middleware_running else "stopped",
+                "summary": text,
+            }
+        )
+
+    @Slot(str)
+    def _on_remote_control_requested(self, action: str) -> None:
+        handlers = {
+            "start_mujoco": self._start_mujoco,
+            "stop_mujoco": self._stop_mujoco,
+            "start_real": self._start_real,
+            "stop_real": self._stop_real,
+            "start_middleware": self._start_middleware,
+            "stop_middleware": self._stop_middleware,
+        }
+        handler = handlers.get(action)
+        if handler is None:
+            self._append_log("remote control: unknown action {}".format(action))
+            return
+        self._append_log("remote control: {}".format(action))
+        handler()
 
     @Slot(str)
     def _append_log(self, text: str) -> None:
         if not text:
             return
         self._log_view.appendPlainText(text)
+        self._backend.publish_remote_log("host_gui", "info", text)
 
     def shutdown(self) -> None:
         if self._shutdown_started:

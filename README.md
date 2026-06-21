@@ -473,6 +473,26 @@ source rc_moveit/install/setup.bash
 python3 demo/tf_target_cli_publisher.py
 ```
 
+Remote ROS 2 control is also available when the host GUI is running. The host
+GUI exposes `/rc_arm_2/remote/*` Trigger services for MuJoCo / Real /
+Middleware start-stop requests, publishes `/rc_arm_2/remote/log` and
+`/rc_arm_2/remote/process_status`, and answers
+`/rc_arm_2/remote/reachability_request` on
+`/rc_arm_2/remote/reachability_result`. A standalone PySide6 client workspace
+lives at `/home/dust/NewDisk1/remote client`:
+
+```bash
+source /opt/ros/humble/setup.bash
+cd "/home/dust/NewDisk1/remote client"
+colcon build --symlink-install
+./run_remote_client_domain55.sh
+```
+
+Both machines must be on the same LAN, use `ROS_DOMAIN_ID=55`, and allow ROS 2
+DDS discovery traffic through the firewall. This remote-control path does not
+add an application-level safety lock; any trusted machine in the same ROS 2
+domain can send the exposed control requests.
+
 The GUI uses `j4 world` semantics: `0 deg` means the tool is level in the arm's radial vertical plane. It keeps `Editing target`, `Last sent target`, and `Actual current pose` separate, publishes only on `Send`, and supports `Reset to current`, `Home`, `Send if changed only`, `Vacuum ON/OFF`, payload commands, action-set triggers, independent `J5 target (m)` commands, MuJoCo / Real start-stop buttons, and approximate reachability feedback. `Run Action Set` publishes only the action-set ID; it does not overwrite the middleware target point supplied by an external vision publisher. This GUI/executor chain no longer calls MoveIt's `/compute_ik`; `/compute_ik` remains available for teleop and other chains.
 
 Common target executor options:
