@@ -38,7 +38,9 @@ done
 |---|---|---|---|---|
 | `rc_moveit/rc_arm_hardware/src/robstride_can_driver.cpp:1-465`，`rc_moveit/rc_arm_hardware/include/rc_arm_hardware/robstride_can_driver.hpp:38-295`，`rc_moveit/rc_arm_hardware/CMakeLists.txt:27-29` | Robstride 驱动源码存在，但库只编译 `rc_arm_hardware.cpp`；仓内只有 `MotorType/getMotorParams` 被用 | 删除 `.cpp` 和未用类；把 `MotorType/getMotorParams` 拆成小头文件 | 确认没有外部包 include/use `RobstrideCanDriver` | 不可达旧后端，误导维护 |
 | `rc_moveit/dmbot_serial/src/usb2canfd_dm_node.cpp:10-314`，`rc_moveit/dmbot_serial/include/dmbot_serial/usb2canfd_dm_node.hpp:17-57`，`rc_moveit/dmbot_serial/CMakeLists.txt:70-80`，`:107` | 旧独立 USB2CAN 节点订阅 `/debug/final_*` 后下发；当前主链路由 `rc_arm_hardware` 直接 `writeCommands()` | 如果当前架构以 `rc_arm_hardware` 直连为准，删除该节点、头文件和 CMake target | 确认现场没有手动运行 `ros2 run dmbot_serial usb2canfd_dm_node_cpp` | 两条下发路径重复维护，误运行可能双发 |
+done
 | `rc_moveit/dmbot_serial/src/debugger_node.cpp:11-282`，`rc_moveit/dmbot_serial/include/dmbot_serial/debugger_node.hpp:13-37`，`rc_moveit/dmbot_serial/CMakeLists.txt:82-88` | `debugger_node_cpp` 发布旧 `robot_command`，仓内只有旧 `usb2canfd_dm_node_cpp` 消费 | 若删除旧 USB2CAN 节点，同步删除 debugger 节点 | 确认它不是保留的台架工具 | 调试链路依附旧入口 |
+done
 | `rc_moveit/dmbot_serial/src/test.cpp:13-143`，`rc_moveit/dmbot_serial/CMakeLists.txt:54-60` | `test_motor` 是硬编码 SN/CAN ID 的单电机测试程序，含大量实验注释 | 从默认构建/安装删除；必要时移入 `tools/` 或 `examples/` | 确认不作为硬件验收步骤 | 生产包混入一次性测试入口 |
 | `rc_moveit/dmbot_serial/launch/dev_sn.launch:1-7`，`rc_moveit/dmbot_serial/launch/test_motor.launch:1-7` | ROS 1 风格 XML launch 与 `.launch.py` 重复 | 删除 XML 版本，只保留 ROS 2 Python launch | 确认没有脚本调用 XML launch | 同一工具两个入口 |
 | `rc_moveit/dmbot_serial/include/dmbot_serial/protocol/damiao.h:216-218`，`rc_moveit/dmbot_serial/src/protocol/damiao.cpp:138-176` | `Motor_Control(..., simulation_only)` 构造函数仓内无调用 | 删除声明和实现 | 确认外部没有把 `motor` 库当 SDK 用 | 未用 API |

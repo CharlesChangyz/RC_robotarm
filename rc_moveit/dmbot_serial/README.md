@@ -22,12 +22,10 @@ dmbot_serial/
 ├── package.xml                 # ROS 2 包定义
 ├── README.md                   # 本文件
 ├── include/dmbot_serial/       # 头文件目录
-│   ├── debugger_node.hpp       # 调试命令发布器
 │   └── protocol/               # 通信协议
 │       ├── damiao.h            # 达妙电机协议定义
 │       └── usb_class.h         # USB 通信类
 ├── src/                        # 源文件目录
-│   ├── debugger_node.cpp       # 调试节点实现
 │   ├── dev_sn.cpp              # USB 设备序列号查询工具
 │   ├── test.cpp                # 电机功能测试程序
 │   └── protocol/               # 协议实现
@@ -44,31 +42,7 @@ dmbot_serial/
 
 ## 组件说明
 
-### 1. `debugger_node` - 调试命令发布器
-
-**功能**：交互式键盘控制界面，用于测试和调试
-
-**工作流程**：
-- 启动时会显示可用命令列表
-- 监听键盘输入（1-9, 0 分别对应 10 个预定义命令）
-- 每个命令定义不同的电机目标位置和 PID 参数
-- 以 100ms 的周期发布控制命令到 `robot_command` 话题
-
-**预定义命令示例**：
-| 命令 | 功能 |
-|------|------|
-| 1 | 所有电机回到零位，启用电机 |
-| 2 | 电机 2 轻微旋转测试 |
-| 3 | 电机 3 轻微旋转测试 |
-| 4 | 电机 4 轻微旋转测试 |
-| ... | ... |
-
-**特点**：
-- 包含安全的关节限位检查（防止电机超出安全范围）
-- 实时调整的 PID 增益参数
-- 实时摇摆运动控制（swing phase）
-
-### 3. `dev_sn` - USB 设备查询工具
+### `dev_sn` - USB 设备查询工具
 
 **功能**：扫描并列出所有已连接的 USB-CAN-FD 适配器
 
@@ -148,54 +122,11 @@ ros2 run dmbot_serial dev_sn
 
 运行后会显示所有连接的 USB-CAN-FD 设备及其序列号。
 
-#### 2. 启动调试器
-
-```bash
-ros2 run dmbot_serial debugger_node_cpp
-```
-
-#### 3. 使用调试器控制
-
-按键盘数字键 1-9, 0 来切换不同的控制命令：
-- 按 `1`：启用电机，所有关节回零
-- 按 `2-4`：测试各个关节的单独运动
-- 按 `0`：发送第 10 个预定义命令
-- 按 `Ctrl+C`：退出
-
-### 高级配置
-
-#### 自定义控制命令
-
-编辑 [src/debugger_node.cpp](src/debugger_node.cpp) 中的 `create_commands()` 方法来定义新的控制序列。
-
-#### PID 增益调整
-
-在 [include/dmbot_serial/debugger_node.hpp](include/dmbot_serial/debugger_node.hpp) 中调整：
-
-```cpp
-motor_gains_ = {
-    std::pair<float, float>{0.001F, 0.005F},  // 电机0的Kp, Kd
-    {5.0F, 1.0F},                              // 电机1的Kp, Kd
-    ...
-};
-```
-
 ---
 
 ## 通信协议
 
 ### ROS 2 消息格式
-
-**控制命令格式** (`arm_msgs::msg::RobotCommand`)：
-```
-bool is_enable
-MotorCommand[] motor_command (6 个元素)
-  - float q      # 目标位置 (rad)
-  - float dq     # 目标速度 (rad/s)
-  - float tau    # 目标力矩 (Nm)
-  - float kp     # 比例增益
-  - float kd     # 微分增益
-```
 
 **关节状态反馈** (`sensor_msgs::msg::JointState`)：
 ```

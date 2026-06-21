@@ -67,14 +67,6 @@ target_link_libraries(dev_sn PRIVATE
     ${LIBUSB_LIBRARIES}
 )
 
-add_executable(debugger_node_cpp
-  src/debugger_node.cpp
-)
-ament_target_dependencies(debugger_node_cpp
-  rclcpp
-  arm_msgs
-)
-
 add_executable(dm_serial_frame_bridge
   src/dm_serial_frame_bridge.cpp
 )
@@ -92,7 +84,7 @@ install(
 )
 
 install(
-  TARGETS motor dmbot_serial_driver test_motor dev_sn debugger_node_cpp dm_serial_frame_bridge
+  TARGETS motor dmbot_serial_driver test_motor dev_sn dm_serial_frame_bridge
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
