@@ -17,12 +17,11 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import rclpy
 from geometry_msgs.msg import TransformStamped
-from PySide6.QtCore import QObject, QProcess, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QProcess, QSettings, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
-    QDial,
     QDoubleSpinBox,
     QFormLayout,
     QGridLayout,
@@ -58,7 +57,6 @@ SCRIPT_RUN_MUJOCO = ROOT_DIR / "scripts" / "run_rc_arm_mujoco.sh"
 SCRIPT_RUN_MUJOCO_BRIDGE = ROOT_DIR / "scripts" / "run_rc_arm_mujoco_bridge.sh"
 SCRIPT_RUN_REAL = ROOT_DIR / "scripts" / "run_rc_arm_real.sh"
 AUTO_CLEANUP_WAIT_SEC = 1.0
-WHEEL_CONTINUOUS_INTERVAL_MS = 50
 PROJECT_ROS_CLEANUP_PATTERNS = (
     ("middleware", "arm2_middleware"),
     ("executor", "target_pose_moveit_executor.py"),
@@ -136,8 +134,22 @@ QCheckBox {
     font-size: 15px;
     spacing: 8px;
 }
-QDial {
-    background: rgba(255, 43, 243, 18);
+QCheckBox#languageToggle {
+    color: #72f8ff;
+    font: 800 12px "Cascadia Code", "Liberation Mono", monospace;
+    spacing: 6px;
+    padding: 0 4px;
+}
+QCheckBox#languageToggle::indicator {
+    width: 34px;
+    height: 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 234, 255, 135);
+    background: rgba(0, 234, 255, 18);
+}
+QCheckBox#languageToggle::indicator:checked {
+    border: 1px solid #ff2bf3;
+    background: rgba(255, 43, 243, 120);
 }
 QPushButton {
     min-height: 38px;
@@ -153,33 +165,92 @@ QPushButton:hover {
     border: 1px solid #00eaff;
     background: rgba(0, 234, 255, 42);
 }
+QPushButton:focus {
+    border: 1px solid #ffffff;
+    background: rgba(255, 255, 255, 22);
+}
+QPushButton:pressed {
+    color: #020812;
+    border: 1px solid #ffffff;
+    background: #72f8ff;
+}
 QPushButton:disabled {
-    color: #536978;
-    border-color: rgba(83, 105, 120, 80);
-    background: rgba(83, 105, 120, 25);
+    color: #40505d;
+    border-color: rgba(64, 80, 93, 105);
+    background: #060b14;
 }
 QPushButton[role="primary"] {
     border: 1px solid #00eaff;
     background: rgba(0, 234, 255, 58);
+}
+QPushButton[role="primary"]:pressed {
+    color: #020812;
+    border: 1px solid #b8fbff;
+    background: #00eaff;
+}
+QPushButton[role="primary"]:disabled {
+    color: #36525c;
+    border: 1px solid rgba(0, 234, 255, 42);
+    background: rgba(0, 234, 255, 10);
 }
 QPushButton[role="safe"] {
     color: #deffe9;
     border: 1px solid #39ff88;
     background: rgba(57, 255, 136, 34);
 }
+QPushButton[role="safe"]:pressed {
+    color: #021109;
+    border: 1px solid #bbffd4;
+    background: #39ff88;
+}
+QPushButton[role="safe"]:disabled {
+    color: #365045;
+    border: 1px solid rgba(57, 255, 136, 38);
+    background: rgba(57, 255, 136, 9);
+}
 QPushButton[role="danger"] {
     color: #ffe1e8;
     border: 1px solid #ff2f5f;
     background: rgba(255, 47, 95, 36);
+}
+QPushButton[role="danger"]:pressed {
+    color: #19020a;
+    border: 1px solid #ffc0cf;
+    background: #ff2f5f;
+}
+QPushButton[role="danger"]:disabled {
+    color: #5c3942;
+    border: 1px solid rgba(255, 47, 95, 38);
+    background: rgba(255, 47, 95, 9);
 }
 QPushButton[role="warn"] {
     color: #fff0b6;
     border: 1px solid #ffd23f;
     background: rgba(255, 210, 63, 34);
 }
+QPushButton[role="warn"]:pressed {
+    color: #171004;
+    border: 1px solid #fff0b6;
+    background: #ffd23f;
+}
+QPushButton[role="warn"]:disabled {
+    color: #5c5135;
+    border: 1px solid rgba(255, 210, 63, 40);
+    background: rgba(255, 210, 63, 9);
+}
 QPushButton[role="magenta"] {
     border: 1px solid #ff2bf3;
     background: rgba(255, 43, 243, 34);
+}
+QPushButton[role="magenta"]:pressed {
+    color: #170216;
+    border: 1px solid #ffc2fb;
+    background: #ff2bf3;
+}
+QPushButton[role="magenta"]:disabled {
+    color: #5c3959;
+    border: 1px solid rgba(255, 43, 243, 38);
+    background: rgba(255, 43, 243, 9);
 }
 QPlainTextEdit#logView {
     color: #c8fbff;
@@ -196,16 +267,47 @@ def set_button_role(button: QPushButton, role: str) -> None:
     button.setProperty("role", role)
 
 
-def middleware_command() -> List[str]:
-    action_sets_file = RC_MOVEIT_DIR / "rc_arm2_middleware" / "config" / "action_sets.yaml"
-    command = (
-        f"cd {shlex.quote(str(RC_MOVEIT_DIR))} && "
-        "source /opt/ros/humble/setup.bash && "
-        "source install/setup.bash && "
-        "ros2 run rc_arm2_middleware arm2_middleware --ros-args "
-        f"-p action_sets_file:={shlex.quote(str(action_sets_file))}"
-    )
-    return ["bash", "-lc", command]
+UI_TEXT = {
+    "target_editor": {"en": "Target Editor", "zh": "目标编辑"},
+    "reachability": {"en": "Reachability", "zh": "可达性"},
+    "system_control": {"en": "System Control", "zh": "系统控制"},
+    "status": {"en": "Status", "zh": "状态"},
+    "log": {"en": "Log", "zh": "日志"},
+    "j4_world": {"en": "j4 world (deg)", "zh": "j4 世界角 (deg)"},
+    "xyz_step": {"en": "xyz step", "zh": "XYZ 步长"},
+    "j4_step": {"en": "j4 step", "zh": "J4 步长"},
+    "j5_target": {"en": "J5 target (m)", "zh": "J5 目标 (m)"},
+    "send_j5": {"en": "Send J5", "zh": "发送 J5"},
+    "use_actual": {"en": "Use actual", "zh": "使用实际值"},
+    "send_if_changed": {"en": "Send if changed only", "zh": "仅变化时发送"},
+    "send": {"en": "Send", "zh": "发送"},
+    "reset_current": {"en": "Reset to current", "zh": "重置到当前"},
+    "home": {"en": "Home", "zh": "回零"},
+    "reach_status": {"en": "Status", "zh": "状态"},
+    "x_range": {"en": "x range", "zh": "X 范围"},
+    "y_range": {"en": "y range", "zh": "Y 范围"},
+    "z_range": {"en": "z range", "zh": "Z 范围"},
+    "start_mujoco": {"en": "Start MuJoCo", "zh": "启动 MuJoCo"},
+    "stop_mujoco": {"en": "Stop MuJoCo", "zh": "停止 MuJoCo"},
+    "start_real": {"en": "Start Real", "zh": "启动实机"},
+    "stop_real": {"en": "Stop Real", "zh": "停止实机"},
+    "vacuum_on": {"en": "Vacuum ON", "zh": "吸盘开"},
+    "vacuum_off": {"en": "Vacuum OFF", "zh": "吸盘关"},
+    "payload_on": {"en": "Payload ON", "zh": "负载开"},
+    "payload_off": {"en": "Payload OFF", "zh": "负载关"},
+    "action_set_id": {"en": "Action set id", "zh": "动作集 ID"},
+    "run_action_set": {"en": "Run Action Set", "zh": "执行动作集"},
+    "actual_pose": {"en": "Actual current pose", "zh": "当前实际位姿"},
+    "editing_target": {"en": "Editing target", "zh": "编辑目标"},
+    "last_sent": {"en": "Last sent target", "zh": "上次发送目标"},
+    "last_send_result": {"en": "Last send result", "zh": "上次发送结果"},
+    "last_vacuum": {"en": "Last vacuum command", "zh": "上次吸盘命令"},
+    "j5_actual": {"en": "J5 actual (m)", "zh": "J5 实际值 (m)"},
+    "last_j5": {"en": "Last J5 command (m)", "zh": "上次 J5 命令 (m)"},
+    "last_middleware": {"en": "Last middleware command", "zh": "上次中间件命令"},
+    "payload_active": {"en": "Payload active", "zh": "负载状态"},
+    "process_status": {"en": "Process status", "zh": "进程状态"},
+}
 
 
 @dataclass
@@ -831,8 +933,13 @@ class TargetPublisherWindow(QMainWindow):
         self._editing_dirty = False
         self._actual_pose_ready = False
         self._syncing_editor = False
-        self._wheel_drag_origin: Dict[str, float] = {}
         self._shutdown_started = False
+        self._settings = QSettings("RCArm", "TfTargetCliPublisher")
+        self._language = str(self._settings.value("language", "en"))
+        if self._language not in ("en", "zh"):
+            self._language = "en"
+        self._translatable_widgets: List[Tuple[object, str]] = []
+        self._language_toggle: Optional[QCheckBox] = None
 
         self.setWindowTitle("RC Arm TF Target Publisher")
         self.setMinimumSize(1280, 760)
@@ -856,8 +963,7 @@ class TargetPublisherWindow(QMainWindow):
         self._mujoco_stack = ControlProcess(["bash", str(SCRIPT_RUN_MUJOCO)], "MuJoCo stack")
         self._mujoco_bridge = ControlProcess(["bash", str(SCRIPT_RUN_MUJOCO_BRIDGE)], "MuJoCo bridge")
         self._real_stack = ControlProcess(["bash", str(SCRIPT_RUN_REAL)], "Real stack")
-        self._middleware_stack = ControlProcess(middleware_command(), "Middleware")
-        for proc in (self._mujoco_stack, self._mujoco_bridge, self._real_stack, self._middleware_stack):
+        for proc in (self._mujoco_stack, self._mujoco_bridge, self._real_stack):
             proc.log_line.connect(self._append_log)
             proc.state_changed.connect(self._on_process_state_changed)
 
@@ -865,11 +971,9 @@ class TargetPublisherWindow(QMainWindow):
         self._reachability_timer.setInterval(300)
         self._reachability_timer.setSingleShot(True)
         self._reachability_timer.timeout.connect(self._request_reachability)
-        self._wheel_send_timer = QTimer(self)
-        self._wheel_send_timer.setInterval(WHEEL_CONTINUOUS_INTERVAL_MS)
-        self._wheel_send_timer.timeout.connect(self._on_wheel_send_timer)
 
         self._build_ui()
+        self._apply_language()
         self._install_shortcuts()
         self._sync_editing_widgets()
         self._update_status_labels()
@@ -1000,6 +1104,44 @@ class TargetPublisherWindow(QMainWindow):
             announce="clearing project ROS processes",
         )
 
+    def _text(self, key: str) -> str:
+        return UI_TEXT[key][self._language]
+
+    def _register_text(self, widget, key: str):
+        self._translatable_widgets.append((widget, key))
+        self._apply_widget_text(widget, key)
+        return widget
+
+    def _apply_widget_text(self, widget, key: str) -> None:
+        text = self._text(key)
+        if isinstance(widget, QGroupBox):
+            widget.setTitle(text)
+        else:
+            widget.setText(text)
+
+    def _build_language_toggle(self) -> QCheckBox:
+        toggle = QCheckBox()
+        toggle.setObjectName("languageToggle")
+        toggle.setToolTip("Switch language / 切换语言")
+        toggle.toggled.connect(self._set_language)
+        self._language_toggle = toggle
+        return toggle
+
+    def _apply_language(self) -> None:
+        for widget, key in self._translatable_widgets:
+            self._apply_widget_text(widget, key)
+        if self._language_toggle is not None:
+            self._language_toggle.blockSignals(True)
+            self._language_toggle.setChecked(self._language == "zh")
+            self._language_toggle.setText("中" if self._language == "zh" else "EN")
+            self._language_toggle.blockSignals(False)
+        self._settings.setValue("language", self._language)
+
+    @Slot(bool)
+    def _set_language(self, checked: bool) -> None:
+        self._language = "zh" if checked else "en"
+        self._apply_language()
+
     def _auto_cleanup_ros_duplicates(
         self,
         node_names: List[str],
@@ -1061,6 +1203,10 @@ class TargetPublisherWindow(QMainWindow):
         bottom.setSpacing(12)
         root.addLayout(top, stretch=3)
         root.addLayout(bottom, stretch=2)
+        footer = QHBoxLayout()
+        footer.addWidget(self._build_language_toggle(), stretch=0)
+        footer.addStretch(1)
+        root.addLayout(footer, stretch=0)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.NoFrame)
@@ -1074,22 +1220,13 @@ class TargetPublisherWindow(QMainWindow):
         bottom.addWidget(self._build_log_panel(), stretch=6)
 
     def _build_target_editor(self) -> QWidget:
-        box = QGroupBox("Target Editor")
+        box = self._register_text(QGroupBox(), "target_editor")
         layout = QGridLayout(box)
 
         self._xyz_step_spin = QDoubleSpinBox()
         self._xyz_step_spin.setDecimals(3)
         self._xyz_step_spin.setRange(0.001, 1.0)
         self._xyz_step_spin.setValue(0.1)
-        self._wheel_send_rate_spin = QDoubleSpinBox()
-        self._wheel_send_rate_spin.setDecimals(1)
-        self._wheel_send_rate_spin.setRange(1.0, 60.0)
-        self._wheel_send_rate_spin.setValue(1000.0 / WHEEL_CONTINUOUS_INTERVAL_MS)
-        self._wheel_send_rate_spin.setSuffix(" Hz")
-        self._wheel_send_rate_spin.valueChanged.connect(self._on_wheel_send_rate_changed)
-        self._wheel_continuous_send_check = QCheckBox("Continuous send")
-        self._wheel_continuous_send_check.setChecked(True)
-        self._wheel_continuous_send_check.toggled.connect(self._on_wheel_continuous_toggled)
         self._j4_step_spin = QDoubleSpinBox()
         self._j4_step_spin.setDecimals(1)
         self._j4_step_spin.setRange(0.1, 180.0)
@@ -1099,15 +1236,13 @@ class TargetPublisherWindow(QMainWindow):
         self._j5_target_spin.setRange(-10.0, 10.0)
         self._j5_target_spin.setSingleStep(0.001)
         self._j5_target_spin.setSuffix(" m")
-        self._send_j5_btn = QPushButton("Send J5")
-        self._j5_use_actual_btn = QPushButton("Use actual")
+        self._send_j5_btn = self._register_text(QPushButton(), "send_j5")
+        self._j5_use_actual_btn = self._register_text(QPushButton(), "use_actual")
         set_button_role(self._send_j5_btn, "magenta")
         self._send_j5_btn.clicked.connect(self._send_j5_command)
         self._j5_use_actual_btn.clicked.connect(self._use_actual_j5)
 
         self._field_spins = {}
-        self._axis_wheels = {}
-        self._axis_wheel_delta_labels = {}
         rows = [
             ("x", "x", "m"),
             ("y", "y", "m"),
@@ -1115,7 +1250,7 @@ class TargetPublisherWindow(QMainWindow):
             ("j4", "j4 world", "deg"),
         ]
         for row, (field_key, display_name, unit) in enumerate(rows):
-            label = QLabel(f"{display_name} ({unit})")
+            label = self._register_text(QLabel(), "j4_world") if field_key == "j4" else QLabel(f"{display_name} ({unit})")
             spin = QDoubleSpinBox()
             spin.setDecimals(4 if field_key != "j4" else 2)
             if field_key == "j4":
@@ -1131,49 +1266,28 @@ class TargetPublisherWindow(QMainWindow):
             layout.addWidget(minus, row, 1)
             layout.addWidget(spin, row, 2)
             layout.addWidget(plus, row, 3)
-            if field_key in ("x", "y", "z"):
-                dial = QDial()
-                dial.setRange(-20, 20)
-                dial.setValue(0)
-                dial.setNotchesVisible(True)
-                dial.setWrapping(False)
-                dial.sliderPressed.connect(lambda axis=field_key: self._on_axis_wheel_pressed(axis))
-                dial.valueChanged.connect(
-                    lambda value, axis=field_key: self._on_axis_wheel_changed(axis, value)
-                )
-                dial.sliderReleased.connect(lambda axis=field_key: self._on_axis_wheel_released(axis))
-                delta_label = QLabel("0.0000 m")
-                layout.addWidget(dial, row, 4)
-                layout.addWidget(delta_label, row, 5)
-                self._axis_wheels[field_key] = dial
-                self._axis_wheel_delta_labels[field_key] = delta_label
             self._field_spins[field_key] = spin
 
-        layout.addWidget(QLabel("xyz step"), 4, 0)
+        layout.addWidget(self._register_text(QLabel(), "xyz_step"), 4, 0)
         layout.addWidget(self._xyz_step_spin, 4, 2)
-        layout.addWidget(QLabel("xyz wheel"), 4, 4)
-        layout.addWidget(QLabel("j4 step"), 5, 0)
+        layout.addWidget(self._register_text(QLabel(), "j4_step"), 5, 0)
         layout.addWidget(self._j4_step_spin, 5, 2)
-        layout.addWidget(QLabel("send rate"), 5, 4)
-        layout.addWidget(self._wheel_send_rate_spin, 5, 5)
-        layout.addWidget(self._wheel_continuous_send_check, 6, 4, 1, 2)
-        layout.addWidget(QLabel("hold for continuous move"), 7, 4, 1, 2)
-        layout.addWidget(QLabel("J5 target (m)"), 6, 0)
+        layout.addWidget(self._register_text(QLabel(), "j5_target"), 6, 0)
         layout.addWidget(self._j5_target_spin, 6, 2)
         layout.addWidget(self._send_j5_btn, 6, 3)
         layout.addWidget(self._j5_use_actual_btn, 7, 2, 1, 2)
 
-        self._send_if_changed = QCheckBox("Send if changed only")
+        self._send_if_changed = self._register_text(QCheckBox(), "send_if_changed")
         self._send_if_changed.setChecked(True)
 
-        send_btn = QPushButton("Send")
+        send_btn = self._register_text(QPushButton(), "send")
         set_button_role(send_btn, "primary")
         send_btn.clicked.connect(self._send_target)
         self._send_btn = send_btn
-        reset_btn = QPushButton("Reset to current")
+        reset_btn = self._register_text(QPushButton(), "reset_current")
         reset_btn.clicked.connect(self._reset_to_current)
         self._reset_btn = reset_btn
-        home_btn = QPushButton("Home")
+        home_btn = self._register_text(QPushButton(), "home")
         home_btn.clicked.connect(self._reset_to_home)
         self._home_btn = home_btn
 
@@ -1184,7 +1298,7 @@ class TargetPublisherWindow(QMainWindow):
         return box
 
     def _build_reachability_panel(self) -> QWidget:
-        box = QGroupBox("Reachability")
+        box = self._register_text(QGroupBox(), "reachability")
         layout = QFormLayout(box)
         self._reachability_label = QLabel("Unknown")
         self._range_labels = {
@@ -1192,35 +1306,31 @@ class TargetPublisherWindow(QMainWindow):
             "y": QLabel("NA"),
             "z": QLabel("NA"),
         }
-        layout.addRow("Status", self._reachability_label)
-        layout.addRow("x range", self._range_labels["x"])
-        layout.addRow("y range", self._range_labels["y"])
-        layout.addRow("z range", self._range_labels["z"])
+        layout.addRow(self._register_text(QLabel(), "reach_status"), self._reachability_label)
+        layout.addRow(self._register_text(QLabel(), "x_range"), self._range_labels["x"])
+        layout.addRow(self._register_text(QLabel(), "y_range"), self._range_labels["y"])
+        layout.addRow(self._register_text(QLabel(), "z_range"), self._range_labels["z"])
         return box
 
     def _build_system_panel(self) -> QWidget:
-        box = QGroupBox("System Control")
+        box = self._register_text(QGroupBox(), "system_control")
         layout = QVBoxLayout(box)
-        self._start_mujoco_btn = QPushButton("Start MuJoCo")
-        self._stop_mujoco_btn = QPushButton("Stop MuJoCo")
-        self._start_real_btn = QPushButton("Start Real")
-        self._stop_real_btn = QPushButton("Stop Real")
-        self._start_middleware_btn = QPushButton("Start Middleware")
-        self._stop_middleware_btn = QPushButton("Stop Middleware")
+        self._start_mujoco_btn = self._register_text(QPushButton(), "start_mujoco")
+        self._stop_mujoco_btn = self._register_text(QPushButton(), "stop_mujoco")
+        self._start_real_btn = self._register_text(QPushButton(), "start_real")
+        self._stop_real_btn = self._register_text(QPushButton(), "stop_real")
         self._action_set_spin = QSpinBox()
         self._action_set_spin.setRange(1, 999)
         self._action_set_spin.setValue(1)
-        self._run_action_set_btn = QPushButton("Run Action Set")
-        vacuum_on = QPushButton("Vacuum ON")
-        vacuum_off = QPushButton("Vacuum OFF")
-        payload_on = QPushButton("Payload ON")
-        payload_off = QPushButton("Payload OFF")
+        self._run_action_set_btn = self._register_text(QPushButton(), "run_action_set")
+        vacuum_on = self._register_text(QPushButton(), "vacuum_on")
+        vacuum_off = self._register_text(QPushButton(), "vacuum_off")
+        payload_on = self._register_text(QPushButton(), "payload_on")
+        payload_off = self._register_text(QPushButton(), "payload_off")
         set_button_role(self._start_mujoco_btn, "safe")
         set_button_role(self._stop_mujoco_btn, "danger")
         set_button_role(self._start_real_btn, "safe")
         set_button_role(self._stop_real_btn, "danger")
-        set_button_role(self._start_middleware_btn, "safe")
-        set_button_role(self._stop_middleware_btn, "danger")
         set_button_role(self._run_action_set_btn, "primary")
         set_button_role(vacuum_on, "warn")
         set_button_role(payload_on, "warn")
@@ -1229,8 +1339,6 @@ class TargetPublisherWindow(QMainWindow):
         self._stop_mujoco_btn.clicked.connect(self._stop_mujoco)
         self._start_real_btn.clicked.connect(self._start_real)
         self._stop_real_btn.clicked.connect(self._stop_real)
-        self._start_middleware_btn.clicked.connect(self._start_middleware)
-        self._stop_middleware_btn.clicked.connect(self._stop_middleware)
         self._run_action_set_btn.clicked.connect(self._run_action_set)
         vacuum_on.clicked.connect(lambda: self._backend.queue_vacuum(True))
         vacuum_off.clicked.connect(lambda: self._backend.queue_vacuum(False))
@@ -1242,8 +1350,6 @@ class TargetPublisherWindow(QMainWindow):
             self._stop_mujoco_btn,
             self._start_real_btn,
             self._stop_real_btn,
-            self._start_middleware_btn,
-            self._stop_middleware_btn,
             vacuum_on,
             vacuum_off,
             payload_on,
@@ -1251,7 +1357,7 @@ class TargetPublisherWindow(QMainWindow):
         ):
             layout.addWidget(widget)
         action_row = QHBoxLayout()
-        action_row.addWidget(QLabel("Action set id"))
+        action_row.addWidget(self._register_text(QLabel(), "action_set_id"))
         action_row.addWidget(self._action_set_spin, stretch=1)
         layout.addLayout(action_row)
         layout.addWidget(self._run_action_set_btn)
@@ -1259,13 +1365,12 @@ class TargetPublisherWindow(QMainWindow):
         return box
 
     def _build_status_panel(self) -> QWidget:
-        box = QGroupBox("Status")
+        box = self._register_text(QGroupBox(), "status")
         layout = QFormLayout(box)
         self._actual_label = QLabel("NA")
         self._editing_label = QLabel("NA")
         self._last_sent_label = QLabel("NA")
         self._send_status_label = QLabel("idle")
-        self._wheel_status_label = QLabel("idle")
         self._vacuum_status_label = QLabel("unknown")
         self._j5_actual_label = QLabel("waiting")
         self._j5_command_status_label = QLabel("idle")
@@ -1273,21 +1378,20 @@ class TargetPublisherWindow(QMainWindow):
         self._payload_status_label = QLabel("false")
         self._process_status_label = QLabel("all stopped")
 
-        layout.addRow("Actual current pose", self._actual_label)
-        layout.addRow("Editing target", self._editing_label)
-        layout.addRow("Last sent target", self._last_sent_label)
-        layout.addRow("Last send result", self._send_status_label)
-        layout.addRow("XYZ wheel", self._wheel_status_label)
-        layout.addRow("Last vacuum command", self._vacuum_status_label)
-        layout.addRow("J5 actual (m)", self._j5_actual_label)
-        layout.addRow("Last J5 command (m)", self._j5_command_status_label)
-        layout.addRow("Last middleware command", self._middleware_status_label)
-        layout.addRow("Payload active", self._payload_status_label)
-        layout.addRow("Process status", self._process_status_label)
+        layout.addRow(self._register_text(QLabel(), "actual_pose"), self._actual_label)
+        layout.addRow(self._register_text(QLabel(), "editing_target"), self._editing_label)
+        layout.addRow(self._register_text(QLabel(), "last_sent"), self._last_sent_label)
+        layout.addRow(self._register_text(QLabel(), "last_send_result"), self._send_status_label)
+        layout.addRow(self._register_text(QLabel(), "last_vacuum"), self._vacuum_status_label)
+        layout.addRow(self._register_text(QLabel(), "j5_actual"), self._j5_actual_label)
+        layout.addRow(self._register_text(QLabel(), "last_j5"), self._j5_command_status_label)
+        layout.addRow(self._register_text(QLabel(), "last_middleware"), self._middleware_status_label)
+        layout.addRow(self._register_text(QLabel(), "payload_active"), self._payload_status_label)
+        layout.addRow(self._register_text(QLabel(), "process_status"), self._process_status_label)
         return box
 
     def _build_log_panel(self) -> QWidget:
-        box = QGroupBox("Log")
+        box = self._register_text(QGroupBox(), "log")
         layout = QVBoxLayout(box)
         self._log_view = QPlainTextEdit()
         self._log_view.setObjectName("logView")
@@ -1364,12 +1468,6 @@ class TargetPublisherWindow(QMainWindow):
         self._send_btn.setEnabled(self._actual_pose_ready)
         self._run_action_set_btn.setEnabled(self._actual_pose_ready)
         self._action_set_spin.setEnabled(self._actual_pose_ready)
-        if self._wheel_drag_origin:
-            active_axes = ",".join(sorted(self._wheel_drag_origin.keys()))
-            mode = "continuous" if self._wheel_continuous_send_check.isChecked() else "step"
-            self._wheel_status_label.setText(f"dragging {active_axes} ({mode})")
-        else:
-            self._wheel_status_label.setText("idle")
 
     def _request_reachability(self) -> None:
         if not self._actual_pose_ready:
@@ -1383,87 +1481,6 @@ class TargetPublisherWindow(QMainWindow):
         self._editing_dirty = True
         self._update_status_labels()
         self._reachability_timer.start()
-
-    def _wheel_send_period_sec(self) -> float:
-        return 1.0 / max(1.0, self._wheel_send_rate_spin.value())
-
-    def _axis_wheel_delta(self, axis: str) -> float:
-        return float(self._axis_wheels[axis].value()) * self._xyz_step_spin.value()
-
-    def _set_axis_wheel_delta_label(self, axis: str, delta: float) -> None:
-        self._axis_wheel_delta_labels[axis].setText("{:+.4f} m".format(delta))
-
-    def _publish_axis_wheel_target(self) -> None:
-        if not self._actual_pose_ready:
-            self._wheel_status_label.setText("blocked: waiting for actual pose")
-            return
-        self._editing_target = self._read_editing_target()
-        self._backend.queue_send_target(self._editing_target, False)
-        self._backend.queue_reachability(self._editing_target)
-
-    def _on_axis_wheel_pressed(self, axis: str) -> None:
-        self._wheel_drag_origin[axis] = self._field_spins[axis].value()
-        self._set_axis_wheel_delta_label(axis, 0.0)
-        if self._wheel_continuous_send_check.isChecked() and not self._wheel_send_timer.isActive():
-            self._wheel_send_timer.setInterval(max(1, int(round(self._wheel_send_period_sec() * 1000.0))))
-            self._wheel_send_timer.start()
-        self._update_status_labels()
-
-    def _on_axis_wheel_changed(self, axis: str, value: int) -> None:
-        if axis not in self._wheel_drag_origin:
-            self._set_axis_wheel_delta_label(axis, 0.0)
-            return
-        del value
-        delta = self._axis_wheel_delta(axis)
-        self._set_axis_wheel_delta_label(axis, delta)
-        if self._wheel_continuous_send_check.isChecked():
-            self._apply_axis_wheel_motion(force=True)
-        else:
-            if abs(delta) > 1.0e-9:
-                self._field_spins[axis].setValue(self._field_spins[axis].value() + delta)
-                self._publish_axis_wheel_target()
-
-    def _on_axis_wheel_released(self, axis: str) -> None:
-        self._wheel_drag_origin.pop(axis, None)
-        dial = self._axis_wheels[axis]
-        dial.blockSignals(True)
-        dial.setValue(0)
-        dial.blockSignals(False)
-        self._set_axis_wheel_delta_label(axis, 0.0)
-        if not self._wheel_drag_origin:
-            self._wheel_send_timer.stop()
-        self._update_status_labels()
-
-    def _on_wheel_send_rate_changed(self, _value: float) -> None:
-        self._wheel_send_timer.setInterval(max(1, int(round(self._wheel_send_period_sec() * 1000.0))))
-
-    def _on_wheel_continuous_toggled(self, enabled: bool) -> None:
-        if enabled:
-            if self._wheel_drag_origin and not self._wheel_send_timer.isActive():
-                self._wheel_send_timer.setInterval(max(1, int(round(self._wheel_send_period_sec() * 1000.0))))
-                self._wheel_send_timer.start()
-        else:
-            self._wheel_send_timer.stop()
-        self._update_status_labels()
-
-    def _apply_axis_wheel_motion(self, force: bool = False) -> None:
-        if not self._wheel_drag_origin:
-            return
-
-        moved_axes = []
-        for axis in list(self._wheel_drag_origin.keys()):
-            delta = self._axis_wheel_delta(axis)
-            self._set_axis_wheel_delta_label(axis, delta)
-            if abs(delta) <= 1.0e-9:
-                continue
-            self._field_spins[axis].setValue(self._field_spins[axis].value() + delta)
-            moved_axes.append(axis)
-
-        if moved_axes:
-            self._publish_axis_wheel_target()
-
-    def _on_wheel_send_timer(self) -> None:
-        self._apply_axis_wheel_motion()
 
     def _send_target(self) -> None:
         self._editing_target = self._read_editing_target()
@@ -1676,19 +1693,8 @@ class TargetPublisherWindow(QMainWindow):
         self._real_stack.stop()
         self._refresh_process_buttons()
 
-    def _start_middleware(self) -> None:
-        if not self._auto_cleanup_ros_duplicates(
-            ["/arm2_middleware"],
-            "Duplicate Middleware Nodes",
-            blocked_status=self._process_status_label,
-        ):
-            return
-        self._middleware_stack.start()
-        self._refresh_process_buttons()
-
-    def _stop_middleware(self) -> None:
-        self._middleware_stack.stop()
-        self._refresh_process_buttons()
+    def _middleware_managed_by_stack(self) -> None:
+        self._append_log("middleware is managed by Real/MuJoCo stack; use Start/Stop Real or MuJoCo")
 
     @Slot(str)
     def _on_process_state_changed(self, _text: str) -> None:
@@ -1697,20 +1703,18 @@ class TargetPublisherWindow(QMainWindow):
     def _refresh_process_buttons(self) -> None:
         mujoco_running = self._mujoco_stack.is_running() or self._mujoco_bridge.is_running()
         real_running = self._real_stack.is_running()
-        middleware_running = self._middleware_stack.is_running()
+        stack_running = mujoco_running or real_running
         self._start_mujoco_btn.setEnabled(not mujoco_running and not real_running)
         self._start_real_btn.setEnabled(not real_running and not mujoco_running)
         self._stop_mujoco_btn.setEnabled(mujoco_running)
         self._stop_real_btn.setEnabled(real_running)
-        self._start_middleware_btn.setEnabled(not middleware_running)
-        self._stop_middleware_btn.setEnabled(middleware_running)
         status_parts = []
         if mujoco_running:
             status_parts.append("MuJoCo running")
         if real_running:
             status_parts.append("Real running")
-        if middleware_running:
-            status_parts.append("Middleware running")
+        if stack_running:
+            status_parts.append("Middleware managed by stack")
         text = ", ".join(status_parts) if status_parts else "all stopped"
         self._process_status_label.setText(text)
         self._backend.publish_process_status(
@@ -1718,7 +1722,7 @@ class TargetPublisherWindow(QMainWindow):
                 "mujoco": "running" if self._mujoco_stack.is_running() else "stopped",
                 "mujoco_bridge": "running" if self._mujoco_bridge.is_running() else "stopped",
                 "real": "running" if real_running else "stopped",
-                "middleware": "running" if middleware_running else "stopped",
+                "middleware": "managed_by_stack" if stack_running else "stopped",
                 "summary": text,
             }
         )
@@ -1730,8 +1734,8 @@ class TargetPublisherWindow(QMainWindow):
             "stop_mujoco": self._stop_mujoco,
             "start_real": self._start_real,
             "stop_real": self._stop_real,
-            "start_middleware": self._start_middleware,
-            "stop_middleware": self._stop_middleware,
+            "start_middleware": self._middleware_managed_by_stack,
+            "stop_middleware": self._middleware_managed_by_stack,
         }
         handler = handlers.get(action)
         if handler is None:
@@ -1754,7 +1758,6 @@ class TargetPublisherWindow(QMainWindow):
         self._mujoco_stack.stop()
         self._mujoco_bridge.stop()
         self._real_stack.stop()
-        self._middleware_stack.stop()
         self._backend.stop()
 
     def closeEvent(self, event) -> None:  # noqa: N802
