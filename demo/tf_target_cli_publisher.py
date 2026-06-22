@@ -80,6 +80,8 @@ REMOTE_LOG_TOPIC = "/rc_arm_2/remote/log"
 REMOTE_PROCESS_STATUS_TOPIC = "/rc_arm_2/remote/process_status"
 REMOTE_REACHABILITY_REQUEST_TOPIC = "/rc_arm_2/remote/reachability_request"
 REMOTE_REACHABILITY_RESULT_TOPIC = "/rc_arm_2/remote/reachability_result"
+REMOTE_CLIENT_HEARTBEAT_TOPIC = "/rc_arm_2/remote/client_heartbeat"
+REMOTE_CLIENT_TIMEOUT_SEC = 4.0
 NEON_CONSOLE_STYLESHEET = """
 QMainWindow {
     background: #030712;
@@ -113,6 +115,11 @@ QGroupBox::title {
 QLabel {
     color: #eafcff;
     font-size: 15px;
+}
+QLabel#connectionIndicator {
+    color: #687887;
+    font: 800 13px "Cascadia Code", "Liberation Mono", monospace;
+    padding: 2px 8px;
 }
 QFormLayout QLabel {
     color: #9ab8c6;
@@ -355,6 +362,7 @@ class RosBackend(QObject):
     last_middleware_status = Signal(str)
     backend_error = Signal(str)
     remote_control_requested = Signal(str)
+    remote_clients_updated = Signal(int)
 
     def __init__(self, args) -> None:
         super().__init__()
@@ -372,6 +380,7 @@ class RosBackend(QObject):
         self._payload_sub = None
         self._j5_position_sub = None
         self._joint_state_sub = None
+        self._remote_client_heartbeat_sub = None
         self._remote_reachability_sub = None
         self._remote_log_pub = None
         self._remote_process_status_pub = None
@@ -394,6 +403,8 @@ class RosBackend(QObject):
         self._last_middleware_sent_time = 0.0
         self._latest_joint_map: Dict[str, float] = {}
         self._last_solver_solution: Optional[Dict[str, float]] = None
+        self._remote_clients: Dict[str, float] = {}
+        self._last_remote_client_count = 0
 
     def start(self) -> None:
         if not rclpy.ok():
@@ -428,6 +439,9 @@ class RosBackend(QObject):
             String, REMOTE_REACHABILITY_RESULT_TOPIC, 10
         )
         self._remote_reachability_sub = self._node.create_subscription(String, REMOTE_REACHABILITY_REQUEST_TOPIC, self._on_remote_reachability_request, 10)
+        self._remote_client_heartbeat_sub = self._node.create_subscription(
+            String, REMOTE_CLIENT_HEARTBEAT_TOPIC, self._on_remote_client_heartbeat, 20
+        )
         self._remote_services = [
             self._node.create_service(Trigger, service_name, self._make_remote_trigger_handler(action))
             for service_name, action in REMOTE_SERVICE_ACTIONS.items()
@@ -492,6 +506,40 @@ class RosBackend(QObject):
                 mapping[name] = float(msg.position[idx])
         self._latest_joint_map = mapping
 
+    def _on_remote_client_heartbeat(self, msg: String) -> None:
+        try:
+            payload = json.loads(msg.data)
+            client_id = str(payload.get("client_id", "")).strip()
+        except Exception:
+            return
+        if not client_id:
+            return
+        with self._lock:
+            self._remote_clients[client_id] = time.monotonic()
+            count, _client_ids = self._remote_client_snapshot_locked()
+        if count != self._last_remote_client_count:
+            self._last_remote_client_count = count
+            self.remote_clients_updated.emit(count)
+
+    def _remote_client_snapshot_locked(self) -> Tuple[int, List[str]]:
+        now = time.monotonic()
+        active = {
+            client_id: last_seen
+            for client_id, last_seen in self._remote_clients.items()
+            if now - last_seen <= REMOTE_CLIENT_TIMEOUT_SEC
+        }
+        self._remote_clients = active
+        client_ids = sorted(active.keys())
+        return len(client_ids), client_ids
+
+    def remote_client_snapshot(self) -> Tuple[int, List[str]]:
+        with self._lock:
+            count, client_ids = self._remote_client_snapshot_locked()
+        if count != self._last_remote_client_count:
+            self._last_remote_client_count = count
+            self.remote_clients_updated.emit(count)
+        return count, client_ids
+
     def _make_remote_trigger_handler(
         self, action: str
     ) -> Callable[[object, object], object]:
@@ -529,6 +577,13 @@ class RosBackend(QObject):
         msg = String()
         payload = {"stamp": time.time()}
         payload.update(status)
+        count, client_ids = self.remote_client_snapshot()
+        payload.update(
+            {
+                "remote_clients": count,
+                "remote_client_ids": client_ids,
+            }
+        )
         msg.data = json.dumps(payload, sort_keys=True)
         self._remote_process_status_pub.publish(msg)
 
@@ -959,6 +1014,7 @@ class TargetPublisherWindow(QMainWindow):
         self._backend.last_middleware_status.connect(self._set_middleware_status)
         self._backend.backend_error.connect(self._append_log)
         self._backend.remote_control_requested.connect(self._on_remote_control_requested)
+        self._backend.remote_clients_updated.connect(self._update_connection_indicator)
 
         self._mujoco_stack = ControlProcess(["bash", str(SCRIPT_RUN_MUJOCO)], "MuJoCo stack")
         self._mujoco_bridge = ControlProcess(["bash", str(SCRIPT_RUN_MUJOCO_BRIDGE)], "MuJoCo bridge")
@@ -971,15 +1027,20 @@ class TargetPublisherWindow(QMainWindow):
         self._reachability_timer.setInterval(300)
         self._reachability_timer.setSingleShot(True)
         self._reachability_timer.timeout.connect(self._request_reachability)
+        self._process_status_timer = QTimer(self)
+        self._process_status_timer.setInterval(1000)
+        self._process_status_timer.timeout.connect(self._refresh_process_buttons)
 
         self._build_ui()
         self._apply_language()
+        self._update_connection_indicator(0)
         self._install_shortcuts()
         self._sync_editing_widgets()
         self._update_status_labels()
         self._startup_cleanup_project_ros_processes()
         self._backend.start()
         self._refresh_process_buttons()
+        self._process_status_timer.start()
         self._request_reachability()
 
     def _ros2_env_command(self, ros2_args: List[str]) -> List[str]:
@@ -1142,6 +1203,18 @@ class TargetPublisherWindow(QMainWindow):
         self._language = "zh" if checked else "en"
         self._apply_language()
 
+    @Slot(int)
+    def _update_connection_indicator(self, count: int = 0) -> None:
+        count = max(0, int(count))
+        if hasattr(self, "_backend"):
+            count, _client_ids = self._backend.remote_client_snapshot()
+        if count > 0:
+            self._connection_indicator.setText(f"● Remote clients: {count}")
+            self._connection_indicator.setStyleSheet("color: #39ff88;")
+        else:
+            self._connection_indicator.setText("● Remote clients: 0")
+            self._connection_indicator.setStyleSheet("color: #687887;")
+
     def _auto_cleanup_ros_duplicates(
         self,
         node_names: List[str],
@@ -1205,6 +1278,9 @@ class TargetPublisherWindow(QMainWindow):
         root.addLayout(bottom, stretch=2)
         footer = QHBoxLayout()
         footer.addWidget(self._build_language_toggle(), stretch=0)
+        self._connection_indicator = QLabel()
+        self._connection_indicator.setObjectName("connectionIndicator")
+        footer.addWidget(self._connection_indicator, stretch=0)
         footer.addStretch(1)
         root.addLayout(footer, stretch=0)
         scroll = QScrollArea()
