@@ -76,7 +76,7 @@ unloaded_low_stiffness_kd: 0.0
 unloaded_low_stiffness_torque_bias: 0.0
 
 # 带载动力学/场景参数
-payload_mass: 0.63
+payload_mass: 0.7
 payload_diaginertia_x: 0.022
 payload_diaginertia_y: 0.022
 payload_diaginertia_z: 0.022
@@ -99,12 +99,12 @@ mujoco_payload_initial_pos_z: 0.20
 
 #j1 低刚度 Kp 覆盖值；
 #0 表示回退到 unloaded_low_stiffness_kp
-unloaded_low_stiffness_kp_j1: 5.0
+unloaded_low_stiffness_kp_j1: 3.0
 
 # j1 空载低刚度 Kd 覆盖值；
 # 0 表示回退到 unloaded_low_stiffness_kd
 unloaded_low_stiffness_kd_j1: 0.5
-payload_low_stiffness_kp_j1: 5.0
+payload_low_stiffness_kp_j1: 3.0
 payload_low_stiffness_kd_j1: 0.5
 
 # j2 低刚度 Kp 覆盖值
@@ -127,9 +127,9 @@ payload_low_stiffness_kd_j3: 24.5
 unloaded_low_stiffness_kp_j4: 5.0
 
 # j4 空载低刚度 Kd 覆盖值
-unloaded_low_stiffness_kd_j4: 0.5
+unloaded_low_stiffness_kd_j4: 1.0
 payload_low_stiffness_kp_j4: 5.0
-payload_low_stiffness_kd_j4: 0.5
+payload_low_stiffness_kd_j4: 1.0
 
 # 是否启用 Pinocchio 重力补偿项
 use_pinocchio_gravity: false

@@ -38,7 +38,7 @@ class DmSerialActionBridge:
         return action_id
 
     def completion_frame(self) -> RawCanFrame:
-        return RawCanFrame(can_id=self._complete_id, dlc=0, data=[])
+        return RawCanFrame(can_id=self._complete_id, dlc=8, data=[0] * 8)
 
 
 def resolve_allowed_action_set_ids(
