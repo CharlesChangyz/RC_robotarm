@@ -153,6 +153,43 @@ source rc_moveit/install/setup.bash
 python3 demo/tf_target_cli_publisher.py
 ```
 
+如果需要跨 Wi-Fi 控制另一台电脑上的 ROS 2 节点，优先使用 Fast DDS discovery server，避免依赖不稳定的 DDS multicast discovery。当前确认可用的网络配置：
+
+- 本机 / GUI / discovery server：`192.168.3.83`
+- 远程 ROS 节点电脑：`192.168.3.159`
+- `ROS_DOMAIN_ID=55`
+- `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`
+- `ROS_DISCOVERY_SERVER=192.168.3.83:11811`
+
+启动顺序：
+
+```bash
+# 终端 1，本机 192.168.3.83
+./scripts/run_fastdds_discovery_server.sh
+
+# 终端 2，本机 GUI/代理
+./scripts/run_tf_cli_domain55.sh
+```
+
+`scripts/run_tf_cli_domain55.sh` 会默认导出：
+
+```bash
+ROS_DOMAIN_ID=55
+ROS_LOCALHOST_ONLY=0
+RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+ROS_DISCOVERY_SERVER=192.168.3.83:11811
+```
+
+远程 ROS 节点电脑 `192.168.3.159` 启动节点前也需要设置同一 discovery server：
+
+```bash
+export ROS_DOMAIN_ID=55
+export ROS_LOCALHOST_ONLY=0
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+export ROS_DISCOVERY_SERVER=192.168.3.83:11811
+source /opt/ros/humble/setup.bash
+```
+
 GUI 主要行为：
 
 - `Target Editor`：编辑 `x / y / z / j4 world`，其中 `j4 world = 0 deg` 表示工具水平
