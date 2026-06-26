@@ -824,6 +824,61 @@ action_sets:
         target_spin: 0.0
 
 ##################################################################################################
+# 测试
+  - id: 90
+    name: front_200
+    steps:   
+      - type: move_target_offset_mrl #j5 负责左右横移动
+        label: move_to_default_pose
+        offset_xyz: [0.0, 0.0, 0.0]
+        j5_target_pos: 0.0 #j5 在视觉target_points.y + offset.y的基础上，再+ j5_target_pos
+        target_spin: 90.0 #已经无用target_points.y + offset.z判断
+
+  - id: 91
+    name: front_neg_200
+    steps:
+      - type: move_target_offset_mrl
+        label: move_to_default_pose # 目标略上方
+        offset_xyz: [0.0, 0.0, 0.0]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+  - id: 92
+    name: left_200
+    steps: 
+      - type: move_target_offset_mf
+        label: move_to_default_pose #向左吸
+        offset_xyz: [0.0, 0.0, 0.0]
+        j5_target_pos: 0.0
+        target_spin: 90.0
+
+  - id: 93
+    name: left_neg_200
+    steps:
+      - type: move_target_offset_mf
+        label: move_to_default_pose #向下吸
+        offset_xyz: [0.0, 0.0, 0.0]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+  - id: 94
+    name: right_200
+    steps:
+      - type: move_target_offset_mf
+        label: move_to_default_pose # 向右吸
+        offset_xyz: [0.0, 0.0, 0.0]
+        j5_target_pos: 0.0
+        target_spin: 90.0
+
+  - id: 95
+    name: right_neg_200
+    steps:
+      - type: move_target_offset_mf
+        label: move_to_default_pose # 向下吸
+        offset_xyz: [0.0, 0.0, 0.0]
+        j5_target_pos: 0.0
+        target_spin: 90.0
+  
   - id: 99
     name: watching_front
     steps:
