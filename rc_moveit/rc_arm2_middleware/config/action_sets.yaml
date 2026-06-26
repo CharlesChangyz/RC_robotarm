@@ -6,7 +6,7 @@ action_sets:
   - id: 81
     name: watching_front
     steps:
-      - type: move_fixed_po
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.05]
         target_spin: 0.
@@ -44,6 +44,7 @@ action_sets:
       - type: move_target_offset_mrl #机械臂y=0
         label: move_to_default_pose # 向前伸出吸住
         offset_xyz: [0.15, 0.0, -0.05]
+        j5_target_pos: 0.0
         target_spin: 90.0
 
       - type: set_payload_active
@@ -170,14 +171,14 @@ action_sets:
       
       - type: move_fixed_pose_mf
         label: move_to_default_pose #向左看
-        offset_xyz: [0.0, -0.25, 0.05]
+        xyz: [0.0, -0.25, 0.05]
         j5_target_pos: 0.0 #直接是j5的真实值
         target_spin: 90.0
 
       - type: move_target_offset_mf
         label: move_to_default_pose #向左吸
         offset_xyz: [0.0, -0.15, -0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.14
         target_spin: 90.0
 
       - type: set_payload_active
@@ -238,13 +239,13 @@ action_sets:
       - type: move_fixed_pose_mf
         label: move_to_default_pose #向左看
         xyz: [0.0, 0.25, 0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.14
         target_spin: 0.0
 
       - type: move_target_offset_mf
         label: move_to_default_pose #向下吸
         offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.14
         target_spin: 0.0
 
       - type: set_payload_active
@@ -311,7 +312,7 @@ action_sets:
       - type: move_target_offset_mf
         label: move_to_default_pose # 向右吸
         offset_xyz: [0.0, 0.15, -0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: 0.14
         target_spin: 90.0
 
       - type: set_payload_active
@@ -378,7 +379,7 @@ action_sets:
       - type: move_target_offset_mf
         label: move_to_default_pose # 向下吸
         offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: 0.14
         target_spin: 90.0
 
       - type: set_payload_active
@@ -446,6 +447,7 @@ action_sets:
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向前吸
         offset_xyz: [0.15, 0.0, -0.05]
+        j5_target_pos: 0.0
         target_spin: 90.0
 
       - type: set_payload_active
@@ -496,14 +498,14 @@ action_sets:
       
       - type: move_fixed_pose_mf
         label: move_to_default_pose #向左看
-        offset_xyz: [0.0, -0.25, 0.05]
+        xyz: [0.0, -0.25, 0.05]
         j5_target_pos: 0.0 #直接是j5的真实值
         target_spin: 90.0
 
       - type: move_target_offset_mf
         label: move_to_default_pose #向左吸
         offset_xyz: [0.0, -0.15, -0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.14
         target_spin: 90.0
 
       - type: set_payload_active
@@ -525,14 +527,14 @@ action_sets:
       
       - type: move_fixed_pose_mf
         label: move_to_default_pose #向左看
-        xyz: [0.0, 0.25, 0.05]
+        xyz: [0.0, -0.25, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
 
       - type: move_target_offset_mf
         label: move_to_default_pose #向下吸
         offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.14
         target_spin: 0.0
 
       - type: set_payload_active
@@ -561,7 +563,7 @@ action_sets:
       - type: move_target_offset_mf
         label: move_to_default_pose # 向右吸
         offset_xyz: [0.0, 0.15, -0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: 0.14
         target_spin: 90.0
 
       - type: set_payload_active
@@ -590,7 +592,7 @@ action_sets:
       - type: move_target_offset_mf
         label: move_to_default_pose # 向下吸
         offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: 0.14
         target_spin: 90.0
 
       - type: set_payload_active
@@ -620,6 +622,7 @@ action_sets:
       - type: move_target_offset_mrl #机械臂y=0
         label: move_to_default_pose # 向前伸出吸住
         offset_xyz: [0.15, 0.0, -0.05]
+        j5_target_pos: 0.0
         target_spin: 90.0
 
       - type: set_payload_active
@@ -674,6 +677,7 @@ action_sets:
       - type: move_target_offset_mrl #机械臂y=0
         label: move_to_default_pose # 向前伸出吸住
         offset_xyz: [0.15, 0.0, -0.05]
+        j5_target_pos: 0.0
         target_spin: 90.0
 
       - type: set_payload_active
