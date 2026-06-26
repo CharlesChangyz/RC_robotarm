@@ -647,21 +647,24 @@ class Arm2MiddlewareNode(Node):
             x = self._cached_target_point.x + float(step.offset_xyz[0])
             y = self._cached_target_point.y + float(step.offset_xyz[1])
             z = self._cached_target_point.z + float(step.offset_xyz[2])
+            j5_target_pos = step.j5_target_pos
             if step.step_type.endswith("_mf"):
                 x = 0.0
             else:
+                # _mrl
                 y = 0.0
+                j5_target_pos = float(self._cached_target_point.y) + float(step.j5_target_pos)
             if self._cached_target_point.z <0.1:
                 target_spin_deg = 0.0
             else:
                 target_spin_deg = 90.0
             self._enter_motion_wait(
                 "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
-                % (step.step_type, x, y, z, target_spin_deg, float(step.j5_target_pos)),
-                j5_target_pos=step.j5_target_pos,
+                % (step.step_type, x, y, z, target_spin_deg, float(j5_target_pos)),
+                j5_target_pos=j5_target_pos,
             )
             self._publish_motion_target(x, y, z, target_spin_deg)
-            self._publish_j5_target(step.j5_target_pos)
+            self._publish_j5_target(j5_target_pos)
             return
 
         if step.step_type == "move_fixed_pose":
@@ -674,17 +677,19 @@ class Arm2MiddlewareNode(Node):
 
         if step.step_type in {"move_fixed_pose_mf", "move_fixed_pose_mrl"}:
             x, y, z = step.xyz
+            j5_target_pos = step.j5_target_pos
             if step.step_type.endswith("_mf"):
                 x = 0.0
             else:
                 y = 0.0
+                j5_target_pos = float(step.xyz[1]) + float(step.j5_target_pos)
             self._enter_motion_wait(
                 "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
-                % (step.step_type, x, y, z, step.target_spin_deg, float(step.j5_target_pos)),
-                j5_target_pos=step.j5_target_pos,
+                % (step.step_type, x, y, z, step.target_spin_deg, float(j5_target_pos)),
+                j5_target_pos=j5_target_pos,
             )
             self._publish_motion_target(x, y, z, step.target_spin_deg)
-            self._publish_j5_target(step.j5_target_pos)
+            self._publish_j5_target(j5_target_pos)
             return
 
         self._fail_action_set(f"unsupported step type at runtime: {step.step_type}")
