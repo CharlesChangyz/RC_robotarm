@@ -76,7 +76,7 @@ unloaded_low_stiffness_kd: 0.0
 unloaded_low_stiffness_torque_bias: 0.0
 
 # 带载动力学/场景参数
-payload_mass: 0.7
+payload_mass: 0.75
 payload_diaginertia_x: 0.022
 payload_diaginertia_y: 0.022
 payload_diaginertia_z: 0.022
