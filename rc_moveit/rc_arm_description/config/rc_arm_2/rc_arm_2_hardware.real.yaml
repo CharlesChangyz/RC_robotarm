@@ -39,11 +39,11 @@ dm_dat_baud: 2000000
 dm_control_mode: 0
 
 # 实机启动时先等待 USB2CANFD 稳定，避免过早发使能包
-dm_startup_delay_sec: 5.0
+dm_startup_delay_sec: 2.0
 
 # 激活阶段重复发送使能，降低首次使能包丢失的概率
-dm_enable_retry_count: 3
-dm_enable_retry_interval_sec: 1.0
+dm_enable_retry_count: 2
+dm_enable_retry_interval_sec: 0.5
 
 # 关节到电机 CAN ID 的映射
 motor_id_j1: 0
