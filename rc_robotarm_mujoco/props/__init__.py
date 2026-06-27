@@ -1,1 +1,0 @@
-from rc_robotarm_mujoco.props.primitive import Primitive

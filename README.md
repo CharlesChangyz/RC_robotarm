@@ -308,7 +308,7 @@ rc_moveit/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.mujoco.yaml
 ```bash
 source /opt/ros/humble/setup.bash
 source rc_moveit/install/setup.bash
-ros2 launch rc_arm_teleop rc_arm_2_sim_teleop.launch.py device:=/dev/input/js0
+ros2 launch rc_arm_teleop rc_arm_2/sim_teleop.launch.py device:=/dev/input/js0
 ```
 
 实机遥操作：
@@ -316,7 +316,7 @@ ros2 launch rc_arm_teleop rc_arm_2_sim_teleop.launch.py device:=/dev/input/js0
 ```bash
 source /opt/ros/humble/setup.bash
 source rc_moveit/install/setup.bash
-ros2 launch rc_arm_teleop rc_arm_2_real_teleop.launch.py device:=/dev/input/js0
+ros2 launch rc_arm_teleop rc_arm_2/real_teleop.launch.py device:=/dev/input/js0
 ```
 
 手柄参数位于：
@@ -612,7 +612,7 @@ Simulation teleop:
 ```bash
 source /opt/ros/humble/setup.bash
 source rc_moveit/install/setup.bash
-ros2 launch rc_arm_teleop rc_arm_2_sim_teleop.launch.py device:=/dev/input/js0
+ros2 launch rc_arm_teleop rc_arm_2/sim_teleop.launch.py device:=/dev/input/js0
 ```
 
 Real-hardware teleop:
@@ -620,7 +620,7 @@ Real-hardware teleop:
 ```bash
 source /opt/ros/humble/setup.bash
 source rc_moveit/install/setup.bash
-ros2 launch rc_arm_teleop rc_arm_2_real_teleop.launch.py device:=/dev/input/js0
+ros2 launch rc_arm_teleop rc_arm_2/real_teleop.launch.py device:=/dev/input/js0
 ```
 
 Gamepad parameters:

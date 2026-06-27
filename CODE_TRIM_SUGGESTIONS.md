@@ -71,11 +71,19 @@ done
 done
 
 | `rc_moveit/rc_arm_moveit_config/launch/rc_arm_2_demo.launch.py:8-20` | 平铺 demo launch 只是 include `launch/rc_arm_2/demo.launch.py` | 删除 wrapper | 确认没有使用 `ros2 launch rc_arm_moveit_config rc_arm_2_demo.launch.py` 的流程 | 纯转发 |
+done
+
 | `rc_moveit/rc_arm_teleop/launch/rc_arm_2_sim_teleop.launch.py:8-20`，`rc_moveit/rc_arm_teleop/launch/rc_arm_2_real_teleop.launch.py:50-91` | 平铺 teleop launch 转发到子目录；real 版本还重复声明同一批参数 | 删除平铺 wrapper，统一使用 `launch/rc_arm_2/*.launch.py` | README 当前仍引用旧入口，需同步文档 | 两个入口维护同一功能 |
-| `demo/rc_robotarm_demo.py:1-6`，`demo/rc_robotarm_demo_2.py:352`，`scripts/run_rc_arm_mujoco_bridge.sh:28` | `rc_robotarm_demo.py` 只是导入 `rc_robotarm_demo_2.main` 的薄 wrapper | 合并入口，只保留一个文件名；若保留旧名，明确标注兼容别名 | 当前脚本调用 `demo/rc_robotarm_demo.py` | “哪个 demo 是真入口”不清晰 |
-| `scripts/arm2_target_point_stdin_publisher.py:1-40` | stdin JSON 转 `Arm2TargetPoint` 的调试工具，仓内无主流程引用 | 若不是外部调试工具，删除；否则移到 `tools/` | 确认视觉/上位机是否管道喂 JSON | 主 `scripts/` 里混入非主链路工具 |
-| `rc_robotarm_mujoco/props/primitive.py:4`，`rc_robotarm_mujoco/props/__init__.py:1` | `Primitive` 抽象仓内未使用 | 若不是公共 API，删除 `props` 包 | 确认外部 notebook/script 未使用 | 闲置抽象 |
-| `rc_robotarm_mujoco/assets/map/mocap_env.xml:1-10` | mocap 场景变体，默认 `StandardArena` 加载 `robocon2026.xml`，仓内未见入口 | 无单独运行需求则删除 | 确认无人手动加载该 XML | 未接入默认场景路径 |
+done
+
+| `demo/rc_robotarm_demo.py:1`，`scripts/run_rc_arm_mujoco_bridge.sh:28` | 已把原 `rc_robotarm_demo_2.py` 实现合并到 `rc_robotarm_demo.py`；脚本入口保持不变 | 无需继续修改 | 若外部手动调用旧 `_2.py` 文件名需同步改命令 | 已处理：只保留一个真实入口 |
+done
+
+| `scripts/arm2_target_point_stdin_publisher.py` | stdin JSON 转 `Arm2TargetPoint` 的调试工具，仓内无主流程引用 | 无需继续修改 | 若外部还手动管道喂 JSON，改用 ROS 节点或恢复为本地工具 | 已处理：脚本已删除 |
+done
+
+| `rc_robotarm_mujoco/props/` | `Primitive` 抽象仓内未使用 | 无需继续修改 | 若外部 notebook/script 使用过 `rc_robotarm_mujoco.props`，需改为本地工具代码 | 已处理：`props` 包已删除 |
+| `rc_robotarm_mujoco/assets/map/mocap_env.xml` | mocap 场景变体，默认 `StandardArena` 加载 `robocon2026.xml`，仓内未见入口 | 无需继续修改 | 若外部手动加载该 XML，需改用 `robocon2026.xml` 或恢复本地场景 | 已处理：未接入场景变体已删除 |
 | `rc_robotarm_mujoco/assets/map/meshes/robocon2026.obj`，`robocon2026.mtl` | 完整导出 OBJ/MTL 与运行用拆分 mesh 并存；当前 `robocon2026.xml` 引用 `visual/` 和 `parts/` | 若拆分 mesh 是唯一运行资产，删除完整导出 OBJ/MTL | 确认建模流程不把它当源文件 | 避免源导出和运行资产双份维护 |
 | `README.md:5-317`，`:324-600` | 中英文两套 README 内容基本重复，共约 600 行 | 单团队使用可删掉一套语言；若需要双语，拆成 `README.md` + `README.en.md` | 确认是否有对外英文文档需求 | 文档维护量翻倍 |
 
@@ -86,7 +94,7 @@ done
 | `rc_moveit/dmbot_serial/src/dm_serial_frame_bridge.cpp:15-95`，`rc_moveit/rc_arm_hardware/src/rc_arm_hardware.cpp:800-806`，`:1023-1040`，`rc_moveit/rc_arm_moveit_config/launch/rc_arm_2_robot.launch.py:48`，`:150-163` | 独立 bridge 和硬件接口都实现 `/rc_arm_2/dm_serial_rx/tx` 原始帧桥；主 launch 默认关闭独立 bridge | 如果硬件接口总是运行，删除独立 `dm_serial_frame_bridge` target；如果需要无 ros2_control 桥接，则保留并明确文档 | 是否存在 `use_dm_serial_frame_bridge:=true` 且不启动硬件接口的模式 | 两套桥接会重复维护，且可能竞争同一 USB2CANFD |
 | `rc_moveit/dmbot_serial/include/dmbot_serial/protocol/damiao.h:255-256`，`rc_moveit/dmbot_serial/src/protocol/damiao.cpp:382-395`，`rc_moveit/dmbot_serial/src/dm_motor_driver.cpp:88-99`，`:204-217`，`rc_moveit/rc_arm_hardware/src/rc_arm_hardware.cpp:452`，`:466-469`，`:800-806` | raw frame callback 链服务 DM serial action bridge | 如果不再用 DM 原始帧触发动作集，整条删除；如果还用，不建议局部删 | 当前 `arm2_middleware` 默认启用 `dm_serial_bridge_enabled`，需现场确认 | 这是跨包功能链，必须整条取舍 |
 | `rc_moveit/rc_arm2_middleware/rc_arm2_middleware/arm2_middleware_node.py:119-123`，`:412-414`，`:519-532`；`rc_moveit/dmbot_serial/src/protocol/damiao.cpp:813-814`；`rc_moveit/rc_arm_hardware/src/rc_arm_hardware.cpp:1048`，`:1063-1066` | middleware 支持 laser wait，但当前 action_sets 只使用 `move_target_offset_noj5`；底层 laser 固定发布 1000 | 若不使用 `move_target_offset` 激光闭环，删除 laser topic、状态、等待逻辑和固定 1000 | 确认后续是否会恢复激光距离闭环 | 固定假数据和未用等待逻辑增加认知成本 |
-| `rc_moveit/rc_arm_hardware/src/rc_arm_hardware.cpp:435-480`，`:1436-1511` | 硬件插件无条件创建大量 debug publisher；部分 topic 是 MuJoCo bridge 主链路输入 | 把“MuJoCo 必需 topic”和“纯 debug topic”分开；纯 debug topic 增加开关或删除 | `demo/rc_robotarm_demo_2.py:335-337` 依赖 `/debug/final_joint_command_joint_frame`、`/debug/final_pd_gains`、`/debug/final_joint_torque_ff` | debug 与功能桥接混在一起，导致不能直接删 |
+| `rc_moveit/rc_arm_hardware/src/rc_arm_hardware.cpp:435-480`，`:1436-1511` | 硬件插件无条件创建大量 debug publisher；部分 topic 是 MuJoCo bridge 主链路输入 | 把“MuJoCo 必需 topic”和“纯 debug topic”分开；纯 debug topic 增加开关或删除 | `demo/rc_robotarm_demo.py:335-337` 依赖 `/debug/final_joint_command_joint_frame`、`/debug/final_pd_gains`、`/debug/final_joint_torque_ff` | debug 与功能桥接混在一起，导致不能直接删 |
 | `rc_moveit/rc_arm_hardware/include/rc_arm_hardware/rc_arm_hardware.hpp:185-188`，`rc_moveit/rc_arm_hardware/src/rc_arm_hardware.cpp:198-212`；`rc_moveit/rc_arm_moveit_config/launch/payload_scene_sync.py` | `payload_box_size`、MuJoCo payload body/site/initial pos 在硬件插件内只读入不使用，场景同步脚本才关心 | 从 C++ 硬件插件 schema 中删除；这些字段留给 scene sync 配置 | 确认 xacro 不强制每个字段都传给硬件插件 | 硬件接口混入场景参数 |
 | `rc_moveit/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.real.yaml:8-18`，`rc_moveit/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.mujoco.yaml:26-35` | real 配置保留 MuJoCo 字段，MuJoCo 配置保留 CAN 字段 | 拆成公共配置 + backend 专属配置，删除各后端无效字段 | xacro 和硬件插件当前是否要求统一 schema | 配置文件承担兼容职责，参数越写越多 |
 | `rc_moveit/rc_arm_moveit_config/launch/rc_arm_2_robot.launch.py:49`，`rc_moveit/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.real.yaml:29`，`rc_moveit/rc_arm_description/config/rc_arm_2/rc_arm_2_hardware.mujoco.yaml:28` | USB2CANFD SN 默认值重复三处 | 保留一个权威位置，其余只透传或读取配置 | 独立 bridge 是否需要同一配置源 | 换设备时容易漏改 |
