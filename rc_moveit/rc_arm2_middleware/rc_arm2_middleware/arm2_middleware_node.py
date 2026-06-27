@@ -29,6 +29,7 @@ class MiddlewareState(str, Enum):
     WAITING_MOTION_RESULT = "WAITING_MOTION_RESULT"
     TRACKING_TARGET_OFFSET = "TRACKING_TARGET_OFFSET"
     WAITING_PAYLOAD_ACTIVE = "WAITING_PAYLOAD_ACTIVE"
+    WAITING_DELAY = "WAITING_DELAY"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
@@ -50,6 +51,7 @@ class ActionStep:
     xyz: Optional[Tuple[float, float, float]] = None
     j5_target_pos: Optional[float] = None
     enabled: Optional[bool] = None
+    delay_sec: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -309,6 +311,13 @@ class Arm2MiddlewareNode(Node):
                 enabled=bool(raw_step["enabled"]),
             )
 
+        if step_type == "delay":
+            return ActionStep(
+                step_type=step_type,
+                label=label,
+                delay_sec=self._parse_delay_sec(raw_step),
+            )
+
         if step_type in {"move_target_offset", "move_target_offset_noj5"}:
             return ActionStep(
                 step_type=step_type,
@@ -349,6 +358,15 @@ class Arm2MiddlewareNode(Node):
         if not isinstance(raw_xyz, (list, tuple)) or len(raw_xyz) != 3:
             raise ValueError(f"{field_name} must be a length-3 list")
         return (float(raw_xyz[0]), float(raw_xyz[1]), float(raw_xyz[2]))
+
+    def _parse_delay_sec(self, raw_step: dict) -> float:
+        raw_delay = raw_step.get("duration_sec", raw_step.get("delay_sec", raw_step.get("seconds")))
+        if raw_delay is None:
+            raise ValueError("delay step requires duration_sec")
+        delay_sec = float(raw_delay)
+        if delay_sec < 0.0:
+            raise ValueError("delay duration_sec must be non-negative")
+        return delay_sec
 
     def _set_state(self, new_state: MiddlewareState, detail: str) -> None:
         if self._state == new_state:
@@ -535,6 +553,14 @@ class Arm2MiddlewareNode(Node):
             timeout_detail = (
                 f"payload wait timeout after {timeout_sec:.2f} sec waiting for payload_active={desired}"
             )
+        elif self._state == MiddlewareState.WAITING_DELAY:
+            delay_sec = 0.0
+            if run.current_step is not None and run.current_step.delay_sec is not None:
+                delay_sec = max(0.0, float(run.current_step.delay_sec))
+            elapsed = self.get_clock().now().nanoseconds - run.waiting_started_ns
+            if elapsed >= int(delay_sec * 1_000_000_000):
+                self._complete_current_step(f"delay completed after {delay_sec:.3f} sec")
+            return
         else:
             return
 
@@ -601,6 +627,14 @@ class Arm2MiddlewareNode(Node):
             )
             return
 
+        if step.step_type == "delay":
+            delay_sec = 0.0 if step.delay_sec is None else max(0.0, float(step.delay_sec))
+            if delay_sec <= 0.0:
+                self._complete_current_step("delay skipped because duration is 0.000 sec")
+                return
+            self._enter_delay_wait(f"waiting delay {delay_sec:.3f} sec")
+            return
+
         if step.step_type == "move_target_offset":
             if self._cached_target_point is None:
                 self._fail_action_set("move_target_offset requested before target point was received")
@@ -648,11 +682,7 @@ class Arm2MiddlewareNode(Node):
             y = self._cached_target_point.y + float(step.offset_xyz[1])
             z = self._cached_target_point.z + float(step.offset_xyz[2])
             j5_target_pos = step.j5_target_pos
-            if step.step_type.endswith("_mf"):
-                x = 0.0
-            else:
-                # _mrl
-                y = 0.0001
+            if step.step_type.endswith("_mrl"):
                 j5_target_pos = float(self._cached_target_point.y) + float(step.j5_target_pos)
             if self._cached_target_point.z <0.1:
                 target_spin_deg = 0.0
@@ -678,10 +708,7 @@ class Arm2MiddlewareNode(Node):
         if step.step_type in {"move_fixed_pose_mf", "move_fixed_pose_mrl"}:
             x, y, z = step.xyz
             j5_target_pos = step.j5_target_pos
-            if step.step_type.endswith("_mf"):
-                x = 0.0
-            else:
-                y = 0.0001
+            if step.step_type.endswith("_mrl"):
                 j5_target_pos = float(step.xyz[1]) + float(step.j5_target_pos)
             self._enter_motion_wait(
                 "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
@@ -710,6 +737,23 @@ class Arm2MiddlewareNode(Node):
         run.waiting_j5_target_pos = j5_target_pos
         run.last_j5_command_pos = j5_target_pos
         self._set_state(MiddlewareState.WAITING_MOTION_RESULT, detail)
+
+    def _enter_delay_wait(self, detail: str) -> None:
+        run = self._active_run
+        if run is None:
+            self._fail_action_set("internal error: missing active run when entering delay wait")
+            return
+
+        run.waiting_started_ns = self.get_clock().now().nanoseconds
+        run.waiting_execution_baseline_id = self._latest_motion_execution_id
+        run.waiting_execution_id = None
+        run.desired_payload_active = None
+        run.last_target_offset_command = None
+        run.target_offset_publish_count = 0
+        run.waiting_motion_succeeded = False
+        run.waiting_j5_target_pos = None
+        run.last_j5_command_pos = None
+        self._set_state(MiddlewareState.WAITING_DELAY, detail)
 
     def _enter_target_offset_tracking(self, detail: str) -> None:
         run = self._active_run

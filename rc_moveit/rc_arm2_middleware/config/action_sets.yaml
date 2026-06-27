@@ -34,38 +34,48 @@ action_sets:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
-      - type: move_target_offset_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [-0.05, 0.0, -0.05]
-        j5_target_pos: 0.0 #j5 在视觉target_points.y + offset.y的基础上，再+ j5_target_pos
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
 
-      - type: move_target_offset_mrl #机械臂y=0
-        label: move_to_default_pose # 向前伸出吸住
-        offset_xyz: [0.15, 0.0, -0.05]
+      - type: move_fixed_pose_mrl #j5 负责左右横移动
+        label: move_to_default_pose
+        xyz: [0.4, 0.0, 0.0]
         j5_target_pos: 0.0
-        target_spin: 90.0
+        target_spin: 95.0 #已经无用target_points.y + offset.z判断
+      
+      - type: move_fixed_pose_mrl #j5 负责左右横移动
+        label: move_to_default_pose
+        xyz: [0.6, 0.0, 0.0]
+        j5_target_pos: 0.0
+        target_spin: 100.0 #已经无用target_points.y + offset.z判断
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
 
       - type: set_payload_active
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl #机械臂y=0
+      - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose # 举高
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: 0.0
-        target_spin: 170.0
+        target_spin: 160.0
 
-      - type: move_fixed_pose_mrl #机械臂y=0
+      - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose # 转180度
-        xyz: [-0.1, 0.0, 0.7]
+        xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: 0.0
-        target_spin: 170.0
+        target_spin: 160.0
 
-      - type: move_fixed_pose_mrl #机械臂y=0
+      - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose #放置
-        xyz: [-0.36, 0.0, 0.45]
+        xyz: [-0.31, -0.0001, 0.40]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+      - type: move_fixed_pose_mrl #机械臂y=-0.0001
+        label: move_to_default_pose #放置
+        xyz: [-0.31, -0.0001, 0.35]
         j5_target_pos: 0.0
         target_spin: 0.0
 
@@ -79,13 +89,13 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [-0.1, 0.0, 0.7] # 居高
+        xyz: [-0.1, -0.0001, 0.8] # 居高
         j5_target_pos: 0.0
         target_spin: 50.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.7] # 转180度
+        xyz: [0.1, 0.0, 0.8] # 转180度
         j5_target_pos: 0.0
         target_spin: 50.0
 
