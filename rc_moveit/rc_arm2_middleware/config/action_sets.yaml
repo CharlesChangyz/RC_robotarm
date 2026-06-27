@@ -37,15 +37,21 @@ action_sets:
 
       - type: move_fixed_pose_mrl #j5 负责左右横移动
         label: move_to_default_pose
-        xyz: [0.4, 0.0, 0.0]
+        xyz: [0.25, 0.0, 0.2]
         j5_target_pos: 0.0
-        target_spin: 95.0 #已经无用target_points.y + offset.z判断
+        target_spin: 15.0 #已经无用target_points.y + offset.z判断
+
+      - type: move_fixed_pose_mrl #j5 负责左右横移动
+        label: move_to_default_pose
+        xyz: [0.66, 0.0, 0.2]
+        j5_target_pos: 0.0
+        target_spin: 15.0 #已经无用target_points.y + offset.z判断
       
       - type: move_fixed_pose_mrl #j5 负责左右横移动
         label: move_to_default_pose
-        xyz: [0.6, 0.0, 0.0]
+        xyz: [0.66, 0.0, 0.12]
         j5_target_pos: 0.0
-        target_spin: 100.0 #已经无用target_points.y + offset.z判断
+        target_spin: 15.0 #已经无用target_points.y + offset.z判断
 
       - type: delay
         label: wait_after_move
