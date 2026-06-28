@@ -9,7 +9,7 @@ action_sets:
       - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.05]
-        target_spin: 0.
+        target_spin: 0.0
 
   - id: 82
     name: watching_left
@@ -18,7 +18,7 @@ action_sets:
         label: move_to_default_pose
         xyz: [0.0, -0.25, 0.05]
         target_spin: 0.0
-  
+
   - id: 83
     name: watching_right
     steps:
@@ -26,8 +26,10 @@ action_sets:
         label: move_to_default_pose
         xyz: [0.0, 0.25, 0.05]
         target_spin: 0.0
+
 #######################################################################################################
-# 存储
+# 无视觉
+# store
   - id: 1
     name: catch_200_KFS_front_and_store_stand
     steps:
@@ -35,23 +37,23 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
+      - type: move_fixed_pose_mrl # j5 负责左右横移动
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
+        j5_target_pos: -0.015
+        target_spin: 0.0
 
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.66, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-      
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.66, 0.0, 0.12]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
+        j5_target_pos: -0.015
+        target_spin: 0.0
 
       - type: delay
         label: wait_after_move
@@ -61,57 +63,57 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
         xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 150.0
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 转180度
         xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: 0.0001
+        j5_target_pos: -0.0149
         target_spin: 150.0
 
       - type: delay
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 放置
         xyz: [-0.31, -0.0001, 0.40]
-        j5_target_pos: 0.0001
+        j5_target_pos: -0.0149
         target_spin: -15.0
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 放置
         xyz: [-0.31, -0.0001, 0.35]
-        j5_target_pos: 0.0001
+        j5_target_pos: -0.0149  
         target_spin: -15.0
 
       - type: set_payload_active
-        label: payload_off # 松力
+        label: payload_off
         enabled: false
-      
+
       - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
+        label: vacuum_off
         enabled: false
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
-        j5_target_pos: 0.0001
+        xyz: [-0.1, -0.0001, 0.8]
+        j5_target_pos: -0.0149
         target_spin: 90.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: 0.0
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: -0.015
         target_spin: 90.0
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2171, 0.0, 0.1171] # 看前面
+        label: move_to_default_pose # 看前面
+        xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: -0.0149
         target_spin: 0.0
 
@@ -122,17 +124,17 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.18]
         j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
+        target_spin: 90.0
 
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.65, 0.0, 0.18]
         j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
+        target_spin: 90.0
 
       - type: delay
         label: wait_after_move
@@ -147,13 +149,13 @@ action_sets:
         can_id: 0x501
         can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: -0.015
         target_spin: 150.0
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 转180度
         xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: -0.0149
@@ -163,46 +165,41 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.40]
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 放置
+        xyz: [-0.31, -0.0001, 0.40]
         j5_target_pos: -0.0149
         target_spin: -15.0
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 放置
+        xyz: [-0.31, -0.0001, 0.35]
+        j5_target_pos: -0.0149  
         target_spin: -15.0
 
       - type: set_payload_active
-        label: payload_off # 松力
+        label: payload_off
         enabled: false
-      
+
       - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
+        label: vacuum_off
         enabled: false
 
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
+        xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: -0.0149
         target_spin: 90.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: -0.015
         target_spin: 90.0
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2171, 0.0, 0.1171] # 看前面
+        label: move_to_default_pose # 看前面
+        xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: -0.0149
         target_spin: 0.0
 
@@ -213,17 +210,17 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.795, 0.0, 0.0]
         j5_target_pos: -0.015
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
+        target_spin: 0.0
 
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.795, 0.0, -0.08]
         j5_target_pos: -0.015
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
+        target_spin: 0.0
 
       - type: delay
         label: wait_after_move
@@ -238,13 +235,13 @@ action_sets:
         can_id: 0x501
         can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: -0.015
         target_spin: 150.0
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 转180度
         xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: -0.0149
@@ -254,46 +251,41 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.45]
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 放置
+        xyz: [-0.31, -0.0001, 0.40]
         j5_target_pos: -0.0149
         target_spin: -15.0
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 放置
+        xyz: [-0.31, -0.0001, 0.35]
+        j5_target_pos: -0.0149  
         target_spin: -15.0
 
       - type: set_payload_active
-        label: payload_off # 松力
+        label: payload_off
         enabled: false
-      
+
       - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
+        label: vacuum_off
         enabled: false
 
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
+        xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: -0.0149
         target_spin: 90.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: -0.015
         target_spin: 90.0
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2171, 0.0, 0.1171] # 看前面
+        label: move_to_default_pose # 看前面
+        xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: -0.0149
         target_spin: 0.0
 
@@ -304,17 +296,17 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.2, 0.0, 0.4]
         j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
+        target_spin: 90.0
 
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.75, 0.0, 0.35]
         j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
+        target_spin: 90.0
 
       - type: delay
         label: wait_after_move
@@ -329,970 +321,562 @@ action_sets:
         can_id: 0x501
         can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: -0.015
-        target_spin: 160.0
+        target_spin: 150.0
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 转180度
         xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: -0.0149
-        target_spin: 160.0
+        target_spin: 150.0
 
       - type: delay
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.40]
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 放置
+        xyz: [-0.31, -0.0001, 0.40]
         j5_target_pos: -0.0149
         target_spin: -15.0
 
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 放置
+        xyz: [-0.31, -0.0001, 0.35]
+        j5_target_pos: -0.0149  
         target_spin: -15.0
-      
+
       - type: set_payload_active
-        label: payload_off # 松力
+        label: payload_off
         enabled: false
-      
+
       - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
+        label: vacuum_off
         enabled: false
 
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
+        xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: -0.0149
         target_spin: 90.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: -0.015
         target_spin: 90.0
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.4] # 看前面
+        label: move_to_default_pose # 看前面
+        xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: -0.0149
-        target_spin: 90.0
+        target_spin: 0.0
 
-  - id: 5
-    name: catch_neg_200_KFS_left_and_store
+# keep
+  - id: 3
+    name: catch_200_KFS_front_and_keep
     steps:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose #向左看
-        xyz: [0.0, 0.25, 0.05]
-        j5_target_pos: -0.14
-        target_spin: 0.0
 
-      - type: move_target_offset_mf
-        label: move_to_default_pose #向下吸
-        offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: -0.14
-        target_spin: 0.0
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.18]
+        j5_target_pos: -0.015
+        target_spin: 90.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.65, 0.0, 0.18]
+        j5_target_pos: -0.015
+        target_spin: 90.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
 
       - type: set_payload_active
         label: payload_on
         enabled: true
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose #居高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
+        label: move_to_default_pose # 机械臂保持在前上方
+        xyz: [0.25, 0.0, 0.25]
+        j5_target_pos: -0.015
+        target_spin: 90.0
 
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.36, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #居高
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 50.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #转180度
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 50.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #看前面
-        xyz: [0.25, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-  - id: 6
-    name: catch_200_KFS_right_and_store
+  - id: 4
+    name: catch_neg_200_KFS_front_and_keep
     steps:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose #向右看
-        xyz: [0.0, 0.25, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 90.0
 
-      - type: move_target_offset_mf
-        label: move_to_default_pose # 向右吸
-        offset_xyz: [0.0, 0.15, -0.05]
-        j5_target_pos: 0.14
-        target_spin: 90.0
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.795, 0.0, 0.0]
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.795, 0.0, -0.08]
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
 
       - type: set_payload_active
         label: payload_on
         enabled: true
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 居高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.36, 0.0, 0.45]
-        j5_target_pos: 0.0
+        label: move_to_default_pose # 机械臂保持在前上方
+        xyz: [0.25, 0.0, 0.25]
+        j5_target_pos: -0.015
         target_spin: 90.0
+
+# discard
+  - id: 10
+    name: catch_200_KFS_front_and_discard_left
+    steps:
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.18]
+        j5_target_pos: -0.015
+        target_spin: 90.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.65, 0.0, 0.18]
+        j5_target_pos: -0.015
+        target_spin: 90.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 举高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 170.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 左转
+        xyz: [0.0, -0.1, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 170.0
 
       - type: set_payload_active
         label: payload_off
         enabled: false
-      
+
       - type: set_vacuum
         label: vacuum_off
         enabled: false
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 居高
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
         target_spin: 50.0
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 50.0
-      
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #看前面
+        label: move_to_default_pose # 看前面
         xyz: [0.25, 0.0, 0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 0.0
 
-  - id: 7
-    name: catch_neg_200_KFS_right_and_store
+  - id: 15
+    name: catch_200_KFS_front_and_discard_right
     steps:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose #向右看
-        xyz: [0.0, 0.25, 0.05]
-        j5_target_pos: 0.0 
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.18]
+        j5_target_pos: -0.015
         target_spin: 90.0
 
-      - type: move_target_offset_mf
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.65, 0.0, 0.18]
+        j5_target_pos: -0.015
+        target_spin: 90.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 举高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 170.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 右转
+        xyz: [0.0, 0.1, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 170.0
+
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 居高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 50.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.25, 0.0, 0.05]
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+  - id: 16
+    name: catch_neg_200_KFS_front_and_discard_left
+    steps:
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.795, 0.0, 0.0]
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.795, 0.0, -0.08]
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 举高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 170.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 左转
+        xyz: [0.0, -0.1, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 170.0
+
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 居高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 50.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.25, 0.0, 0.05]
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+  - id: 17
+    name: catch_neg_200_KFS_front_and_discard_right
+    steps:
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.795, 0.0, 0.0]
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.795, 0.0, -0.08]
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 举高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 170.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 右转
+        xyz: [0.0, 0.1, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 170.0
+
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 居高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 50.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.25, 0.0, 0.05]
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+############################################################################################################
+# 有视觉
+# store
+  - id: 42
+    name: catch_200_KFS_front_and_store
+    steps:
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_target_offset_mrl # j5 负责左右横移动
+        label: move_to_default_pose
+        offset_xyz: [-0.05, 0.0, -0.05]
+        j5_target_pos: -0.015
+        target_spin: 90.0
+
+      - type: move_target_offset_mrl
+        label: move_to_default_pose # 向前吸
+        offset_xyz: [0.15, 0.0, -0.05]
+        j5_target_pos: -0.015
+        target_spin: 90.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 举高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
+        target_spin: 150.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 转180度
+        xyz: [-0.1, -0.0001, 0.7]
+        j5_target_pos: -0.0149
+        target_spin: 150.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 放置
+        xyz: [-0.31, -0.0001, 0.40]
+        j5_target_pos: -0.0149
+        target_spin: -15.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 放置
+        xyz: [-0.31, -0.0001, 0.35]
+        j5_target_pos: -0.0149  
+        target_spin: -15.0
+
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [-0.1, -0.0001, 0.8]
+        j5_target_pos: -0.0149
+        target_spin: 90.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: -0.015
+        target_spin: 90.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: -0.0149
+        target_spin: 0.0
+
+  - id: 49
+    name: catch_neg_200_KFS_front_and_store
+    steps:
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_target_offset_mrl
+        label: move_to_default_pose # 目标略上方
+        offset_xyz: [0.0, 0.0, 0.05]
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+      - type: move_target_offset_mrl
         label: move_to_default_pose # 向下吸
         offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: 0.14
-        target_spin: 90.0
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
 
       - type: set_payload_active
         label: payload_on
         enabled: true
 
+      - type: send_can_frame
+        label: notify # 完成抓取通知
+        can_id: 0x501
+        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 居高
+        label: move_to_default_pose # 举高
         xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
+        j5_target_pos: -0.015
+        target_spin: 150.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 转180度
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
+        xyz: [-0.1, -0.0001, 0.7]
+        j5_target_pos: -0.0149
+        target_spin: 150.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.36, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 90.0
+        xyz: [-0.31, -0.0001, 0.40]
+        j5_target_pos: -0.0149
+        target_spin: -15.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 放置
+        xyz: [-0.31, -0.0001, 0.35]
+        j5_target_pos: -0.0149  
+        target_spin: -15.0
 
       - type: set_payload_active
         label: payload_off
         enabled: false
-      
+
       - type: set_vacuum
         label: vacuum_off
         enabled: false
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose #居高
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 50.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #转180度
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 50.0
-      
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #看前面
-        xyz: [0.25, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-################################################################################################################
-# 放在臂上
-  - id: 11
-    name: catch_200_KFS_front_and_store_stand
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
         label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-      
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.12]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.25, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-
-  - id: 12
-    name: catch_200_KFS_front_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.18]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.65, 0.0, 0.18]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: -0.015
-        target_spin: 150.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: -0.0149
-        target_spin: 150.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.40]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off # 松力
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
+        xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: -0.0149
         target_spin: 90.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: -0.015
         target_spin: 90.0
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2171, 0.0, 0.1171] # 看前面
+        label: move_to_default_pose # 看前面
+        xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: -0.0149
         target_spin: 0.0
 
-  - id: 13
-    name: catch_neg_200_KFS_front_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, 0.0]
-        j5_target_pos: -0.015
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, -0.08]
-        j5_target_pos: -0.015
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: -0.015
-        target_spin: 150.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: -0.0149
-        target_spin: 150.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.45]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off # 松力
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2171, 0.0, 0.1171] # 看前面
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-  - id: 14
-    name: catch_400_KFS_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.2, 0.0, 0.4]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.75, 0.0, 0.35]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: -0.015
-        target_spin: 160.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: -0.0149
-        target_spin: 160.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.40]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off # 松力
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.4] # 看前面
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-############################################################################################################
-#丢弃
-  - id: 61
-    name: catch_200_KFS_front_and_store_stand
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-      
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.12]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 150.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: 0.0001
-        target_spin: 150.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.31, -0.0001, 0.40]
-        j5_target_pos: 0.0001
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.31, -0.0001, 0.35]
-        j5_target_pos: 0.0001
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off # 松力
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
-        j5_target_pos: 0.0001
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.2] # 看前面
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-  - id: 22
-    name: catch_200_KFS_front_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.18]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.65, 0.0, 0.18]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: -0.015
-        target_spin: 150.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: -0.0149
-        target_spin: 150.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.40]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off # 松力
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2171, 0.0, 0.1171] # 看前面
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-  - id: 23
-    name: catch_neg_200_KFS_front_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, 0.0]
-        j5_target_pos: -0.015
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, -0.08]
-        j5_target_pos: -0.015
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: -0.015
-        target_spin: 150.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: -0.0149
-        target_spin: 150.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.45]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off # 松力
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2171, 0.0, 0.1171] # 看前面
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-  - id: 24
-    name: catch_400_KFS_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.2, 0.0, 0.4]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.75, 0.0, 0.35]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: -0.015
-        target_spin: 160.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: -0.0149
-        target_spin: 160.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.40]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off # 松力
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.4] # 看前面
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-#########################################################################################################################
-#视觉
+# keep
   - id: 43
     name: catch_200_KFS_front_and_keep
     steps:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
-      - type: move_target_offset_mrl #j5 负责左右横移动
+
+      - type: move_target_offset_mrl # j5 负责左右横移动
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, -0.05]
-        j5_target_pos: 0.0 #j5 在视觉target_points.y + offset.y的基础上，再+ j5_target_pos
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
+        j5_target_pos: -0.015
+        target_spin: 90.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向前吸
         offset_xyz: [0.15, 0.0, -0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
 
       - type: set_payload_active
-        label: payload_on 
+        label: payload_on
         enabled: true
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
         xyz: [0.25, 0.0, 0.25]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
 
   - id: 44
@@ -1301,27 +885,27 @@ action_sets:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
+
       - type: move_target_offset_mrl
         label: move_to_default_pose # 目标略上方
         offset_xyz: [0.0, 0.0, 0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 0.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向下吸
-        offset_xyz: [0.0, 0.0, -0.05] 
-        j5_target_pos: 0.0
+        offset_xyz: [0.0, 0.0, -0.05]
+        j5_target_pos: -0.015
         target_spin: 0.0
 
       - type: set_payload_active
-        label: payload_on 
+        label: payload_on
         enabled: true
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
         xyz: [0.25, 0.0, 0.25]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
 
   - id: 45
@@ -1330,15 +914,15 @@ action_sets:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
+
       - type: move_fixed_pose_mf
-        label: move_to_default_pose #向左看
+        label: move_to_default_pose # 向左看
         xyz: [0.0, -0.25, 0.05]
-        j5_target_pos: 0.0 #直接是j5的真实值
+        j5_target_pos: -0.015
         target_spin: 90.0
 
       - type: move_target_offset_mf
-        label: move_to_default_pose #向左吸
+        label: move_to_default_pose # 向左吸
         offset_xyz: [0.0, -0.15, -0.05]
         j5_target_pos: -0.14
         target_spin: 90.0
@@ -1346,11 +930,11 @@ action_sets:
       - type: set_payload_active
         label: payload_on
         enabled: true
-      
+
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
         xyz: [0.25, 0.0, 0.25]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
 
   - id: 46
@@ -1359,15 +943,15 @@ action_sets:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
+
       - type: move_fixed_pose_mf
-        label: move_to_default_pose #向左看
+        label: move_to_default_pose # 向左看
         xyz: [0.0, -0.25, 0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 0.0
 
       - type: move_target_offset_mf
-        label: move_to_default_pose #向下吸
+        label: move_to_default_pose # 向下吸
         offset_xyz: [0.0, 0.0, -0.05]
         j5_target_pos: -0.14
         target_spin: 0.0
@@ -1379,7 +963,7 @@ action_sets:
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
         xyz: [0.25, 0.0, 0.25]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
 
   - id: 47
@@ -1388,11 +972,11 @@ action_sets:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
+
       - type: move_fixed_pose_mf
-        label: move_to_default_pose #向右看
+        label: move_to_default_pose # 向右看
         xyz: [0.0, 0.25, 0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
 
       - type: move_target_offset_mf
@@ -1408,7 +992,7 @@ action_sets:
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
         xyz: [0.25, 0.0, 0.25]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
 
   - id: 48
@@ -1417,11 +1001,11 @@ action_sets:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
+
       - type: move_fixed_pose_mf
-        label: move_to_default_pose #向右看
+        label: move_to_default_pose # 向右看
         xyz: [0.0, 0.25, 0.05]
-        j5_target_pos: 0.0 
+        j5_target_pos: -0.015
         target_spin: 90.0
 
       - type: move_target_offset_mf
@@ -1437,120 +1021,119 @@ action_sets:
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
         xyz: [0.25, 0.0, 0.25]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
-############################################################################################################
-#丢弃
+
+# discard
   - id: 8
     name: catch_200_KFS_front_and_discard_left
     steps:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
-      - type: move_target_offset_mrl #j5 负责左右横移动
+
+      - type: move_target_offset_mrl # j5 负责左右横移动
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, -0.05]
-        j5_target_pos: 0.0 #j5 在视觉target_points.y + offset.y的基础上，再+ j5_target_pos
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
+        j5_target_pos: -0.015
+        target_spin: 90.0
 
-      - type: move_target_offset_mrl #机械臂y=0
+      - type: move_target_offset_mrl
         label: move_to_default_pose # 向前伸出吸住
         offset_xyz: [0.15, 0.0, -0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
 
       - type: set_payload_active
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl #机械臂y=0
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
         xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 170.0
 
-      - type: move_fixed_pose_mrl #机械臂y=0
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 左转
         xyz: [0.0, -0.1, 0.7]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 170.0
 
       - type: set_payload_active
-        label: payload_off # 松力
+        label: payload_off
         enabled: false
-      
+
       - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
+        label: vacuum_off
         enabled: false
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.7] # 居高
-        j5_target_pos: 0.0
+        label: move_to_default_pose # 居高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
         target_spin: 50.0
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.05] # 看前面
-        j5_target_pos: 0.0
+        label: move_to_default_pose # 看前面
+        xyz: [0.25, 0.0, 0.05]
+        j5_target_pos: -0.015
         target_spin: 0.0
-  
+
   - id: 28
     name: catch_200_KFS_front_and_discard_right
     steps:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
-      - type: move_target_offset_mrl #j5 负责左右横移动
+
+      - type: move_target_offset_mrl # j5 负责左右横移动
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, -0.05]
-        j5_target_pos: 0.0 #j5 在视觉target_points.y + offset.y的基础上，再+ j5_target_pos
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
+        j5_target_pos: -0.015
+        target_spin: 90.0
 
-      - type: move_target_offset_mrl #机械臂y=0
+      - type: move_target_offset_mrl
         label: move_to_default_pose # 向前伸出吸住
         offset_xyz: [0.15, 0.0, -0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
 
       - type: set_payload_active
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl #机械臂y=0
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
         xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 170.0
 
-      - type: move_fixed_pose_mrl #机械臂y=0
+      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 右转
         xyz: [0.0, 0.1, 0.7]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 170.0
 
       - type: set_payload_active
-        label: payload_off # 松力
+        label: payload_off
         enabled: false
-      
+
       - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
+        label: vacuum_off
         enabled: false
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.7] # 居高
-        j5_target_pos: 0.0
+        label: move_to_default_pose # 居高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
         target_spin: 50.0
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.05] # 看前面
-        j5_target_pos: 0.0
+        label: move_to_default_pose # 看前面
+        xyz: [0.25, 0.0, 0.05]
+        j5_target_pos: -0.015
         target_spin: 0.0
-
 
   - id: 9
     name: catch_neg_200_KFS_front_and_discard_left
@@ -1558,53 +1141,53 @@ action_sets:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
+
       - type: move_target_offset_mrl
         label: move_to_default_pose # 目标略上方
         offset_xyz: [0.0, 0.0, 0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 0.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向下吸
-        offset_xyz: [0.0, 0.0, -0.05] 
-        j5_target_pos: 0.0
+        offset_xyz: [0.0, 0.0, -0.05]
+        j5_target_pos: -0.015
         target_spin: 0.0
 
       - type: set_payload_active
-        label: payload_on 
+        label: payload_on
         enabled: true
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 居高
-        xyz: [0.1, 0.0, 0.7] 
-        j5_target_pos: 0.0
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
         target_spin: 170.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 左转
         xyz: [0.0, -0.1, 0.7]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 170.0
 
       - type: set_payload_active
         label: payload_off
         enabled: false
-      
+
       - type: set_vacuum
         label: vacuum_off
         enabled: false
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose #居高
+        label: move_to_default_pose # 居高
         xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 50.0
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose #看前面
+        label: move_to_default_pose # 看前面
         xyz: [0.25, 0.0, 0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 0.0
 
   - id: 29
@@ -1613,675 +1196,111 @@ action_sets:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-      
+
       - type: move_target_offset_mrl
         label: move_to_default_pose # 目标略上方
         offset_xyz: [0.0, 0.0, 0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 0.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向下吸
-        offset_xyz: [0.0, 0.0, -0.05] 
-        j5_target_pos: 0.0
+        offset_xyz: [0.0, 0.0, -0.05]
+        j5_target_pos: -0.015
         target_spin: 0.0
 
       - type: set_payload_active
-        label: payload_on 
+        label: payload_on
         enabled: true
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 居高
-        xyz: [0.1, 0.0, 0.7] 
-        j5_target_pos: 0.0
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: -0.015
         target_spin: 170.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 右转
         xyz: [0.0, 0.1, 0.7]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 170.0
 
       - type: set_payload_active
         label: payload_off
         enabled: false
-      
+
       - type: set_vacuum
         label: vacuum_off
         enabled: false
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose #居高
+        label: move_to_default_pose # 居高
         xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 50.0
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose #看前面
+        label: move_to_default_pose # 看前面
         xyz: [0.25, 0.0, 0.05]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 0.0
 
 ##################################################################################################
-
-# 存储
-  - id: 31
-    name: catch_200_KFS_front_and_store_stand
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-      
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.12]
-        j5_target_pos: 0.0
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 160.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: 0.0001
-        target_spin: 160.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.31, -0.0001, 0.40]
-        j5_target_pos: 0.0001
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.31, -0.0001, 0.35]
-        j5_target_pos: 0.0001
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off # 松力
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
-        j5_target_pos: 0.0001
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.2] # 看前面
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-  - id: 32
-    name: catch_200_KFS_front_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.18]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.65, 0.0, 0.18]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: -0.015
-        target_spin: 160.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: -0.0149
-        target_spin: 160.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.40]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off # 松力
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2171, 0.0, 0.1171] # 看前面
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-  - id: 33
-    name: catch_neg_200_KFS_front_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, 0.0]
-        j5_target_pos: -0.015
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, -0.08]
-        j5_target_pos: -0.015
-        target_spin: 0.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: -0.015
-        target_spin: 150.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: -0.0149
-        target_spin: 150.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.45]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off # 松力
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2171, 0.0, 0.1171] # 看前面
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-  - id: 34
-    name: catch_400_KFS_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.2, 0.0, 0.4]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: move_fixed_pose_mrl #j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.75, 0.0, 0.35]
-        j5_target_pos: -0.015
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: -0.015
-        target_spin: 160.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: -0.0149
-        target_spin: 160.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.40]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl #机械臂y=-0.0001
-        label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.35]
-        j5_target_pos: -0.0149
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off # 松力
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off # 关闭吸盘
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 完成放置通知
-        can_id: 0x502
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8] # 居高
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8] # 转180度
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.4] # 看前面
-        j5_target_pos: -0.0149
-        target_spin: 90.0
-
-  - id: 35
-    name: catch_neg_200_KFS_left_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-      
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose #向左看
-        xyz: [0.0, 0.25, 0.05]
-        j5_target_pos: -0.14
-        target_spin: 0.0
-
-      - type: move_target_offset_mf
-        label: move_to_default_pose #向下吸
-        offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: -0.14
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #居高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.36, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #居高
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 50.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #转180度
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 50.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #看前面
-        xyz: [0.25, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-  - id: 36
-    name: catch_200_KFS_right_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-      
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose #向右看
-        xyz: [0.0, 0.25, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_target_offset_mf
-        label: move_to_default_pose # 向右吸
-        offset_xyz: [0.0, 0.15, -0.05]
-        j5_target_pos: 0.14
-        target_spin: 90.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 居高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.36, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 居高
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 50.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 50.0
-      
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #看前面
-        xyz: [0.25, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-  - id: 37
-    name: catch_neg_200_KFS_right_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-      
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose #向右看
-        xyz: [0.0, 0.25, 0.05]
-        j5_target_pos: 0.0 
-        target_spin: 90.0
-
-      - type: move_target_offset_mf
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: 0.14
-        target_spin: 90.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 居高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 170.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.36, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-      
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #居高
-        xyz: [-0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 50.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #转180度
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 50.0
-      
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose #看前面
-        xyz: [0.25, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-
 # 测试
   - id: 90
     name: front_200
-    steps:   
-      - type: move_target_offset_mrl #j5 负责左右横移动
+    steps:
+      - type: move_target_offset_mrl
         label: move_to_default_pose
         offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0 #j5 在视觉target_points.y + offset.y的基础上，再+ j5_target_pos
-        target_spin: 90.0 #已经无用target_points.y + offset.z判断
+        j5_target_pos: -0.015
+        target_spin: 90.0
 
   - id: 91
     name: front_neg_200
     steps:
       - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
+        label: move_to_default_pose
         offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 0.0
 
   - id: 92
     name: left_200
-    steps: 
+    steps:
       - type: move_target_offset_mf
-        label: move_to_default_pose #向左吸
+        label: move_to_default_pose
         offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
 
   - id: 93
     name: left_neg_200
     steps:
       - type: move_target_offset_mf
-        label: move_to_default_pose #向下吸
+        label: move_to_default_pose
         offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 0.0
 
   - id: 94
     name: right_200
     steps:
       - type: move_target_offset_mf
-        label: move_to_default_pose # 向右吸
+        label: move_to_default_pose
         offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
 
   - id: 95
     name: right_neg_200
     steps:
       - type: move_target_offset_mf
-        label: move_to_default_pose # 向下吸
+        label: move_to_default_pose
         offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.015
         target_spin: 90.0
-  
+
   - id: 99
     name: watching_front
     steps:
@@ -2289,7 +1308,7 @@ action_sets:
         label: move_to_default_pose
         xyz: [0.6570, 0.0, 0.3171]
         target_spin: 0.0
-      
+
       - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.6570, 0.0, 0.1172]
@@ -2302,7 +1321,7 @@ action_sets:
       - type: set_payload_active
         label: payload_on
         enabled: true
-      
+
       - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2570, 0.0, 0.7772]
@@ -2310,22 +1329,22 @@ action_sets:
 
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [-0.2570, -0.0001, 0.7772]
+        xyz: [-0.2570, -0.0149, 0.7772]
         target_spin: 95.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [-0.2870, -0.0001, 0.4672]
+        xyz: [-0.2870, -0.0149, 0.4672]
         target_spin: 95.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [-0.2870, -0.0001, 0.4672]
-        target_spin: 0.0  
+        xyz: [-0.2870, -0.0149, 0.4672]
+        target_spin: 0.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [-0.2870, -0.0001, 0.3172]
+        xyz: [-0.2870, -0.0149, 0.3172]
         target_spin: 0.0
 
       - type: set_payload_active
@@ -2335,23 +1354,23 @@ action_sets:
       - type: set_vacuum
         label: vacuum_off
         enabled: false
-      
+
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [-0.3070, -0.0001, 0.4172]
+        xyz: [-0.3070, -0.0149, 0.4172]
         target_spin: 0.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [-0.2570, -0.0001, 0.7772]
+        xyz: [-0.2570, -0.0149, 0.7772]
         target_spin: 95.0
-      
+
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [0.2570, 0.00, 0.7772]
+        xyz: [0.2570, 0.0, 0.7772]
         target_spin: 95.0
 
       - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.5]
-        target_spin: 0.0  
+        target_spin: 0.0
