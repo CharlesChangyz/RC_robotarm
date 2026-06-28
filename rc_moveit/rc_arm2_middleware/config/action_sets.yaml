@@ -81,13 +81,13 @@ action_sets:
         label: move_to_default_pose #放置
         xyz: [-0.31, -0.0001, 0.40]
         j5_target_pos: 0.0001
-        target_spin: 0.0
+        target_spin: -15.0
 
       - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose #放置
         xyz: [-0.31, -0.0001, 0.35]
         j5_target_pos: 0.0001
-        target_spin: 0.0
+        target_spin: -15.0
 
       - type: set_payload_active
         label: payload_off # 松力
@@ -111,8 +111,8 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.2] # 看前面
-        j5_target_pos: 0.0
+        xyz: [0.2171, 0.0, 0.1171] # 看前面
+        j5_target_pos: -0.0149
         target_spin: 0.0
 
   - id: 19
@@ -167,13 +167,13 @@ action_sets:
         label: move_to_default_pose #放置
         xyz: [-0.315, -0.0001, 0.40]
         j5_target_pos: -0.0149
-        target_spin: 0.0
+        target_spin: -15.0
 
       - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose #放置
         xyz: [-0.315, -0.0001, 0.35]
         j5_target_pos: -0.0149
-        target_spin: 0.0
+        target_spin: -15.0
 
       - type: set_payload_active
         label: payload_off # 松力
@@ -258,13 +258,13 @@ action_sets:
         label: move_to_default_pose #放置
         xyz: [-0.315, -0.0001, 0.45]
         j5_target_pos: -0.0149
-        target_spin: 0.0
+        target_spin: -15.0
 
       - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose #放置
         xyz: [-0.315, -0.0001, 0.35]
         j5_target_pos: -0.0149
-        target_spin: 0.0
+        target_spin: -15.0
 
       - type: set_payload_active
         label: payload_off # 松力
@@ -349,14 +349,14 @@ action_sets:
         label: move_to_default_pose #放置
         xyz: [-0.315, -0.0001, 0.40]
         j5_target_pos: -0.0149
-        target_spin: 0.0
+        target_spin: -15.0
 
       - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose #放置
         xyz: [-0.315, -0.0001, 0.35]
         j5_target_pos: -0.0149
-        target_spin: 0.0
-
+        target_spin: -15.0
+      
       - type: set_payload_active
         label: payload_off # 松力
         enabled: false
