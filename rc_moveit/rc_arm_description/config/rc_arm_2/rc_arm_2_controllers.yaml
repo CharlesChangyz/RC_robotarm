@@ -54,4 +54,4 @@ arm_controller:
 
       # j4 到目标点的允许误差，单位 rad
       j4_joint:
-        goal: 1.0
+        goal: 0.5

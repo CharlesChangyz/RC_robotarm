@@ -39,19 +39,19 @@ action_sets:
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.2]
         j5_target_pos: 0.0
-        target_spin: 15.0 #已经无用target_points.y + offset.z判断
+        target_spin: 0.0 #已经无用target_points.y + offset.z判断
 
       - type: move_fixed_pose_mrl #j5 负责左右横移动
         label: move_to_default_pose
         xyz: [0.66, 0.0, 0.2]
         j5_target_pos: 0.0
-        target_spin: 15.0 #已经无用target_points.y + offset.z判断
+        target_spin: 0.0 #已经无用target_points.y + offset.z判断
       
       - type: move_fixed_pose_mrl #j5 负责左右横移动
         label: move_to_default_pose
         xyz: [0.66, 0.0, 0.12]
         j5_target_pos: 0.0
-        target_spin: 15.0 #已经无用target_points.y + offset.z判断
+        target_spin: 0.0 #已经无用target_points.y + offset.z判断
 
       - type: delay
         label: wait_after_move
@@ -101,13 +101,13 @@ action_sets:
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8] # 居高
         j5_target_pos: 0.0001
-        target_spin: 50.0
+        target_spin: 90.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8] # 转180度
         j5_target_pos: 0.0
-        target_spin: 50.0
+        target_spin: 90.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
@@ -126,13 +126,13 @@ action_sets:
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.18]
         j5_target_pos: -0.015
-        target_spin: 105.0 #已经无用target_points.y + offset.z判断
+        target_spin: 90.0 #已经无用target_points.y + offset.z判断
 
       - type: move_fixed_pose_mrl #j5 负责左右横移动
         label: move_to_default_pose
         xyz: [0.65, 0.0, 0.18]
         j5_target_pos: -0.015
-        target_spin: 105.0 #已经无用target_points.y + offset.z判断
+        target_spin: 90.0 #已经无用target_points.y + offset.z判断
 
       - type: delay
         label: wait_after_move
@@ -215,15 +215,15 @@ action_sets:
 
       - type: move_fixed_pose_mrl #j5 负责左右横移动
         label: move_to_default_pose
-        xyz: [0.81, 0.0, 0.0]
+        xyz: [0.795, 0.0, 0.0]
         j5_target_pos: -0.015
-        target_spin: 15.0 #已经无用target_points.y + offset.z判断
+        target_spin: 0.0 #已经无用target_points.y + offset.z判断
 
       - type: move_fixed_pose_mrl #j5 负责左右横移动
         label: move_to_default_pose
-        xyz: [0.81, 0.0, -0.08]
+        xyz: [0.795, 0.0, -0.08]
         j5_target_pos: -0.015
-        target_spin: 15.0 #已经无用target_points.y + offset.z判断
+        target_spin: 0.0 #已经无用target_points.y + offset.z判断
 
       - type: delay
         label: wait_after_move
@@ -242,13 +242,13 @@ action_sets:
         label: move_to_default_pose # 举高
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: -0.015
-        target_spin: 160.0
+        target_spin: 150.0
 
       - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose # 转180度
         xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: -0.0149
-        target_spin: 160.0
+        target_spin: 150.0
 
       - type: delay
         label: wait_after_move
@@ -256,15 +256,15 @@ action_sets:
 
       - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose #放置
-        xyz: [-0.315, -0.0001, 0.40]
+        xyz: [-0.315, -0.0001, 0.45]
         j5_target_pos: -0.0149
-        target_spin: 15.0
+        target_spin: 0.0
 
       - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose #放置
         xyz: [-0.315, -0.0001, 0.35]
         j5_target_pos: -0.0149
-        target_spin: 15.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off # 松力
@@ -308,13 +308,13 @@ action_sets:
         label: move_to_default_pose
         xyz: [0.2, 0.0, 0.4]
         j5_target_pos: -0.015
-        target_spin: 105.0 #已经无用target_points.y + offset.z判断
+        target_spin: 90.0 #已经无用target_points.y + offset.z判断
 
       - type: move_fixed_pose_mrl #j5 负责左右横移动
         label: move_to_default_pose
         xyz: [0.75, 0.0, 0.35]
         j5_target_pos: -0.015
-        target_spin: 105.0 #已经无用target_points.y + offset.z判断
+        target_spin: 90.0 #已经无用target_points.y + offset.z判断
 
       - type: delay
         label: wait_after_move
@@ -349,13 +349,13 @@ action_sets:
         label: move_to_default_pose #放置
         xyz: [-0.315, -0.0001, 0.40]
         j5_target_pos: -0.0149
-        target_spin: 15.0
+        target_spin: 0.0
 
       - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose #放置
         xyz: [-0.315, -0.0001, 0.35]
         j5_target_pos: -0.0149
-        target_spin: 15.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off # 松力
