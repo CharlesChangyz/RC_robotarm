@@ -142,6 +142,11 @@ action_sets:
         label: payload_on
         enabled: true
 
+      - type: send_can_frame
+        label: notify # 完成抓取通知
+        can_id: 0x501
+        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+
       - type: move_fixed_pose_mrl #机械臂y=-0.0001
         label: move_to_default_pose # 举高
         xyz: [0.1, 0.0, 0.7]
@@ -178,6 +183,11 @@ action_sets:
         label: vacuum_off # 关闭吸盘
         enabled: false
 
+      - type: send_can_frame
+        label: notify # 完成放置通知
+        can_id: 0x502
+        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8] # 居高
@@ -192,7 +202,7 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.2] # 看前面
+        xyz: [0.2171, 0.0, 0.1171] # 看前面
         j5_target_pos: -0.0149
         target_spin: 0.0
 

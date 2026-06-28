@@ -52,6 +52,8 @@ class ActionStep:
     j5_target_pos: Optional[float] = None
     enabled: Optional[bool] = None
     delay_sec: Optional[float] = None
+    can_id: Optional[int] = None
+    can_data: Optional[Tuple[int, ...]] = None
 
 
 @dataclass(frozen=True)
@@ -318,6 +320,14 @@ class Arm2MiddlewareNode(Node):
                 delay_sec=self._parse_delay_sec(raw_step),
             )
 
+        if step_type == "send_can_frame":
+            return ActionStep(
+                step_type=step_type,
+                label=label,
+                can_id=int(raw_step["can_id"]),
+                can_data=self._parse_can_data(raw_step.get("can_data")),
+            )
+
         if step_type in {"move_target_offset", "move_target_offset_noj5"}:
             return ActionStep(
                 step_type=step_type,
@@ -367,6 +377,20 @@ class Arm2MiddlewareNode(Node):
         if delay_sec < 0.0:
             raise ValueError("delay duration_sec must be non-negative")
         return delay_sec
+
+    def _parse_can_data(self, raw_data: object) -> Tuple[int, ...]:
+        if not isinstance(raw_data, (list, tuple)) or len(raw_data) != 8:
+            raise ValueError("send_can_frame step requires can_data as a length-8 list")
+
+        parsed: List[int] = []
+        for index, value in enumerate(raw_data):
+            byte = int(value)
+            if byte < 0 or byte > 0xFF:
+                raise ValueError(
+                    f"send_can_frame can_data[{index}] must be between 0 and 255"
+                )
+            parsed.append(byte)
+        return tuple(parsed)
 
     def _set_state(self, new_state: MiddlewareState, detail: str) -> None:
         if self._state == new_state:
@@ -633,6 +657,21 @@ class Arm2MiddlewareNode(Node):
                 self._complete_current_step("delay skipped because duration is 0.000 sec")
                 return
             self._enter_delay_wait(f"waiting delay {delay_sec:.3f} sec")
+            return
+
+        if step.step_type == "send_can_frame":
+            if step.can_id is None or step.can_data is None:
+                self._fail_action_set("send_can_frame missing can_id or can_data")
+                return
+            if not self._publish_dm_serial_frame(step.can_id, step.can_data):
+                self._fail_action_set(
+                    "send_can_frame requested but DM serial TX publisher is unavailable"
+                )
+                return
+            self._complete_current_step(
+                "sent can frame id=0x%X data=%s"
+                % (step.can_id, [int(value) for value in step.can_data])
+            )
             return
 
         if step.step_type == "move_target_offset":
@@ -1043,21 +1082,50 @@ class Arm2MiddlewareNode(Node):
             return
 
         frame = self._dm_serial_bridge.completion_frame()
-        msg = CanFrame()
-        msg.id = frame.can_id
-        msg.is_extended = frame.is_extended
-        msg.is_remote = frame.is_remote
-        msg.is_fd = frame.is_fd
-        msg.dlc = frame.dlc
-        msg.data = [0] * 64
-        for index, value in enumerate(frame.data[: frame.dlc]):
-            msg.data[index] = value
-        self._dm_serial_tx_pub.publish(msg)
+        if not self._publish_dm_serial_frame(
+            frame.can_id,
+            frame.data[: frame.dlc],
+            is_extended=frame.is_extended,
+            is_remote=frame.is_remote,
+            is_fd=frame.is_fd,
+            dlc=frame.dlc,
+        ):
+            return
 
         self.get_logger().info(
             "sent DM serial completion id=0x%X for action_set=%d on %s"
             % (frame.can_id, action_set_id, self._dm_serial_tx_topic)
         )
+
+    def _publish_dm_serial_frame(
+        self,
+        can_id: int,
+        data: Sequence[int],
+        *,
+        is_extended: bool = False,
+        is_remote: bool = False,
+        is_fd: bool = True,
+        dlc: Optional[int] = None,
+    ) -> bool:
+        if self._dm_serial_tx_pub is None:
+            return False
+
+        payload = [int(value) & 0xFF for value in data]
+        if dlc is None:
+            dlc = len(payload)
+        dlc = max(0, min(int(dlc), min(len(payload), 64)))
+
+        msg = CanFrame()
+        msg.id = int(can_id)
+        msg.is_extended = bool(is_extended)
+        msg.is_remote = bool(is_remote)
+        msg.is_fd = bool(is_fd)
+        msg.dlc = dlc
+        msg.data = [0] * 64
+        for index, value in enumerate(payload[:dlc]):
+            msg.data[index] = value
+        self._dm_serial_tx_pub.publish(msg)
+        return True
 
 
 def main(args: Optional[Sequence[str]] = None) -> None:
