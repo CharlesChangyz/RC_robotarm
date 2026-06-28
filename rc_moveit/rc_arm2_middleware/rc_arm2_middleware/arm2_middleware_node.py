@@ -723,10 +723,7 @@ class Arm2MiddlewareNode(Node):
             j5_target_pos = step.j5_target_pos
             if step.step_type.endswith("_mrl"):
                 j5_target_pos = float(self._cached_target_point.y) + float(step.j5_target_pos)
-            if self._cached_target_point.z <0.1:
-                target_spin_deg = 0.0
-            else:
-                target_spin_deg = 90.0
+            target_spin_deg = step.target_spin_deg
             self._enter_motion_wait(
                 "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
                 % (step.step_type, x, y, z, target_spin_deg, float(j5_target_pos)),

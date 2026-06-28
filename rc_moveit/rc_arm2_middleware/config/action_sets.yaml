@@ -1275,7 +1275,7 @@ action_sets:
       
       - type: move_target_offset_mrl #j5 负责左右横移动
         label: move_to_default_pose
-        offset_xyz: [-0.05, 0.0, -0.05]
+        offset_xyz: [0.0, 0.0, 0.0]
         j5_target_pos: 0.0 #j5 在视觉target_points.y + offset.y的基础上，再+ j5_target_pos
         target_spin: 90.0 #已经无用target_points.y + offset.z判断
 
