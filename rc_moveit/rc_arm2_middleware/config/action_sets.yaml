@@ -288,13 +288,13 @@ action_sets:
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.4]
         j5_target_pos: -0.015
-        target_spin: 90.0
+        target_spin: 95.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.75, 0.0, 0.35]
         j5_target_pos: -0.015
-        target_spin: 90.0
+        target_spin: 95.0
 
       - type: delay
         label: wait_after_move
@@ -313,13 +313,13 @@ action_sets:
         label: move_to_default_pose # 举高
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: -0.015
-        target_spin: 150.0
+        target_spin: 120.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 转180度
         xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: -0.0149
-        target_spin: 150.0
+        target_spin: 120.0
 
       - type: delay
         label: wait_after_move
@@ -327,15 +327,9 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.315, -0.0001, 0.45]
+        xyz: [-0.325, -0.0001, 0.45]
         j5_target_pos: -0.0149
         target_spin: -5.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.33, -0.0001, 0.35]
-        j5_target_pos: -0.0149  
-        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off
@@ -359,7 +353,7 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
-        xyz: [0.25, 0.0, 0.4]
+        xyz: [0.35, 0.0, 0.4]
         j5_target_pos: -0.015
         target_spin: 0.0
 
