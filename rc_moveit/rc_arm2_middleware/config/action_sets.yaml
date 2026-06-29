@@ -360,7 +360,7 @@ action_sets:
 # keep
 
 # keep
-  - id: 11 #no_vision_catch_200_KFS_front_and_keep
+  - id: 20 #no_vision_catch_200_KFS_front_and_keep
     name: no_vision_catch_200_KFS_front_and_keep
     steps:
       - type: set_vacuum
@@ -389,12 +389,12 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.25]
+        xyz: [0.25, 0.0, 0.4]
         j5_target_pos: -0.015
-        target_spin: 90.0
+        target_spin: 0.0
 
 
-  - id: 12 #no_vision_catch_200_KFS_front_stand_and_keep
+  - id: 13 #no_vision_catch_200_KFS_front_stand_and_keep
     name: no_vision_catch_200_KFS_front_stand_and_keep
     steps:
       - type: set_vacuum
@@ -429,12 +429,12 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.25]
+        xyz: [0.25, 0.0, 0.4]
         j5_target_pos: -0.015
-        target_spin: 90.0
+        target_spin: 0.0
 
 
-  - id: 13 #no_vision_catch_neg_200_KFS_front_and_keep
+  - id: 14 #no_vision_catch_neg_200_KFS_front_and_keep
     name: no_vision_catch_neg_200_KFS_front_and_keep
     steps:
       - type: set_vacuum
@@ -463,12 +463,12 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.25]
+        xyz: [0.25, 0.0, 0.4]
         j5_target_pos: -0.015
-        target_spin: 90.0
+        target_spin: 0.0
 
 
-  - id: 14 #no_vision_catch_400_KFS_front_and_keep
+  - id: 15 #no_vision_catch_400_KFS_front_and_keep
     name: no_vision_catch_400_KFS_front_and_keep
     steps:
       - type: set_vacuum
@@ -497,9 +497,9 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.42]
+        xyz: [0.25, 0.0, 0.4]
         j5_target_pos: -0.015
-        target_spin: 90.0
+        target_spin: 0.0
         
 # discard
   - id: 10 #no_vision_catch_200_KFS_front_and_discard_left
@@ -1867,6 +1867,15 @@ action_sets:
 # discard
 
 # 通用动作
+  - id: 9 #before_catch_head
+    name: before_catch_head
+    steps:
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.0, 0.1170, 0.1171]
+        j5_target_pos: -0.015
+        target_spin: 0.0
+
   - id: 81 #common_watching_front
     name: common_watching_front
     steps:
