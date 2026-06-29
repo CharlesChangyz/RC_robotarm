@@ -168,6 +168,12 @@ python3 demo/tf_target_cli_publisher.py
 ./scripts/run_fastdds_discovery_server.sh
 
 # 终端 2，本机 GUI/代理
+TF_CLI_USE_DISCOVERY_SERVER=1 ./scripts/run_tf_cli_domain55.sh
+```
+
+本机单机测试时可以直接运行：
+
+```bash
 ./scripts/run_tf_cli_domain55.sh
 ```
 
@@ -176,6 +182,11 @@ python3 demo/tf_target_cli_publisher.py
 ```bash
 ROS_DOMAIN_ID=55
 ROS_LOCALHOST_ONLY=0
+```
+
+跨 Wi-Fi 控制时设置 `TF_CLI_USE_DISCOVERY_SERVER=1` 后还会导出：
+
+```bash
 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ROS_DISCOVERY_SERVER=192.168.3.83:11811
 ```
