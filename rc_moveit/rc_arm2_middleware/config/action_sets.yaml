@@ -21,13 +21,13 @@ action_sets:
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.18]
         j5_target_pos: -0.015
-        target_spin: 90.0
+        target_spin: 100.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.65, 0.0, 0.18]
         j5_target_pos: -0.015
-        target_spin: 90.0
+        target_spin: 100.0
 
       - type: delay
         label: wait_after_move
@@ -60,15 +60,15 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.40]
+        xyz: [-0.315, -0.0001, 0.45]
         j5_target_pos: -0.0149
-        target_spin: -15.0
+        target_spin: -5.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.35]
+        xyz: [-0.33, -0.0001, 0.35]
         j5_target_pos: -0.0149  
-        target_spin: -15.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off
@@ -153,15 +153,15 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.40]
+        xyz: [-0.315, -0.0001, 0.45]
         j5_target_pos: -0.0149
-        target_spin: -15.0
+        target_spin: -5.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.35]
+        xyz: [-0.33, -0.0001, 0.35]
         j5_target_pos: -0.0149  
-        target_spin: -15.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off
@@ -240,15 +240,15 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.40]
+        xyz: [-0.315, -0.0001, 0.45]
         j5_target_pos: -0.0149
-        target_spin: -15.0
+        target_spin: -5.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.35]
+        xyz: [-0.33, -0.0001, 0.35]
         j5_target_pos: -0.0149  
-        target_spin: -15.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off
@@ -286,7 +286,7 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [0.2, 0.0, 0.4]
+        xyz: [0.25, 0.0, 0.4]
         j5_target_pos: -0.015
         target_spin: 90.0
 
@@ -327,15 +327,15 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.40]
+        xyz: [-0.315, -0.0001, 0.45]
         j5_target_pos: -0.0149
-        target_spin: -15.0
+        target_spin: -5.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.35]
+        xyz: [-0.33, -0.0001, 0.35]
         j5_target_pos: -0.0149  
-        target_spin: -15.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off
@@ -966,15 +966,15 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.40]
+        xyz: [-0.315, -0.0001, 0.45]
         j5_target_pos: -0.0149
-        target_spin: -15.0
+        target_spin: -5.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.35]
+        xyz: [-0.33, -0.0001, 0.35]
         j5_target_pos: -0.0149  
-        target_spin: -15.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off
@@ -1048,15 +1048,15 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.40]
+        xyz: [-0.315, -0.0001, 0.45]
         j5_target_pos: -0.0149
-        target_spin: -15.0
+        target_spin: -5.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.35]
+        xyz: [-0.33, -0.0001, 0.35]
         j5_target_pos: -0.0149  
-        target_spin: -15.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off
@@ -1135,15 +1135,15 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.40]
+        xyz: [-0.315, -0.0001, 0.45]
         j5_target_pos: -0.0149
-        target_spin: -15.0
+        target_spin: -5.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.35]
+        xyz: [-0.33, -0.0001, 0.35]
         j5_target_pos: -0.0149  
-        target_spin: -15.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off
@@ -1217,15 +1217,15 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.40]
+        xyz: [-0.315, -0.0001, 0.45]
         j5_target_pos: -0.0149
-        target_spin: -15.0
+        target_spin: -5.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.35]
+        xyz: [-0.33, -0.0001, 0.35]
         j5_target_pos: -0.0149  
-        target_spin: -15.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_off
