@@ -10,7 +10,7 @@ action_sets:
 #       但当前 discard 额外拆分为 left/right，因此实际是 32 个。
 # 无视觉
 # store
-  - id: 19 #no_vision_catch_200_KFS_front_and_store
+  - id: 41 #no_vision_catch_200_KFS_front_and_store
     name: no_vision_catch_200_KFS_front_and_store
     steps:
       - type: set_vacuum
@@ -39,8 +39,8 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+        can_id: 0x502
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
@@ -97,7 +97,7 @@ action_sets:
         target_spin: 0.0
 
 
-  - id: 1 #no_vision_catch_200_KFS_front_stand_and_store
+  - id: 42 #no_vision_catch_200_KFS_front_stand_and_store
     name: no_vision_catch_200_KFS_front_stand_and_store
     steps:
       - type: set_vacuum
@@ -132,8 +132,8 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+        can_id: 0x502
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
@@ -190,7 +190,7 @@ action_sets:
         target_spin: 0.0
 
 
-  - id: 2 #no_vision_catch_neg_200_KFS_front_and_store
+  - id: 43 #no_vision_catch_neg_200_KFS_front_and_store
     name: no_vision_catch_neg_200_KFS_front_and_store
     steps:
       - type: set_vacuum
@@ -219,8 +219,8 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+        can_id: 0x502
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
@@ -277,7 +277,7 @@ action_sets:
         target_spin: 0.0
 
 
-  - id: 21 #no_vision_catch_400_KFS_front_and_store
+  - id: 44 #no_vision_catch_400_KFS_front_and_store
     name: no_vision_catch_400_KFS_front_and_store
     steps:
       - type: set_vacuum
@@ -306,8 +306,8 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+        can_id: 0x502
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
@@ -831,8 +831,8 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+        can_id: 0x502
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
@@ -884,8 +884,8 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+        can_id: 0x502
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
@@ -915,12 +915,27 @@ action_sets:
 ############################################################################################################
 # 有视觉
 # store
-  - id: 41 #vision_catch_200_KFS_front_and_store
+  - id: 19 #vision_catch_200_KFS_front_and_store
     name: vision_catch_200_KFS_front_and_store
     steps:
+      - type: send_can_frame
+        label: notify # 完成抓取通知
+        can_id: 0x501
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_vacuum
         label: vacuum_on
         enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
 
       - type: move_target_offset_mrl # j5 负责左右横移动
         label: move_to_default_pose
@@ -997,12 +1012,27 @@ action_sets:
         target_spin: 65.0
 
 
-  - id: 42 #vision_catch_200_KFS_front_stand_and_store
+  - id: 1 #vision_catch_200_KFS_front_stand_and_store
     name: vision_catch_200_KFS_front_stand_and_store
     steps:
+      - type: send_can_frame
+        label: notify # 完成抓取通知
+        can_id: 0x501
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_vacuum
         label: vacuum_on
         enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 目标略上方
@@ -1079,12 +1109,27 @@ action_sets:
         target_spin: 0.0
 
 
-  - id: 43 #vision_catch_neg_200_KFS_front_and_store
+  - id: 2 #vision_catch_neg_200_KFS_front_and_store
     name: vision_catch_neg_200_KFS_front_and_store
     steps:
+      - type: send_can_frame
+        label: notify # 完成抓取通知
+        can_id: 0x501
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_vacuum
         label: vacuum_on
         enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 目标略上方
@@ -1108,8 +1153,8 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x501
-        can_data: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+        can_id: 0x502
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 举高
@@ -1166,22 +1211,37 @@ action_sets:
         target_spin: 0.0
 
 
-  - id: 44 #vision_catch_400_KFS_front_and_store
+  - id: 21 #vision_catch_400_KFS_front_and_store
     name: vision_catch_400_KFS_front_and_store
     steps:
+      - type: send_can_frame
+        label: notify # 完成抓取通知
+        can_id: 0x501
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+        
       - type: set_vacuum
         label: vacuum_on
         enabled: true
 
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.25, 0.0, 0.4]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+
       - type: move_target_offset_mrl # j5 负责左右横移动
         label: move_to_default_pose
-        offset_xyz: [-0.35, 0.0, -0.05]
+        offset_xyz: [-0.35, 0.0, 0.04]
         j5_target_pos: 0.0
         target_spin: 90.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向前吸
-        offset_xyz: [0.15, 0.0, -0.05]
+        offset_xyz: [0.05, 0.0, 0.04]
         j5_target_pos: 0.0
         target_spin: 90.0
 
@@ -1242,7 +1302,7 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
+        xyz: [0.25, 0.0, 0.5]
         j5_target_pos: 0.0
         target_spin: 0.0
 
@@ -1880,7 +1940,7 @@ action_sets:
     steps:
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.05]
+        xyz: [0.1170, 0.0, 0.1171]
         target_spin: 0.0
 
 

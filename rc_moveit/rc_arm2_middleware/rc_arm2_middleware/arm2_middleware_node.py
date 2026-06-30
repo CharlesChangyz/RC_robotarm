@@ -30,6 +30,7 @@ class MiddlewareState(str, Enum):
     TRACKING_TARGET_OFFSET = "TRACKING_TARGET_OFFSET"
     WAITING_PAYLOAD_ACTIVE = "WAITING_PAYLOAD_ACTIVE"
     WAITING_DELAY = "WAITING_DELAY"
+    WAITING_TARGET_POINT_UPDATE = "WAITING_TARGET_POINT_UPDATE"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
@@ -52,6 +53,7 @@ class ActionStep:
     j5_target_pos: Optional[float] = None
     enabled: Optional[bool] = None
     delay_sec: Optional[float] = None
+    timeout_sec: Optional[float] = None
     can_id: Optional[int] = None
     can_data: Optional[Tuple[int, ...]] = None
 
@@ -82,6 +84,7 @@ class ActiveRun:
     waiting_started_ns: Optional[int] = None
     waiting_execution_baseline_id: int = 0
     waiting_execution_id: Optional[int] = None
+    waiting_target_point_baseline_sequence: Optional[int] = None
     desired_payload_active: Optional[bool] = None
     last_target_offset_command: Optional[TargetPoint] = None
     target_offset_publish_count: int = 0
@@ -170,6 +173,7 @@ class Arm2MiddlewareNode(Node):
 
         self._state = MiddlewareState.IDLE
         self._cached_target_point: Optional[TargetPoint] = None
+        self._target_point_sequence = 0
         self._payload_active = False
         self._latest_j5_position: Optional[float] = None
         self._latest_laser_distance: Optional[int] = None
@@ -321,6 +325,13 @@ class Arm2MiddlewareNode(Node):
                 delay_sec=self._parse_delay_sec(raw_step),
             )
 
+        if step_type == "update_target_point":
+            return ActionStep(
+                step_type=step_type,
+                label=label,
+                timeout_sec=self._parse_timeout_sec(raw_step, default_sec=1.0),
+            )
+
         if step_type == "send_can_frame":
             return ActionStep(
                 step_type=step_type,
@@ -379,6 +390,10 @@ class Arm2MiddlewareNode(Node):
             raise ValueError("delay duration_sec must be non-negative")
         return delay_sec
 
+    def _parse_timeout_sec(self, raw_step: dict, default_sec: float) -> float:
+        raw_timeout = raw_step.get("timeout_sec", default_sec)
+        return float(raw_timeout)
+
     def _parse_can_data(self, raw_data: object) -> Tuple[int, ...]:
         if not isinstance(raw_data, (list, tuple)) or len(raw_data) != 8:
             raise ValueError("send_can_frame step requires can_data as a length-8 list")
@@ -408,15 +423,34 @@ class Arm2MiddlewareNode(Node):
             z=float(msg.xyz.z),
             target_spin_deg=float(msg.target_spin_deg),
         )
+        self._target_point_sequence += 1
         self.get_logger().info(
-            "cached target point x=%.4f y=%.4f z=%.4f spin=%.2f deg"
+            "cached target point seq=%d x=%.4f y=%.4f z=%.4f spin=%.2f deg"
             % (
+                self._target_point_sequence,
                 self._cached_target_point.x,
                 self._cached_target_point.y,
                 self._cached_target_point.z,
                 self._cached_target_point.target_spin_deg,
             )
         )
+        run = self._active_run
+        if (
+            run is not None
+            and self._state == MiddlewareState.WAITING_TARGET_POINT_UPDATE
+            and run.waiting_target_point_baseline_sequence is not None
+            and self._target_point_sequence > run.waiting_target_point_baseline_sequence
+        ):
+            old_target_point = run.target_point
+            run.target_point = self._cached_target_point
+            self._complete_current_step(
+                "updated target point %s -> %s seq=%d"
+                % (
+                    self._format_target_point(old_target_point),
+                    self._format_target_point(run.target_point),
+                    self._target_point_sequence,
+                )
+            )
 
     def _on_run_action_set(self, msg: Int32) -> None:
         requested_id = int(msg.data)
@@ -601,6 +635,11 @@ class Arm2MiddlewareNode(Node):
             if elapsed >= int(delay_sec * 1_000_000_000):
                 self._complete_current_step(f"delay completed after {delay_sec:.3f} sec")
             return
+        elif self._state == MiddlewareState.WAITING_TARGET_POINT_UPDATE:
+            timeout_sec = 1.0
+            if run.current_step is not None and run.current_step.timeout_sec is not None:
+                timeout_sec = float(run.current_step.timeout_sec)
+            timeout_detail = self._target_point_update_timeout_detail(timeout_sec)
         else:
             return
 
@@ -673,6 +712,18 @@ class Arm2MiddlewareNode(Node):
                 self._complete_current_step("delay skipped because duration is 0.000 sec")
                 return
             self._enter_delay_wait(f"waiting delay {delay_sec:.3f} sec")
+            return
+
+        if step.step_type == "update_target_point":
+            timeout_sec = 1.0 if step.timeout_sec is None else float(step.timeout_sec)
+            self._enter_target_point_update_wait(
+                "waiting target point update after seq=%d timeout=%.3f current=%s"
+                % (
+                    self._target_point_sequence,
+                    timeout_sec,
+                    self._format_target_point(run.target_point),
+                )
+            )
             return
 
         if step.step_type == "send_can_frame":
@@ -789,6 +840,7 @@ class Arm2MiddlewareNode(Node):
         run.waiting_started_ns = self.get_clock().now().nanoseconds
         run.waiting_execution_baseline_id = self._latest_motion_execution_id
         run.waiting_execution_id = None
+        run.waiting_target_point_baseline_sequence = None
         run.desired_payload_active = None
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
@@ -806,6 +858,7 @@ class Arm2MiddlewareNode(Node):
         run.waiting_started_ns = self.get_clock().now().nanoseconds
         run.waiting_execution_baseline_id = self._latest_motion_execution_id
         run.waiting_execution_id = None
+        run.waiting_target_point_baseline_sequence = None
         run.desired_payload_active = None
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
@@ -823,6 +876,7 @@ class Arm2MiddlewareNode(Node):
         run.waiting_started_ns = self.get_clock().now().nanoseconds
         run.waiting_execution_baseline_id = self._latest_motion_execution_id
         run.waiting_execution_id = None
+        run.waiting_target_point_baseline_sequence = None
         run.desired_payload_active = None
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
@@ -840,6 +894,7 @@ class Arm2MiddlewareNode(Node):
         run.waiting_started_ns = self.get_clock().now().nanoseconds
         run.waiting_execution_baseline_id = self._latest_motion_execution_id
         run.waiting_execution_id = None
+        run.waiting_target_point_baseline_sequence = None
         run.desired_payload_active = bool(desired)
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
@@ -847,6 +902,24 @@ class Arm2MiddlewareNode(Node):
         run.waiting_j5_target_pos = None
         run.last_j5_command_pos = None
         self._set_state(MiddlewareState.WAITING_PAYLOAD_ACTIVE, detail)
+
+    def _enter_target_point_update_wait(self, detail: str) -> None:
+        run = self._active_run
+        if run is None:
+            self._fail_action_set("internal error: missing active run when entering target point update wait")
+            return
+
+        run.waiting_started_ns = self.get_clock().now().nanoseconds
+        run.waiting_execution_baseline_id = self._latest_motion_execution_id
+        run.waiting_execution_id = None
+        run.waiting_target_point_baseline_sequence = self._target_point_sequence
+        run.desired_payload_active = None
+        run.last_target_offset_command = None
+        run.target_offset_publish_count = 0
+        run.waiting_motion_succeeded = False
+        run.waiting_j5_target_pos = None
+        run.last_j5_command_pos = None
+        self._set_state(MiddlewareState.WAITING_TARGET_POINT_UPDATE, detail)
 
     def _refresh_target_offset_target(self, run: ActiveRun) -> None:
         step = run.current_step
@@ -906,6 +979,35 @@ class Arm2MiddlewareNode(Node):
                 laser_detail,
                 self._laser_distance_threshold,
                 target_detail,
+            )
+        )
+
+    def _target_point_update_timeout_detail(self, timeout_sec: float) -> str:
+        run = self._active_run
+        baseline_sequence = (
+            run.waiting_target_point_baseline_sequence if run is not None else None
+        )
+        current_target = self._format_target_point(run.target_point if run is not None else None)
+        return (
+            "target point update timeout after %.2f sec baseline_seq=%s current_seq=%d current=%s"
+            % (
+                timeout_sec,
+                baseline_sequence if baseline_sequence is not None else "none",
+                self._target_point_sequence,
+                current_target,
+            )
+        )
+
+    def _format_target_point(self, target_point: Optional[TargetPoint]) -> str:
+        if target_point is None:
+            return "target_point=none"
+        return (
+            "target_point=(x=%.4f, y=%.4f, z=%.4f, spin=%.2f)"
+            % (
+                target_point.x,
+                target_point.y,
+                target_point.z,
+                target_point.target_spin_deg,
             )
         )
 
@@ -1004,6 +1106,7 @@ class Arm2MiddlewareNode(Node):
         run.waiting_started_ns = None
         run.waiting_execution_baseline_id = self._latest_motion_execution_id
         run.waiting_execution_id = None
+        run.waiting_target_point_baseline_sequence = None
         run.desired_payload_active = None
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
@@ -1048,6 +1151,7 @@ class Arm2MiddlewareNode(Node):
 
         run.waiting_started_ns = None
         run.waiting_execution_id = None
+        run.waiting_target_point_baseline_sequence = None
         run.desired_payload_active = None
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
