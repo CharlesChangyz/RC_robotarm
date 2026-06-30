@@ -1,0 +1,7 @@
+# 开启服务
+systemctl --user start rc-arm2-autostart.service
+# 关闭当前服务
+systemctl --user stop rc-arm2-autostart.service
+# 修改代码后安装
+cd ~/RC_robotarm
+bash autostart/install_user_systemd_autostart.sh
