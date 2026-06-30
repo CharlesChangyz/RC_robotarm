@@ -924,9 +924,15 @@ action_sets:
 
       - type: move_target_offset_mrl # j5 负责左右横移动
         label: move_to_default_pose
+        offset_xyz: [-0.1, 0.0, 0.04]
+        j5_target_pos: 0.0
+        target_spin: 95.0
+
+      - type: move_target_offset_mrl # j5 负责左右横移动
+        label: move_to_default_pose
         offset_xyz: [0.05, 0.0, 0.04]
-        j5_target_pos: -0.02
-        target_spin: 100.0
+        j5_target_pos: 0.0
+        target_spin: 95.0
 
       - type: delay
         label: wait_after_move
@@ -954,7 +960,7 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.315, -0.0001, 0.45]
+        xyz: [-0.33, -0.0001, 0.45]
         j5_target_pos: 0.0149
         target_spin: 0.0
 
@@ -1895,6 +1901,26 @@ action_sets:
         label: move_to_default_pose
         xyz: [0.0, 0.25, 0.05]
         target_spin: 0.0
+
+  - id: 84 #vision_catch_200_KFS_front_and_store
+    name: vision_catch_200_KFS_front_and_store
+    steps:
+      - type: move_target_offset_mrl # j5 负责左右横移动
+        label: move_to_default_pose
+        offset_xyz: [0.0, 0.0, 0.04]
+        j5_target_pos: 0.0
+        target_spin: 100.0
+
+  - id: 85 #vision_catch_200_KFS_front_and_store
+    name: vision_catch_200_KFS_front_and_store
+    steps:
+      - type: move_target_offset_mrl # j5 负责左右横移动
+        label: move_to_default_pose
+        offset_xyz: [0.0, 0.0, 0.04]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+
 
 #######################################################################################################
 # 无视觉

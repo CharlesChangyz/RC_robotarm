@@ -76,6 +76,7 @@ class ActiveRun:
     action_set: ActionSet
     trigger_source: str = "topic"
     trigger_can_id: Optional[int] = None
+    target_point: Optional[TargetPoint] = None
     step_index: int = 0
     current_step: Optional[ActionStep] = None
     waiting_started_ns: Optional[int] = None
@@ -444,10 +445,25 @@ class Arm2MiddlewareNode(Node):
             action_set=action_set,
             trigger_source=source,
             trigger_can_id=can_id,
+            target_point=self._cached_target_point,
         )
+        target_point = self._active_run.target_point
+        if target_point is None:
+            target_detail = "target_point=none"
+        else:
+            target_detail = (
+                "target_point=(x=%.4f, y=%.4f, z=%.4f, spin=%.2f)"
+                % (
+                    target_point.x,
+                    target_point.y,
+                    target_point.z,
+                    target_point.target_spin_deg,
+                )
+            )
         self._set_state(
             MiddlewareState.STARTING_SET,
-            f"starting action_set id={action_set.action_id} name={action_set.name} source={source}",
+            "starting action_set id=%d name=%s source=%s %s"
+            % (action_set.action_id, action_set.name, source, target_detail),
         )
         self._start_next_step()
 
@@ -675,10 +691,13 @@ class Arm2MiddlewareNode(Node):
             return
 
         if step.step_type == "move_target_offset":
-            if self._cached_target_point is None:
-                self._fail_action_set("move_target_offset requested before target point was received")
+            target_point = run.target_point
+            if target_point is None:
+                self._fail_action_set(
+                    "move_target_offset requested but no target point was captured at action start"
+                )
                 return
-            target_spin_deg = self._cached_target_point.target_spin_deg
+            target_spin_deg = target_point.target_spin_deg
             self._enter_target_offset_tracking(
                 "tracking target_offset offset=(%.4f, %.4f, %.4f) spin=%.2f threshold=%d timeout=%.2f"
                 % (
@@ -694,15 +713,16 @@ class Arm2MiddlewareNode(Node):
             return
 
         if step.step_type == "move_target_offset_noj5":
-            if self._cached_target_point is None:
+            target_point = run.target_point
+            if target_point is None:
                 self._fail_action_set(
-                    "move_target_offset_noj5 requested before target point was received"
+                    "move_target_offset_noj5 requested but no target point was captured at action start"
                 )
                 return
-            x = self._cached_target_point.x + float(step.offset_xyz[0])
-            y = self._cached_target_point.y + float(step.offset_xyz[1])
-            z = self._cached_target_point.z + float(step.offset_xyz[2])
-            if(self._cached_target_point.z <0.1):
+            x = target_point.x + float(step.offset_xyz[0])
+            y = target_point.y + float(step.offset_xyz[1])
+            z = target_point.z + float(step.offset_xyz[2])
+            if target_point.z < 0.1:
                 target_spin_deg = 0.0
             else:
                 target_spin_deg = 90.0
@@ -714,15 +734,18 @@ class Arm2MiddlewareNode(Node):
             return
 
         if step.step_type in {"move_target_offset_mf", "move_target_offset_mrl"}:
-            if self._cached_target_point is None:
-                self._fail_action_set(f"{step.step_type} requested before target point was received")
+            target_point = run.target_point
+            if target_point is None:
+                self._fail_action_set(
+                    f"{step.step_type} requested but no target point was captured at action start"
+                )
                 return
-            x = self._cached_target_point.x + float(step.offset_xyz[0])
-            y = self._cached_target_point.y + float(step.offset_xyz[1])
-            z = self._cached_target_point.z + float(step.offset_xyz[2])
+            x = target_point.x + float(step.offset_xyz[0])
+            y = float(step.offset_xyz[1])
+            z = target_point.z + float(step.offset_xyz[2])
             j5_target_pos = step.j5_target_pos
             if step.step_type.endswith("_mrl"):
-                j5_target_pos = float(self._cached_target_point.y) + float(step.j5_target_pos)
+                j5_target_pos = float(target_point.y) + float(step.j5_target_pos)
             target_spin_deg = step.target_spin_deg
             self._enter_motion_wait(
                 "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
@@ -827,7 +850,7 @@ class Arm2MiddlewareNode(Node):
 
     def _refresh_target_offset_target(self, run: ActiveRun) -> None:
         step = run.current_step
-        target_point = self._cached_target_point
+        target_point = run.target_point
         if step is None or step.step_type != "move_target_offset" or target_point is None:
             return
 
