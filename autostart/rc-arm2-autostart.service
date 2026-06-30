@@ -1,0 +1,23 @@
+[Unit]
+Description=RC arm2 TF GUI, real stack, and KFS camera autostart
+After=default.target network-online.target graphical-session.target
+Wants=network-online.target
+ConditionPathExists=@RC_ROBOTARM_WORKSPACE@/autostart/boot_start.sh
+
+[Service]
+Type=simple
+WorkingDirectory=@RC_ROBOTARM_WORKSPACE@
+Environment=RC_ROBOTARM_WORKSPACE=@RC_ROBOTARM_WORKSPACE@
+Environment=ROS_DOMAIN_ID=55
+Environment=ROS_LOCALHOST_ONLY=0
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/rc2/.Xauthority
+Environment=QT_QPA_PLATFORM=xcb
+ExecStart=@RC_ROBOTARM_WORKSPACE@/autostart/boot_start.sh
+TimeoutStartSec=180
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+
+[Install]
+WantedBy=default.target
