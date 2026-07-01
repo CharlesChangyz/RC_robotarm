@@ -1964,8 +1964,8 @@ action_sets:
     steps:
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
-        xyz: [0.0, 0.1170, 0.1171]
-        j5_target_pos: -0.1170
+        xyz: [0.0, 0.1172, 0.1172]
+        j5_target_pos: -0.1970
         target_spin: 0.0
 
   - id: 81 #common_watching_front

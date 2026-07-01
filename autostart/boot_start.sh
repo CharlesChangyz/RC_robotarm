@@ -3,6 +3,8 @@ set -euo pipefail
 
 WORKSPACE_DIR="${RC_ROBOTARM_WORKSPACE:-/home/rc2/RC_robotarm}"
 KFS_DIR="${KFS_DIR:-/home/rc2/KFS}"
+KFS_SCRIPT="${KFS_SCRIPT:-7_1_copy.py}"
+KFS_CONDA_ENV="${KFS_CONDA_ENV:-camera_gpu}"
 LOG_DIR="${RC_ARM2_AUTOSTART_LOG_DIR:-${HOME}/.local/state/rc-arm2-autostart}"
 CONDA_SH="${CONDA_SH:-/home/rc2/miniconda3/etc/profile.d/conda.sh}"
 TF_SERVICE="${TF_SERVICE:-/rc_arm_2/remote/start_real}"
@@ -34,9 +36,17 @@ cleanup() {
   for pid in "${children[@]}"; do
     if kill -0 "${pid}" >/dev/null 2>&1; then
       kill "${pid}" >/dev/null 2>&1 || true
+      pkill -TERM -P "${pid}" >/dev/null 2>&1 || true
     fi
   done
-  wait || true
+  sleep 2
+  for pid in "${children[@]}"; do
+    if kill -0 "${pid}" >/dev/null 2>&1; then
+      kill -KILL "${pid}" >/dev/null 2>&1 || true
+      pkill -KILL -P "${pid}" >/dev/null 2>&1 || true
+    fi
+  done
+  wait >/dev/null 2>&1 || true
 }
 trap cleanup INT TERM EXIT
 
@@ -50,8 +60,8 @@ if [[ ! -f "${WORKSPACE_DIR}/rc_moveit/install/setup.bash" ]]; then
   exit 1
 fi
 
-if [[ ! -f "${KFS_DIR}/xinsheng4ros.py" ]]; then
-  log "missing KFS script: ${KFS_DIR}/xinsheng4ros.py"
+if [[ ! -f "${KFS_DIR}/${KFS_SCRIPT}" ]]; then
+  log "missing KFS script: ${KFS_DIR}/${KFS_SCRIPT}"
   exit 1
 fi
 
@@ -74,16 +84,17 @@ log "starting TF target GUI"
 ) >>"${TF_LOG}" 2>&1 &
 children+=("$!")
 
-log "starting KFS camera ROS publisher"
+log "starting KFS camera ROS publisher: script=${KFS_SCRIPT}, conda_env=${KFS_CONDA_ENV}"
 (
   cd "${KFS_DIR}"
+  unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
   if [[ -f "${CONDA_SH}" ]]; then
     # shellcheck disable=SC1090
     source "${CONDA_SH}"
-    conda activate camera
-    exec python3 xinsheng4ros.py
+    conda activate "${KFS_CONDA_ENV}"
+    exec python3 -u "${KFS_SCRIPT}"
   else
-    exec /home/rc2/miniconda3/condabin/conda run --no-capture-output -n camera python3 xinsheng4ros.py
+    exec /home/rc2/miniconda3/condabin/conda run --no-capture-output -n "${KFS_CONDA_ENV}" python3 -u "${KFS_SCRIPT}"
   fi
 ) >>"${KFS_LOG}" 2>&1 &
 children+=("$!")
