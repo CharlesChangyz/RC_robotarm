@@ -117,6 +117,10 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("target_point_topic", "/arm2/middleware/target_point")
         self.declare_parameter("run_action_set_topic", "/arm2/middleware/run_action_set")
         self.declare_parameter("motion_target_topic", "/arm2/middleware/motion_target")
+        self.declare_parameter(
+            "cartesian_motion_target_topic",
+            "/arm2/middleware/cartesian_motion_target",
+        )
         self.declare_parameter("motion_execution_topic", "/arm2/middleware/motion_execution")
         self.declare_parameter("vacuum_topic", "/rc_arm_2/vacuum_activate")
         self.declare_parameter("payload_command_topic", "/rc_arm_2/payload_active_command")
@@ -141,6 +145,9 @@ class Arm2MiddlewareNode(Node):
         self._target_point_topic = str(self.get_parameter("target_point_topic").value)
         self._run_action_set_topic = str(self.get_parameter("run_action_set_topic").value)
         self._motion_target_topic = str(self.get_parameter("motion_target_topic").value)
+        self._cartesian_motion_target_topic = str(
+            self.get_parameter("cartesian_motion_target_topic").value
+        )
         self._motion_execution_topic = str(self.get_parameter("motion_execution_topic").value)
         self._vacuum_topic = str(self.get_parameter("vacuum_topic").value)
         self._payload_command_topic = str(self.get_parameter("payload_command_topic").value)
@@ -188,6 +195,11 @@ class Arm2MiddlewareNode(Node):
         self._refresh_dm_serial_bridge()
 
         self._motion_target_pub = self.create_publisher(Arm2TargetPoint, self._motion_target_topic, 10)
+        self._cartesian_motion_target_pub = self.create_publisher(
+            Arm2TargetPoint,
+            self._cartesian_motion_target_topic,
+            10,
+        )
         self._vacuum_pub = self.create_publisher(Bool, self._vacuum_topic, 10)
         self._payload_command_pub = self.create_publisher(Bool, self._payload_command_topic, 10)
         self._j5_command_pub = self.create_publisher(Float64, self._j5_command_topic, 10)
@@ -208,7 +220,8 @@ class Arm2MiddlewareNode(Node):
         self.create_timer(1.0 / self._tracking_publish_rate_hz, self._on_timer)
 
         self.get_logger().info(
-            "arm2_middleware ready: action_sets_file=%s action_sets=%s target_point=%s run_action_set=%s motion_target=%s "
+            "arm2_middleware ready: action_sets_file=%s action_sets=%s target_point=%s run_action_set=%s "
+            "motion_target=%s cartesian_motion_target=%s "
             "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s j5_command=%s j5_position=%s "
             "j5_tolerance=%.4f laser_distance=%s laser_threshold=%d laser_wait_timeout=%.2f tracking_publish_rate=%.2f "
             "dm_serial_bridge=%d dm_serial_rx=%s dm_serial_tx=%s dm_serial_command_base_id=0x%X "
@@ -219,6 +232,7 @@ class Arm2MiddlewareNode(Node):
                 self._target_point_topic,
                 self._run_action_set_topic,
                 self._motion_target_topic,
+                self._cartesian_motion_target_topic,
                 self._motion_execution_topic,
                 self._vacuum_topic,
                 self._payload_command_topic,
@@ -348,7 +362,12 @@ class Arm2MiddlewareNode(Node):
                 offset_xyz=self._parse_xyz(raw_step.get("offset_xyz"), "offset_xyz"),
             )
 
-        if step_type in {"move_target_offset_mf", "move_target_offset_mrl"}:
+        if step_type in {
+            "move_target_offset_mf",
+            "move_target_offset_mrl",
+            "move_target_offset_mf_cartesian",
+            "move_target_offset_mrl_cartesian",
+        }:
             return ActionStep(
                 step_type=step_type,
                 label=label,
@@ -784,7 +803,12 @@ class Arm2MiddlewareNode(Node):
             self._publish_motion_target(x, y, z, target_spin_deg)
             return
 
-        if step.step_type in {"move_target_offset_mf", "move_target_offset_mrl"}:
+        if step.step_type in {
+            "move_target_offset_mf",
+            "move_target_offset_mrl",
+            "move_target_offset_mf_cartesian",
+            "move_target_offset_mrl_cartesian",
+        }:
             target_point = run.target_point
             if target_point is None:
                 self._fail_action_set(
@@ -795,7 +819,7 @@ class Arm2MiddlewareNode(Node):
             y = float(step.offset_xyz[1])
             z = target_point.z + float(step.offset_xyz[2])
             j5_target_pos = step.j5_target_pos
-            if step.step_type.endswith("_mrl"):
+            if step.step_type in {"move_target_offset_mrl", "move_target_offset_mrl_cartesian"}:
                 j5_target_pos = float(target_point.y) + float(step.j5_target_pos)
             target_spin_deg = step.target_spin_deg
             self._enter_motion_wait(
@@ -803,7 +827,13 @@ class Arm2MiddlewareNode(Node):
                 % (step.step_type, x, y, z, target_spin_deg, float(j5_target_pos)),
                 j5_target_pos=j5_target_pos,
             )
-            self._publish_motion_target(x, y, z, target_spin_deg)
+            self._publish_motion_target(
+                x,
+                y,
+                z,
+                target_spin_deg,
+                cartesian=step.step_type.endswith("_cartesian"),
+            )
             self._publish_j5_target(j5_target_pos)
             return
 
@@ -1011,16 +1041,25 @@ class Arm2MiddlewareNode(Node):
             )
         )
 
-    def _publish_motion_target(self, x: float, y: float, z: float, target_spin_deg: float) -> None:
+    def _publish_motion_target(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        target_spin_deg: float,
+        cartesian: bool = False,
+    ) -> None:
         msg = Arm2TargetPoint()
         msg.xyz.x = float(x)
         msg.xyz.y = float(y)
         msg.xyz.z = float(z)
         msg.target_spin_deg = float(target_spin_deg)
-        self._motion_target_pub.publish(msg)
+        topic = self._cartesian_motion_target_topic if cartesian else self._motion_target_topic
+        publisher = self._cartesian_motion_target_pub if cartesian else self._motion_target_pub
+        publisher.publish(msg)
         self.get_logger().info(
-            "published motion target x=%.4f y=%.4f z=%.4f spin=%.2f deg on %s"
-            % (x, y, z, target_spin_deg, self._motion_target_topic)
+            "published %s motion target x=%.4f y=%.4f z=%.4f spin=%.2f deg on %s"
+            % ("cartesian" if cartesian else "joint-planned", x, y, z, target_spin_deg, topic)
         )
 
     def _publish_vacuum(self, enabled: bool) -> None:
@@ -1052,6 +1091,8 @@ class Arm2MiddlewareNode(Node):
         return step is not None and step.step_type in {
             "move_target_offset_mf",
             "move_target_offset_mrl",
+            "move_target_offset_mf_cartesian",
+            "move_target_offset_mrl_cartesian",
             "move_fixed_pose_mf",
             "move_fixed_pose_mrl",
         }

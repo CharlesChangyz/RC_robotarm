@@ -11,8 +11,9 @@ from typing import Dict, List, Optional, Tuple
 from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPoint
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
-from moveit_msgs.action import MoveGroup
+from moveit_msgs.action import ExecuteTrajectory, MoveGroup
 from moveit_msgs.msg import CollisionObject, Constraints, JointConstraint, PlanningScene
+from moveit_msgs.srv import GetCartesianPath
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -32,6 +33,8 @@ EXECUTION_ERROR_RESULT_EXCEPTION = -6
 EXECUTION_ERROR_PREEMPTED = -7
 EXECUTION_ERROR_PENDING_SUPERSEDED = -8
 EXECUTION_ERROR_REDUNDANT_TARGET = -9
+EXECUTION_ERROR_CARTESIAN_PATH_FAILED = -10
+EXECUTION_ERROR_CARTESIAN_SERVICE_EXCEPTION = -11
 
 
 def _normalize_frame_id(frame_id: str) -> str:
@@ -107,6 +110,7 @@ class ExecutionRequest:
     source: str
     target: PoseStamped
     execution_id: Optional[int] = None
+    use_cartesian: bool = False
 
 
 class TargetPoseMoveItExecutor(Node):
@@ -114,6 +118,7 @@ class TargetPoseMoveItExecutor(Node):
         self,
         target_topic: str,
         middleware_target_topic: str,
+        middleware_cartesian_target_topic: str,
         middleware_result_topic: str,
         planning_group: str,
         joint_names: List[str],
@@ -140,11 +145,14 @@ class TargetPoseMoveItExecutor(Node):
         middleware_preempt_interval_sec: float,
         middleware_preempt_pos_threshold: float,
         middleware_preempt_rot_threshold: float,
+        cartesian_max_step: float,
+        cartesian_min_fraction: float,
     ) -> None:
         super().__init__("rc_arm_target_pose_moveit_executor")
 
         self._manual_target_topic = target_topic
         self._middleware_target_topic = middleware_target_topic
+        self._middleware_cartesian_target_topic = middleware_cartesian_target_topic
         self._middleware_result_topic = middleware_result_topic
         self._planning_group = planning_group
         self._joint_names = list(joint_names)
@@ -174,6 +182,8 @@ class TargetPoseMoveItExecutor(Node):
         self._middleware_preempt_rot_threshold = max(
             0.0, float(middleware_preempt_rot_threshold)
         )
+        self._cartesian_max_step = max(1.0e-4, float(cartesian_max_step))
+        self._cartesian_min_fraction = max(0.0, min(1.0, float(cartesian_min_fraction)))
 
         self._manual_target_lock = threading.Lock()
         self._latest_manual_target: Optional[PoseStamped] = None
@@ -186,6 +196,8 @@ class TargetPoseMoveItExecutor(Node):
         self._canceling_request: Optional[ExecutionRequest] = None
         self._last_preempt_request_sec = -1.0e9
         self._ready_move_action = False
+        self._ready_cartesian_path = False
+        self._ready_execute_trajectory = False
         self._ready_solver = False
         self._last_ready_tuple = None
         self._latest_joint_map: Dict[str, float] = {}
@@ -201,6 +213,12 @@ class TargetPoseMoveItExecutor(Node):
             j4_axis=self._j4_axis,
         )
         self._move_group_client = ActionClient(self, MoveGroup, move_action_name)
+        self._cartesian_path_client = self.create_client(GetCartesianPath, "/compute_cartesian_path")
+        self._execute_trajectory_client = ActionClient(
+            self,
+            ExecuteTrajectory,
+            "/execute_trajectory",
+        )
         scene_qos = QoSProfile(
             depth=1,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
@@ -218,6 +236,12 @@ class TargetPoseMoveItExecutor(Node):
 
         self.create_subscription(PoseStamped, target_topic, self._on_manual_target, 20)
         self.create_subscription(Arm2TargetPoint, middleware_target_topic, self._on_middleware_target, 20)
+        self.create_subscription(
+            Arm2TargetPoint,
+            middleware_cartesian_target_topic,
+            self._on_middleware_cartesian_target,
+            20,
+        )
         self.create_subscription(JointState, joint_state_topic, self._on_joint_state, 20)
         self._timer = self.create_timer(max(0.02, float(check_period)), self._on_timer)
         self._scene_timer = self.create_timer(1.0, self._publish_static_world_scene)
@@ -226,15 +250,19 @@ class TargetPoseMoveItExecutor(Node):
 
         self.get_logger().info(
             "TargetPose->MoveIt executor started: manual_topic=%s middleware_target=%s middleware_result=%s "
-            "group=%s avoid_collisions=%d world_boxes=%d planning_scene_topic=%s status_tf=%s->%s"
+            "middleware_cartesian_target=%s group=%s avoid_collisions=%d world_boxes=%d planning_scene_topic=%s "
+            "cartesian_max_step=%.4f cartesian_min_fraction=%.3f status_tf=%s->%s"
             % (
                 self._manual_target_topic,
                 self._middleware_target_topic,
                 self._middleware_result_topic,
+                self._middleware_cartesian_target_topic,
                 self._planning_group,
                 1 if self._avoid_collisions else 0,
                 len(self._world_box_configs),
                 self._planning_scene_topic,
+                self._cartesian_max_step,
+                self._cartesian_min_fraction,
                 self._status_base_frame,
                 self._status_eef_frame,
             )
@@ -424,22 +452,37 @@ class TargetPoseMoveItExecutor(Node):
 
     def _update_ready(self) -> None:
         mg_ready = self._move_group_client.server_is_ready()
+        cartesian_ready = self._cartesian_path_client.service_is_ready()
+        execute_ready = self._execute_trajectory_client.server_is_ready()
         solver_ready = self._kinematics is not None
 
         self._ready_move_action = mg_ready
+        self._ready_cartesian_path = cartesian_ready
+        self._ready_execute_trajectory = execute_ready
         self._ready_solver = solver_ready
 
-        ready_tuple = (mg_ready, solver_ready)
+        ready_tuple = (mg_ready, cartesian_ready, execute_ready, solver_ready)
         if ready_tuple != self._last_ready_tuple:
             self.get_logger().info(
-                "[STATE] ready move_action=%d solver=%d %s"
-                % (1 if mg_ready else 0, 1 if solver_ready else 0, self._format_eef())
+                "[STATE] ready move_action=%d cartesian_path=%d execute_trajectory=%d solver=%d %s"
+                % (
+                    1 if mg_ready else 0,
+                    1 if cartesian_ready else 0,
+                    1 if execute_ready else 0,
+                    1 if solver_ready else 0,
+                    self._format_eef(),
+                )
             )
             self._last_ready_tuple = ready_tuple
 
     def _executor_ready(self) -> bool:
         self._update_ready()
-        return self._ready_move_action and self._ready_solver
+        return (
+            self._ready_move_action
+            and self._ready_cartesian_path
+            and self._ready_execute_trajectory
+            and self._ready_solver
+        )
 
     def _log_status(self) -> None:
         event_age = max(0.0, self._now_sec() - self._last_event_time_sec)
@@ -447,10 +490,13 @@ class TargetPoseMoveItExecutor(Node):
             has_manual_target = self._latest_manual_target is not None
         active_source = self._active_request.source if self._active_request is not None else "idle"
         self.get_logger().info(
-            "[STATE] busy=%d ready(move_action=%d,solver=%d) manual_target=%d active=%s event=%s(%.2fs) %s"
+            "[STATE] busy=%d ready(move_action=%d,cartesian_path=%d,execute_trajectory=%d,solver=%d) "
+            "manual_target=%d active=%s event=%s(%.2fs) %s"
             % (
                 1 if self._busy else 0,
                 1 if self._ready_move_action else 0,
+                1 if self._ready_cartesian_path else 0,
+                1 if self._ready_execute_trajectory else 0,
                 1 if self._ready_solver else 0,
                 1 if has_manual_target else 0,
                 active_source,
@@ -524,13 +570,25 @@ class TargetPoseMoveItExecutor(Node):
         self._event("manual_target_rx", pose_msg)
 
     def _on_middleware_target(self, msg: Arm2TargetPoint) -> None:
+        self._handle_middleware_target(msg, use_cartesian=False)
+
+    def _on_middleware_cartesian_target(self, msg: Arm2TargetPoint) -> None:
+        self._handle_middleware_target(msg, use_cartesian=True)
+
+    def _handle_middleware_target(self, msg: Arm2TargetPoint, use_cartesian: bool) -> None:
         pose_msg = self._motion_target_to_pose(msg)
         request = ExecutionRequest(
             source="middleware",
             target=pose_msg,
             execution_id=self._allocate_execution_id(),
+            use_cartesian=use_cartesian,
         )
-        self._event("middleware_target_rx", pose_msg, extra="execution_id=%d" % request.execution_id)
+        self._event(
+            "middleware_target_rx",
+            pose_msg,
+            extra="execution_id=%d cartesian=%d"
+            % (request.execution_id, 1 if request.use_cartesian else 0),
+        )
 
         if not self._executor_ready():
             self._fail_middleware_request(
@@ -574,9 +632,10 @@ class TargetPoseMoveItExecutor(Node):
         self._event(
             "middleware_target_pending",
             request.target,
-            extra="execution_id=%d active_source=%s"
+            extra="execution_id=%d cartesian=%d active_source=%s"
             % (
                 request.execution_id,
+                1 if request.use_cartesian else 0,
                 self._active_request.source if self._active_request is not None else "idle",
             ),
         )
@@ -696,11 +755,93 @@ class TargetPoseMoveItExecutor(Node):
             self._last_sent_manual_target = _copy_pose_stamped(request.target)
         self._active_request = request
         self._set_busy(True, "execute_%s" % request.source)
-        extra = "source=%s" % request.source
+        extra = "source=%s cartesian=%d" % (
+            request.source,
+            1 if request.use_cartesian else 0,
+        )
         if request.execution_id is not None:
             extra += " execution_id=%d" % request.execution_id
         self._event("solve_request", request.target, extra=extra)
-        self._solve_target(request)
+        if request.use_cartesian:
+            self._compute_cartesian_path(request)
+        else:
+            self._solve_target(request)
+
+    def _compute_cartesian_path(self, request: ExecutionRequest) -> None:
+        path_request = GetCartesianPath.Request()
+        path_request.header.stamp = self.get_clock().now().to_msg()
+        path_request.header.frame_id = request.target.header.frame_id
+        path_request.group_name = self._planning_group
+        path_request.link_name = self._status_eef_frame
+        path_request.waypoints = [request.target.pose]
+        path_request.max_step = self._cartesian_max_step
+        path_request.jump_threshold = 0.0
+        path_request.avoid_collisions = self._avoid_collisions
+
+        start_joints = self._current_seed_joints()
+        if start_joints is not None:
+            path_request.start_state.joint_state.header.stamp = self.get_clock().now().to_msg()
+            path_request.start_state.joint_state.name = list(self._joint_names)
+            path_request.start_state.joint_state.position = [
+                start_joints[joint] for joint in self._joint_names
+            ]
+
+        self._event(
+            "cartesian_path_request",
+            request.target,
+            extra="max_step=%.4f min_fraction=%.3f"
+            % (self._cartesian_max_step, self._cartesian_min_fraction),
+        )
+        future = self._cartesian_path_client.call_async(path_request)
+        future.add_done_callback(
+            lambda done, request=request: self._on_cartesian_path_response(done, request)
+        )
+
+    def _on_cartesian_path_response(self, future, request: ExecutionRequest) -> None:
+        if self._active_request is not request:
+            return
+
+        try:
+            response = future.result()
+        except Exception as exc:
+            self._event("cartesian_path_exception", request.target, extra="source=%s" % request.source)
+            self.get_logger().warn(f"Cartesian path service exception: {exc}")
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_CARTESIAN_SERVICE_EXCEPTION,
+                detail=f"Cartesian path service exception: {exc}",
+                reason="cartesian_path_exception",
+            )
+            return
+
+        if response.fraction < self._cartesian_min_fraction:
+            detail = "Cartesian path incomplete, fraction=%.3f required=%.3f" % (
+                response.fraction,
+                self._cartesian_min_fraction,
+            )
+            self._event("cartesian_path_incomplete", request.target, extra=detail)
+            self.get_logger().warn(detail)
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_CARTESIAN_PATH_FAILED,
+                detail=detail,
+                reason="cartesian_path_incomplete",
+            )
+            return
+
+        goal = ExecuteTrajectory.Goal()
+        goal.trajectory = response.solution
+        self._event(
+            "cartesian_execute_send",
+            request.target,
+            extra="fraction=%.3f" % response.fraction,
+        )
+        send_future = self._execute_trajectory_client.send_goal_async(goal)
+        send_future.add_done_callback(
+            lambda done, request=request: self._on_goal_response(done, request)
+        )
 
     def _solve_target(self, request: ExecutionRequest) -> None:
         pose = request.target
@@ -937,6 +1078,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Target Pose to MoveIt executor")
     parser.add_argument("--target-topic", default="/rc_arm_2/target_pose")
     parser.add_argument("--middleware-target-topic", default="/arm2/middleware/motion_target")
+    parser.add_argument(
+        "--middleware-cartesian-target-topic",
+        default="/arm2/middleware/cartesian_motion_target",
+    )
     parser.add_argument("--middleware-result-topic", default="/arm2/middleware/motion_execution")
     parser.add_argument("--planning-group", default="arm")
     parser.add_argument("--joint-names", default="j1_joint,j2_joint,j3_joint,j4_joint")
@@ -968,6 +1113,8 @@ def parse_args():
     parser.add_argument("--middleware-preempt-interval-sec", type=float, default=0.25)
     parser.add_argument("--middleware-preempt-pos-threshold", type=float, default=0.01)
     parser.add_argument("--middleware-preempt-rot-threshold", type=float, default=0.08)
+    parser.add_argument("--cartesian-max-step", type=float, default=0.005)
+    parser.add_argument("--cartesian-min-fraction", type=float, default=0.99)
     return parser.parse_args()
 
 
@@ -981,6 +1128,7 @@ def main() -> None:
     node = TargetPoseMoveItExecutor(
         target_topic=args.target_topic,
         middleware_target_topic=args.middleware_target_topic,
+        middleware_cartesian_target_topic=args.middleware_cartesian_target_topic,
         middleware_result_topic=args.middleware_result_topic,
         planning_group=args.planning_group,
         joint_names=joints,
@@ -1007,6 +1155,8 @@ def main() -> None:
         middleware_preempt_interval_sec=args.middleware_preempt_interval_sec,
         middleware_preempt_pos_threshold=args.middleware_preempt_pos_threshold,
         middleware_preempt_rot_threshold=args.middleware_preempt_rot_threshold,
+        cartesian_max_step=args.cartesian_max_step,
+        cartesian_min_fraction=args.cartesian_min_fraction,
     )
 
     try:

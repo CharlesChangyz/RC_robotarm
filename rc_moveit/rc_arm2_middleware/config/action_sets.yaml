@@ -1233,7 +1233,7 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset_mrl_cartesian
         label: move_to_default_pose # 向前吸
         offset_xyz: [0.05, 0.0, 0.04]
         j5_target_pos: 0.0
@@ -1326,7 +1326,7 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 90.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset_mrl_cartesian
         label: move_to_default_pose # 向前吸
         offset_xyz: [0.15, 0.0, -0.05]
         j5_target_pos: 0.0
@@ -1449,7 +1449,7 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 90.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset_mrl_cartesian
         label: move_to_default_pose # 向前吸
         offset_xyz: [0.05, 0.0, 0.04]
         j5_target_pos: 0.0
@@ -1485,7 +1485,7 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 90.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset_mrl_cartesian
         label: move_to_default_pose # 向前伸出吸住
         offset_xyz: [0.15, 0.0, -0.05]
         j5_target_pos: 0.0
@@ -1529,7 +1529,7 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 90.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset_mrl_cartesian
         label: move_to_default_pose # 向前伸出吸住
         offset_xyz: [0.15, 0.0, -0.05]
         j5_target_pos: 0.0
@@ -1749,7 +1749,7 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 90.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset_mrl_cartesian
         label: move_to_default_pose # 向前吸
         offset_xyz: [0.15, 0.0, -0.05]
         j5_target_pos: 0.0
@@ -1797,7 +1797,7 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 90.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset_mrl_cartesian
         label: move_to_default_pose # 向前吸
         offset_xyz: [0.15, 0.0, -0.05]
         j5_target_pos: 0.0
