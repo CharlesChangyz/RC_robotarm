@@ -5,6 +5,7 @@ import argparse
 import collections
 import json
 import math
+import os
 import signal
 import shlex
 import subprocess
@@ -57,11 +58,18 @@ SCRIPT_RUN_MUJOCO = ROOT_DIR / "scripts" / "run_rc_arm_mujoco.sh"
 SCRIPT_RUN_MUJOCO_BRIDGE = ROOT_DIR / "scripts" / "run_rc_arm_mujoco_bridge.sh"
 SCRIPT_RUN_REAL = ROOT_DIR / "scripts" / "run_rc_arm_real.sh"
 AUTO_CLEANUP_WAIT_SEC = 1.0
+PROCESS_SIGINT_WAIT_MS = 15000
+PROCESS_SIGTERM_WAIT_MS = 5000
+PROCESS_SIGKILL_WAIT_MS = 3000
 PROJECT_ROS_CLEANUP_PATTERNS = (
     ("middleware", "arm2_middleware"),
+    ("camera bridge", "camera_target_point_bridge"),
     ("executor", "target_pose_moveit_executor.py"),
     ("tf bridge", "tf_target_pose_bridge.py"),
     ("payload sync", "payload_scene_sync.py"),
+    ("position printer", "joint_position_printer.py"),
+    ("torque printer", "joint_torque_printer.py"),
+    ("dm serial bridge", "dm_serial_frame_bridge"),
     ("move_group", "move_group"),
     ("robot_state_publisher", "robot_state_publisher"),
     ("static_transform_publisher", "static_transform_publisher"),
@@ -939,15 +947,44 @@ class ControlProcess(QObject):
         if self.is_running():
             return
         self.log_line.emit("{} start: {}".format(self._label, " ".join(self._command)))
-        self._process.start(self._command[0], self._command[1:])
+        self._process.start("setsid", self._command)
 
     def stop(self) -> None:
         if not self.is_running():
             return
         self.log_line.emit("{} stop requested".format(self._label))
+        process_group_id = int(self._process.processId())
+        if process_group_id > 0:
+            self._signal_process_group(process_group_id, signal.SIGINT, "SIGINT")
+            if self._process.waitForFinished(PROCESS_SIGINT_WAIT_MS):
+                return
+            self._signal_process_group(process_group_id, signal.SIGTERM, "SIGTERM")
+            if self._process.waitForFinished(PROCESS_SIGTERM_WAIT_MS):
+                return
+            self._signal_process_group(process_group_id, signal.SIGKILL, "SIGKILL")
+            self._process.waitForFinished(PROCESS_SIGKILL_WAIT_MS)
+            return
+
         self._process.terminate()
-        if not self._process.waitForFinished(3000):
+        if not self._process.waitForFinished(PROCESS_SIGTERM_WAIT_MS):
             self._process.kill()
+            self._process.waitForFinished(PROCESS_SIGKILL_WAIT_MS)
+
+    def _signal_process_group(self, process_group_id: int, signum: signal.Signals, label: str) -> None:
+        try:
+            os.killpg(process_group_id, signum)
+            self.log_line.emit("{} sent {} to process group {}".format(self._label, label, process_group_id))
+        except ProcessLookupError:
+            pass
+        except Exception as exc:
+            self.log_line.emit(
+                "{} failed to send {} to process group {}: {}".format(
+                    self._label,
+                    label,
+                    process_group_id,
+                    exc,
+                )
+            )
 
     def _read_output(self) -> None:
         text = bytes(self._process.readAllStandardOutput()).decode("utf-8", errors="replace")
@@ -1834,6 +1871,10 @@ class TargetPublisherWindow(QMainWindow):
         self._mujoco_stack.stop()
         self._mujoco_bridge.stop()
         self._real_stack.stop()
+        self._cleanup_project_ros_processes(
+            prefix="shutdown cleanup",
+            announce="clearing project ROS processes",
+        )
         self._backend.stop()
 
     def closeEvent(self, event) -> None:  # noqa: N802
