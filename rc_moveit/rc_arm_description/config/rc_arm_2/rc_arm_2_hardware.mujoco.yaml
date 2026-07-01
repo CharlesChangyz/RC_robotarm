@@ -77,6 +77,9 @@ payload_com_offset_z: 0.020
 payload_box_size_x: 0.05
 payload_box_size_y: 0.05
 payload_box_size_z: 0.05
+payload_blend_enabled: true
+payload_blend_ramp_up_sec: 0.8
+payload_blend_ramp_down_sec: 0.2
 payload_position_kp: 60.0
 payload_position_kd: 3.0
 payload_low_stiffness_kp: 0.0

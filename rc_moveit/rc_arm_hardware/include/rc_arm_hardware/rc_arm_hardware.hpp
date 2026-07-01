@@ -185,6 +185,11 @@ private:
   std::string mujoco_payload_site_name_;
   std::array<double, 3> mujoco_payload_initial_pos_;
   std::atomic<bool> payload_active_;
+  double payload_blend_;
+  double payload_blend_target_;
+  double payload_blend_ramp_up_sec_;
+  double payload_blend_ramp_down_sec_;
+  bool payload_blend_enabled_;
   double j5_kp_;
   double j5_kd_;
   double latest_j5_command_;
@@ -346,6 +351,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr final_torque_ff_pub_; // 最终前馈力矩(joint frame)
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j2_qd_ref_pub_;           // j2 当前参考速度
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j2_qd_actual_pub_;        // j2 当前实际反馈速度
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr payload_blend_pub_;        // 负载渐变比例
   rclcpp::Publisher<std_msgs::msg::UInt32>::SharedPtr laser_distance_pub_;       // 激光测距值
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr payload_active_pub_;         // 统一负载状态
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr j5_position_pub_;         // J5 实际位置

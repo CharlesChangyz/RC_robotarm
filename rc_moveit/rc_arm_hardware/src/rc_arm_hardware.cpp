@@ -17,8 +17,9 @@
 #include <unistd.h>
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
-#include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "arm_msgs/msg/can_frame.hpp"
+#include "hardware_interface/types/hardware_interface_type_values.hpp"
+#include "rc_arm_hardware/payload_blend.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/u_int32.hpp"
@@ -115,6 +116,11 @@ RsA3HardwareInterface::RsA3HardwareInterface()
   , mujoco_payload_site_name_("attachment_site")
   , mujoco_payload_initial_pos_{0.30, 0.0, 0.20}
   , payload_active_(false)
+  , payload_blend_(0.0)
+  , payload_blend_target_(0.0)
+  , payload_blend_ramp_up_sec_(0.8)
+  , payload_blend_ramp_down_sec_(0.2)
+  , payload_blend_enabled_(true)
   , j5_kp_(0.0)
   , j5_kd_(0.0)
   , latest_j5_command_(0.0)
@@ -208,6 +214,15 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   payload_box_size_[0] = getDoubleParamOr(info_, "payload_box_size_x", payload_box_size_[0]);
   payload_box_size_[1] = getDoubleParamOr(info_, "payload_box_size_y", payload_box_size_[1]);
   payload_box_size_[2] = getDoubleParamOr(info_, "payload_box_size_z", payload_box_size_[2]);
+  if (info_.hardware_parameters.count("payload_blend_enabled")) {
+    payload_blend_enabled_ = parseBoolParam(info_.hardware_parameters.at("payload_blend_enabled"));
+  }
+  payload_blend_ramp_up_sec_ = std::max(
+    0.0,
+    getDoubleParamOr(info_, "payload_blend_ramp_up_sec", payload_blend_ramp_up_sec_));
+  payload_blend_ramp_down_sec_ = std::max(
+    0.0,
+    getDoubleParamOr(info_, "payload_blend_ramp_down_sec", payload_blend_ramp_down_sec_));
   if (info_.hardware_parameters.count("mujoco_payload_body_name")) {
     mujoco_payload_body_name_ = info_.hardware_parameters.at("mujoco_payload_body_name");
   }
@@ -394,6 +409,12 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
               vacuum_activate_topic_.c_str(),
               payload_command_topic_.c_str(),
               payload_active_topic_.c_str());
+  RCLCPP_INFO(
+    rclcpp::get_logger("RsA3HardwareInterface"),
+    "  负载渐变：%s，up=%.3fs，down=%.3fs",
+    payload_blend_enabled_ ? "启用" : "禁用",
+    payload_blend_ramp_up_sec_,
+    payload_blend_ramp_down_sec_);
   RCLCPP_INFO(rclcpp::get_logger("RsA3HardwareInterface"),
               "  J5：command_topic=%s，position_topic=%s，kp=%.3f，kd=%.3f",
               j5_command_topic_.c_str(),
@@ -423,6 +444,7 @@ hardware_interface::CallbackReturn RsA3HardwareInterface::on_init(
   final_torque_ff_pub_ = debug_node_->create_publisher<sensor_msgs::msg::JointState>("/debug/final_joint_torque_ff", 10);
   j2_qd_ref_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>("/debug/j2_qd_ref", 10);
   j2_qd_actual_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>("/debug/j2_qd_actual", 10);
+  payload_blend_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>("/debug/payload_blend", 10);
   laser_distance_pub_ = debug_node_->create_publisher<std_msgs::msg::UInt32>("/rc_arm_2/laser_distance", 10);
   payload_active_pub_ = debug_node_->create_publisher<std_msgs::msg::Bool>(payload_active_topic_, 10);
   j5_position_pub_ = debug_node_->create_publisher<std_msgs::msg::Float64>(j5_position_topic_, 10);
@@ -1114,7 +1136,28 @@ hardware_interface::return_type RsA3HardwareInterface::write(
   }
 
   const bool payload_active = payload_active_.load();
-  const ControlGainSet & active_gains = payload_active ? payload_gains_ : unloaded_gains_;
+  payload_blend_target_ = payload_active ? 1.0 : 0.0;
+  updatePayloadBlend(
+    payload_blend_,
+    payload_blend_target_,
+    dt,
+    payload_blend_ramp_up_sec_,
+    payload_blend_ramp_down_sec_,
+    payload_blend_enabled_);
+
+  ControlGainSet blended_gains;
+  blended_gains.position_kp = lerpPayloadValue(
+    unloaded_gains_.position_kp, payload_gains_.position_kp, payload_blend_);
+  blended_gains.position_kd = lerpPayloadValue(
+    unloaded_gains_.position_kd, payload_gains_.position_kd, payload_blend_);
+  blended_gains.low_stiffness_kp = lerpPayloadValue(
+    unloaded_gains_.low_stiffness_kp, payload_gains_.low_stiffness_kp, payload_blend_);
+  blended_gains.low_stiffness_kd = lerpPayloadValue(
+    unloaded_gains_.low_stiffness_kd, payload_gains_.low_stiffness_kd, payload_blend_);
+  blended_gains.low_stiffness_torque_bias = lerpPayloadValue(
+    unloaded_gains_.low_stiffness_torque_bias,
+    payload_gains_.low_stiffness_torque_bias,
+    payload_blend_);
 
   std::vector<double> cmd_positions_motor(joint_configs_.size(), 0.0);
   std::vector<double> cmd_velocities_motor(joint_configs_.size(), 0.0);
@@ -1211,27 +1254,26 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     cmd_velocities_motor[i] = velocity_ff_stage2_[i] * config.direction;
   }
 
-  std::vector<double> pinocchio_gravity_torques_actual;
+  std::vector<double> pinocchio_gravity_torques_actual_unloaded;
+  std::vector<double> pinocchio_gravity_torques_actual_loaded;
   if (pinocchio_initialized_ && (use_pinocchio_gravity_ || use_pinocchio_inverse_dynamics_)) {
-    pinocchio_gravity_torques_actual = computePinocchioGravity(hw_positions_, payload_active);
+    pinocchio_gravity_torques_actual_unloaded = computePinocchioGravity(hw_positions_, false);
+    pinocchio_gravity_torques_actual_loaded = computePinocchioGravity(hw_positions_, true);
   }
 
-  std::vector<double> pinocchio_id_torques;
+  std::vector<double> pinocchio_id_torques_unloaded;
+  std::vector<double> pinocchio_id_torques_loaded;
   if (use_pinocchio_inverse_dynamics_ && pinocchio_initialized_) {
-    pinocchio_id_torques = computePinocchioInverseDynamics(
-      id_ref_positions, id_ref_velocities, id_ref_accelerations, payload_active);
+    pinocchio_id_torques_unloaded = computePinocchioInverseDynamics(
+      id_ref_positions, id_ref_velocities, id_ref_accelerations, false);
+    pinocchio_id_torques_loaded = computePinocchioInverseDynamics(
+      id_ref_positions, id_ref_velocities, id_ref_accelerations, true);
   }
-  std::vector<double> pinocchio_gravity_torques_ref;
+  std::vector<double> pinocchio_gravity_torques_ref_unloaded;
+  std::vector<double> pinocchio_gravity_torques_ref_loaded;
   if (use_pinocchio_inverse_dynamics_ && pinocchio_initialized_) {
-    pinocchio_gravity_torques_ref = computePinocchioGravity(id_ref_positions, payload_active);
-  }
-  std::vector<double> pinocchio_dynamic_only_torques(joint_configs_.size(), 0.0);
-  if (pinocchio_initialized_) {
-    for (size_t i = 0; i < joint_configs_.size(); ++i) {
-      if (i < pinocchio_id_torques.size() && i < pinocchio_gravity_torques_ref.size()) {
-        pinocchio_dynamic_only_torques[i] = pinocchio_id_torques[i] - pinocchio_gravity_torques_ref[i];
-      }
-    }
+    pinocchio_gravity_torques_ref_unloaded = computePinocchioGravity(id_ref_positions, false);
+    pinocchio_gravity_torques_ref_loaded = computePinocchioGravity(id_ref_positions, true);
   }
 
   if (last_tau_for_spike_check.size() != joint_configs_.size()) {
@@ -1244,31 +1286,52 @@ hardware_interface::return_type RsA3HardwareInterface::write(
 
     double gravity_torque = 0.0;
     if (gravity_comp_enabled_ || (use_pinocchio_gravity_ && pinocchio_initialized_)) {
-      if (use_pinocchio_gravity_ && pinocchio_initialized_ && i < pinocchio_gravity_torques_actual.size()) {
-        gravity_torque = pinocchio_gravity_torques_actual[i] * gravity_feedforward_ratio_;
+      if (use_pinocchio_gravity_ && pinocchio_initialized_ &&
+          i < pinocchio_gravity_torques_actual_unloaded.size() &&
+          i < pinocchio_gravity_torques_actual_loaded.size()) {
+        gravity_torque = lerpPayloadValue(
+          pinocchio_gravity_torques_actual_unloaded[i],
+          pinocchio_gravity_torques_actual_loaded[i],
+          payload_blend_) * gravity_feedforward_ratio_;
       } else {
         gravity_torque = computeGravityTorque(i, hw_positions_[i]) * gravity_feedforward_ratio_;
       }
     }
 
     double model_feedforward_torque = gravity_torque;
-    if (use_pinocchio_inverse_dynamics_ && pinocchio_initialized_ && i < pinocchio_id_torques.size()) {
-      model_feedforward_torque = pinocchio_id_torques[i];
-      if (i < pinocchio_gravity_torques_ref.size()) {
-        model_feedforward_torque -= (1.0 - gravity_feedforward_ratio_) * pinocchio_gravity_torques_ref[i];
+    if (use_pinocchio_inverse_dynamics_ && pinocchio_initialized_ &&
+        i < pinocchio_id_torques_unloaded.size() &&
+        i < pinocchio_id_torques_loaded.size()) {
+      model_feedforward_torque = lerpPayloadValue(
+        pinocchio_id_torques_unloaded[i],
+        pinocchio_id_torques_loaded[i],
+        payload_blend_);
+      if (i < pinocchio_gravity_torques_ref_unloaded.size() &&
+          i < pinocchio_gravity_torques_ref_loaded.size()) {
+        const double gravity_ref = lerpPayloadValue(
+          pinocchio_gravity_torques_ref_unloaded[i],
+          pinocchio_gravity_torques_ref_loaded[i],
+          payload_blend_);
+        model_feedforward_torque -= (1.0 - gravity_feedforward_ratio_) * gravity_ref;
       }
     }
 
-    const double active_low_joint_kp = payload_active
+    const double unloaded_low_joint_kp = (config.unloaded_low_stiffness_kp > 0.0)
+      ? config.unloaded_low_stiffness_kp
+      : unloaded_gains_.low_stiffness_kp;
+    const double payload_low_joint_kp = (config.payload_low_stiffness_kp > 0.0)
       ? config.payload_low_stiffness_kp
-      : config.unloaded_low_stiffness_kp;
-    const double active_low_joint_kd = payload_active
+      : payload_gains_.low_stiffness_kp;
+    const double unloaded_low_joint_kd = (config.unloaded_low_stiffness_kd > 0.0)
+      ? config.unloaded_low_stiffness_kd
+      : unloaded_gains_.low_stiffness_kd;
+    const double payload_low_joint_kd = (config.payload_low_stiffness_kd > 0.0)
       ? config.payload_low_stiffness_kd
-      : config.unloaded_low_stiffness_kd;
+      : payload_gains_.low_stiffness_kd;
     const double low_joint_kp = std::clamp(
-      (active_low_joint_kp > 0.0) ? active_low_joint_kp : active_gains.low_stiffness_kp, 0.0, 500.0);
+      lerpPayloadValue(unloaded_low_joint_kp, payload_low_joint_kp, payload_blend_), 0.0, 500.0);
     const double low_joint_kd = std::clamp(
-      (active_low_joint_kd > 0.0) ? active_low_joint_kd : active_gains.low_stiffness_kd, 0.0, 5.0);
+      lerpPayloadValue(unloaded_low_joint_kd, payload_low_joint_kd, payload_blend_), 0.0, 5.0);
 
     double motor_kp = 0.0;
     double motor_kd = 0.0;
@@ -1281,8 +1344,12 @@ hardware_interface::return_type RsA3HardwareInterface::write(
 
       if ((use_pinocchio_gravity_ || use_pinocchio_inverse_dynamics_) &&
           pinocchio_initialized_ &&
-          i < pinocchio_gravity_torques_actual.size()) {
-        joint_cmd_torque = pinocchio_gravity_torques_actual[i];
+          i < pinocchio_gravity_torques_actual_unloaded.size() &&
+          i < pinocchio_gravity_torques_actual_loaded.size()) {
+        joint_cmd_torque = lerpPayloadValue(
+          pinocchio_gravity_torques_actual_unloaded[i],
+          pinocchio_gravity_torques_actual_loaded[i],
+          payload_blend_);
       } else {
         joint_cmd_torque = computeGravityTorque(i, hw_positions_[i]);
       }
@@ -1291,12 +1358,22 @@ hardware_interface::return_type RsA3HardwareInterface::write(
     } else if (low_stiffness_mode_) {
       motor_kp = low_joint_kp;
       motor_kd = low_joint_kd;
-      joint_cmd_torque = model_feedforward_torque + active_gains.low_stiffness_torque_bias;
+      joint_cmd_torque = model_feedforward_torque + blended_gains.low_stiffness_torque_bias;
     } else {
-      const double active_joint_kp = payload_active ? config.payload_kp : config.unloaded_kp;
-      const double active_joint_kd = payload_active ? config.payload_kd : config.unloaded_kd;
-      const double joint_kp = (active_joint_kp > 0.0) ? active_joint_kp : active_gains.position_kp;
-      const double joint_kd = (active_joint_kd > 0.0) ? active_joint_kd : active_gains.position_kd;
+      const double unloaded_joint_kp = (config.unloaded_kp > 0.0)
+        ? config.unloaded_kp
+        : unloaded_gains_.position_kp;
+      const double payload_joint_kp = (config.payload_kp > 0.0)
+        ? config.payload_kp
+        : payload_gains_.position_kp;
+      const double unloaded_joint_kd = (config.unloaded_kd > 0.0)
+        ? config.unloaded_kd
+        : unloaded_gains_.position_kd;
+      const double payload_joint_kd = (config.payload_kd > 0.0)
+        ? config.payload_kd
+        : payload_gains_.position_kd;
+      const double joint_kp = lerpPayloadValue(unloaded_joint_kp, payload_joint_kp, payload_blend_);
+      const double joint_kd = lerpPayloadValue(unloaded_joint_kd, payload_joint_kd, payload_blend_);
       motor_kp = std::clamp(joint_kp, 0.0, 500.0);
       motor_kd = std::clamp(joint_kd, 0.0, 5.0);
       joint_cmd_torque = model_feedforward_torque;
@@ -1422,6 +1499,11 @@ hardware_interface::return_type RsA3HardwareInterface::write(
       }
       j2_qd_ref_pub_->publish(qd_ref_msg);
       j2_qd_actual_pub_->publish(qd_actual_msg);
+    }
+    if (payload_blend_pub_) {
+      std_msgs::msg::Float64 payload_blend_msg;
+      payload_blend_msg.data = payload_blend_;
+      payload_blend_pub_->publish(payload_blend_msg);
     }
   }
 
