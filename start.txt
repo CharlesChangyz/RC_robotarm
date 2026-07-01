@@ -1,0 +1,5 @@
+
+用法：
+/home/rc2/dyzdyz/autostart/start_qrcode_can.sh
+需要打开摄像头可视化窗口：
+/home/rc2/dyzdyz/autostart/start_qrcode_can.sh --show
