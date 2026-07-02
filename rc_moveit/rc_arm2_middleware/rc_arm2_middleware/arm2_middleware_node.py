@@ -384,7 +384,11 @@ class Arm2MiddlewareNode(Node):
                 xyz=self._parse_xyz(raw_step.get("xyz"), "xyz"),
             )
 
-        if step_type in {"move_fixed_pose_mf", "move_fixed_pose_mrl"}:
+        if step_type in {
+            "move_fixed_pose_mf",
+            "move_fixed_pose_mrl",
+            "move_fixed_pose_mrl_cartesian",
+        }:
             return ActionStep(
                 step_type=step_type,
                 label=label,
@@ -845,17 +849,27 @@ class Arm2MiddlewareNode(Node):
             self._publish_motion_target(x, y, z, step.target_spin_deg)
             return
 
-        if step.step_type in {"move_fixed_pose_mf", "move_fixed_pose_mrl"}:
+        if step.step_type in {
+            "move_fixed_pose_mf",
+            "move_fixed_pose_mrl",
+            "move_fixed_pose_mrl_cartesian",
+        }:
             x, y, z = step.xyz
             j5_target_pos = step.j5_target_pos
-            if step.step_type.endswith("_mrl"):
+            if step.step_type in {"move_fixed_pose_mrl", "move_fixed_pose_mrl_cartesian"}:
                 j5_target_pos = float(step.xyz[1]) + float(step.j5_target_pos)
             self._enter_motion_wait(
                 "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
                 % (step.step_type, x, y, z, step.target_spin_deg, float(j5_target_pos)),
                 j5_target_pos=j5_target_pos,
             )
-            self._publish_motion_target(x, y, z, step.target_spin_deg)
+            self._publish_motion_target(
+                x,
+                y,
+                z,
+                step.target_spin_deg,
+                cartesian=step.step_type.endswith("_cartesian"),
+            )
             self._publish_j5_target(j5_target_pos)
             return
 
@@ -1095,6 +1109,7 @@ class Arm2MiddlewareNode(Node):
             "move_target_offset_mrl_cartesian",
             "move_fixed_pose_mf",
             "move_fixed_pose_mrl",
+            "move_fixed_pose_mrl_cartesian",
         }
 
     def _is_j5_at_target(self, target_pos: Optional[float]) -> bool:

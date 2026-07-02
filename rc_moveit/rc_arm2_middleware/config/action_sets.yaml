@@ -39,7 +39,7 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x502
+        can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
@@ -132,7 +132,7 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x502
+        can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
@@ -219,7 +219,7 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x502
+        can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
@@ -306,7 +306,7 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x502
+        can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
@@ -831,7 +831,7 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x502
+        can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
@@ -884,7 +884,7 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x502
+        can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
@@ -919,8 +919,8 @@ action_sets:
     name: vision_catch_200_KFS_front_and_store
     steps:
       - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x501
+        label: notify # 开始抓取通知
+        can_id: 0x601
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: set_vacuum
@@ -943,7 +943,7 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 95.0
 
-      - type: move_target_offset_mrl # j5 负责左右横移动
+      - type: move_target_offset_mrl_cartesian # j5 负责左右横移动
         label: move_to_default_pose
         offset_xyz: [0.05, 0.0, 0.04]
         j5_target_pos: 0.0
@@ -975,13 +975,13 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.33, -0.0001, 0.45]
+        xyz: [-0.33, -0.0001, 0.48]
         j5_target_pos: 0.0
         target_spin: 0.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 放置
-        xyz: [-0.33, -0.0001, 0.35]
+        xyz: [-0.34, -0.0001, 0.35]
         j5_target_pos: 0.0  
         target_spin: 0.0
 
@@ -1017,7 +1017,7 @@ action_sets:
     steps:
       - type: send_can_frame
         label: notify # 开始抓取通知
-        can_id: 0x501
+        can_id: 0x601
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: set_vacuum
@@ -1114,7 +1114,7 @@ action_sets:
     steps:
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x501
+        can_id: 0x601
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: set_vacuum
@@ -1153,7 +1153,7 @@ action_sets:
 
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x502
+        can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mrl
@@ -1216,7 +1216,7 @@ action_sets:
     steps:
       - type: send_can_frame
         label: notify # 完成抓取通知
-        can_id: 0x501
+        can_id: 0x601
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: set_vacuum
@@ -1830,6 +1830,65 @@ action_sets:
         xyz: [0.25, 0.0, 0.4]
         j5_target_pos: 0.0
         target_spin: 90.0
+##################################################################################################
+# 取出
+  - id: 70
+    name: vision_catch_200_KFS_front_stand_and_store
+    steps:
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 举高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 120
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 转180度
+        xyz: [-0.1, -0.0001, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 120
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose 
+        xyz: [-0.315, -0.0001, 0.45]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 向下吸
+        xyz: [-0.33, -0.0001, 0.35]
+        j5_target_pos: 0.0  
+        target_spin: 0.0
+
+      - type: set_payload_active
+        label: payload_on
+        enabled: false
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [-0.1, -0.0001, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 90.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 90.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.25, 0.0, 0.45]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
 
 ##################################################################################################
 # 测试
