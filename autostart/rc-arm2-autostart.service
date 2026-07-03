@@ -17,6 +17,7 @@ Environment=XAUTHORITY=/home/rc2/.Xauthority
 Environment=QT_QPA_PLATFORM=xcb
 ExecStart=@RC_ROBOTARM_WORKSPACE@/autostart/boot_start.sh
 TimeoutStartSec=180
+TimeoutStopSec=15
 Restart=on-failure
 RestartSec=5
 KillMode=control-group

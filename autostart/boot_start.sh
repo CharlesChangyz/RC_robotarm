@@ -30,22 +30,60 @@ log() {
 }
 
 children=()
+cleaning_up=0
+
+collect_descendants() {
+  local parent="$1"
+  local child
+
+  for child in $(pgrep -P "${parent}" 2>/dev/null || true); do
+    collect_descendants "${child}"
+    printf '%s\n' "${child}"
+  done
+}
 
 cleanup() {
+  if (( cleaning_up )); then
+    return
+  fi
+  cleaning_up=1
+
   log "stopping autostart children"
+  local pids=()
+  local pid
+  local descendants=()
+
   for pid in "${children[@]}"; do
     if kill -0 "${pid}" >/dev/null 2>&1; then
-      kill "${pid}" >/dev/null 2>&1 || true
-      pkill -TERM -P "${pid}" >/dev/null 2>&1 || true
+      mapfile -t descendants < <(collect_descendants "${pid}")
+      pids+=("${descendants[@]}" "${pid}")
     fi
   done
+
+  if ((${#pids[@]} == 0)); then
+    wait >/dev/null 2>&1 || true
+    return
+  fi
+
+  kill -TERM "${pids[@]}" >/dev/null 2>&1 || true
+  for _ in $(seq 1 20); do
+    local any_alive=0
+    for pid in "${pids[@]}"; do
+      if kill -0 "${pid}" >/dev/null 2>&1; then
+        any_alive=1
+        break
+      fi
+    done
+    if (( ! any_alive )); then
+      wait >/dev/null 2>&1 || true
+      return
+    fi
+    sleep 0.1
+  done
+
+  log "some autostart children did not exit after SIGTERM; sending SIGKILL"
+  kill -KILL "${pids[@]}" >/dev/null 2>&1 || true
   sleep 2
-  for pid in "${children[@]}"; do
-    if kill -0 "${pid}" >/dev/null 2>&1; then
-      kill -KILL "${pid}" >/dev/null 2>&1 || true
-      pkill -KILL -P "${pid}" >/dev/null 2>&1 || true
-    fi
-  done
   wait >/dev/null 2>&1 || true
 }
 trap cleanup INT TERM EXIT

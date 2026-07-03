@@ -97,7 +97,7 @@ action_sets:
         target_spin: 0.0
 
 
-  - id: 42 #no_vision_catch_200_KFS_front_stand_and_store
+  - id: 72 #no_vision_catch_200_KFS_front_stand_and_store
     name: no_vision_catch_200_KFS_front_stand_and_store
     steps:
       - type: set_vacuum
@@ -556,7 +556,7 @@ action_sets:
         target_spin: 0.0
 
 
-  - id: 22 #no_vision_catch_200_KFS_front_and_discard_right
+  - id: 42 #no_vision_catch_200_KFS_front_and_discard_right
     name: no_vision_catch_200_KFS_front_and_discard_right
     steps:
       - type: set_vacuum
@@ -1004,17 +1004,22 @@ action_sets:
         label: vacuum_off
         enabled: false
 
+      - type: send_can_frame
+        label: notify # 气夹收回
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: 0.0
-        target_spin: 90.0
+        target_spin: 100.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
-        target_spin: 90.0
+        target_spin: 100.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
@@ -1106,23 +1111,28 @@ action_sets:
         label: vacuum_off
         enabled: false
 
+      - type: send_can_frame
+        label: notify # 气夹收回
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: 0.0
-        target_spin: 90.0
+        target_spin: 10.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
-        target_spin: 90.0
+        target_spin: 100.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
-        target_spin: 0.0
+        target_spin: 65.0
 
 
   - id: 2 #vision_catch_neg_200_KFS_front_and_store
@@ -1208,23 +1218,28 @@ action_sets:
         label: vacuum_off
         enabled: false
 
+      - type: send_can_frame
+        label: notify # 气夹收回
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: 0.0
-        target_spin: 90.0
+        target_spin: 100.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
-        target_spin: 90.0
+        target_spin: 100.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
-        target_spin: 0.0
+        target_spin: 65.0
 
 
   - id: 21 #vision_catch_400_KFS_front_and_store
@@ -1303,23 +1318,28 @@ action_sets:
         label: vacuum_off
         enabled: false
 
+      - type: send_can_frame
+        label: notify # 气夹收回
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: 0.0
-        target_spin: 90.0
+        target_spin: 100.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
-        target_spin: 90.0
+        target_spin: 100.0
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
-        target_spin: 0.0
+        target_spin: 65.0
 
 # keep
 
@@ -1934,38 +1954,45 @@ action_sets:
         target_spin: 0.0
 ##################################################################################################
 # 取出
-  - id: 70
-    name: vision_catch_200_KFS_front_stand_and_store
+  - id: 70 #KFS_out
+    name: KFS_out 
     steps:
       - type: set_vacuum
         label: vacuum_on
         enabled: true
 
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 举高
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 100.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 转180度
+        xyz: [-0.1, -0.0001, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 100.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 向下吸
+        xyz: [-0.2, -0.0001, 0.28]
+        j5_target_pos: 0.0  
+        target_spin: 0.0
+
+      - type: send_can_frame
+        label: notify # 取块
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_on
         enabled: true
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
         label: move_to_default_pose # 向下吸
-        xyz: [-0.31, -0.0001, 0.35]
+        xyz: [-0.2, -0.0001, 0.35]
         j5_target_pos: 0.0  
         target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: false
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
@@ -1978,6 +2005,31 @@ action_sets:
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
+
+
+  - id: 71 #KFS_place_second_floor_left
+    name: KFS_place_second_floor_left
+    steps:
+    - type: move_fixed_pose_mrl
+      label: move_to_default_pose
+      xyz: [0.1, 0.0, 0.8]
+      j5_target_pos: -0.14
+      target_spin: 100.0
+
+    - type: move_fixed_pose_mrl
+      label: move_to_default_pose
+      xyz: [0.3, 0.0, 0.65]
+      j5_target_pos: -0.14
+      target_spin: 100.0
+
+    - type: set_payload_active
+      label: payload_off
+      enabled: false
+
+    - type: set_vacuum
+      label: vacuum_off
+      enabled: false
+  
 
 
 ##################################################################################################
@@ -2331,3 +2383,14 @@ action_sets:
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.5]
         target_spin: 0.0
+
+  - id: 22 #home
+    name: home
+    steps:
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.0, 0.1172, 0.1172]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+      
