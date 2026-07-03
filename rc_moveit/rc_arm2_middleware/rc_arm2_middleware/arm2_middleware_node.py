@@ -14,7 +14,7 @@ from rclpy.node import Node
 from std_msgs.msg import Bool, Float64, Int32, UInt32
 import yaml
 
-from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPoint, CanFrame
+from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPath, Arm2TargetPoint, CanFrame
 from rc_arm2_middleware.dm_serial_action_bridge import (
     DmSerialActionBridge,
     RawCanFrame,
@@ -50,6 +50,7 @@ class ActionStep:
     target_spin_deg: float = 0.0
     offset_xyz: Optional[Tuple[float, float, float]] = None
     xyz: Optional[Tuple[float, float, float]] = None
+    waypoints: Optional[Tuple[TargetPoint, ...]] = None
     j5_target_pos: Optional[float] = None
     enabled: Optional[bool] = None
     delay_sec: Optional[float] = None
@@ -121,6 +122,10 @@ class Arm2MiddlewareNode(Node):
             "cartesian_motion_target_topic",
             "/arm2/middleware/cartesian_motion_target",
         )
+        self.declare_parameter(
+            "cartesian_motion_path_topic",
+            "/arm2/middleware/cartesian_motion_path",
+        )
         self.declare_parameter("motion_execution_topic", "/arm2/middleware/motion_execution")
         self.declare_parameter("vacuum_topic", "/rc_arm_2/vacuum_activate")
         self.declare_parameter("payload_command_topic", "/rc_arm_2/payload_active_command")
@@ -147,6 +152,9 @@ class Arm2MiddlewareNode(Node):
         self._motion_target_topic = str(self.get_parameter("motion_target_topic").value)
         self._cartesian_motion_target_topic = str(
             self.get_parameter("cartesian_motion_target_topic").value
+        )
+        self._cartesian_motion_path_topic = str(
+            self.get_parameter("cartesian_motion_path_topic").value
         )
         self._motion_execution_topic = str(self.get_parameter("motion_execution_topic").value)
         self._vacuum_topic = str(self.get_parameter("vacuum_topic").value)
@@ -200,6 +208,11 @@ class Arm2MiddlewareNode(Node):
             self._cartesian_motion_target_topic,
             10,
         )
+        self._cartesian_motion_path_pub = self.create_publisher(
+            Arm2TargetPath,
+            self._cartesian_motion_path_topic,
+            10,
+        )
         self._vacuum_pub = self.create_publisher(Bool, self._vacuum_topic, 10)
         self._payload_command_pub = self.create_publisher(Bool, self._payload_command_topic, 10)
         self._j5_command_pub = self.create_publisher(Float64, self._j5_command_topic, 10)
@@ -221,7 +234,7 @@ class Arm2MiddlewareNode(Node):
 
         self.get_logger().info(
             "arm2_middleware ready: action_sets_file=%s action_sets=%s target_point=%s run_action_set=%s "
-            "motion_target=%s cartesian_motion_target=%s "
+            "motion_target=%s cartesian_motion_target=%s cartesian_motion_path=%s "
             "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s j5_command=%s j5_position=%s "
             "j5_tolerance=%.4f laser_distance=%s laser_threshold=%d laser_wait_timeout=%.2f tracking_publish_rate=%.2f "
             "dm_serial_bridge=%d dm_serial_rx=%s dm_serial_tx=%s dm_serial_command_base_id=0x%X "
@@ -233,6 +246,7 @@ class Arm2MiddlewareNode(Node):
                 self._run_action_set_topic,
                 self._motion_target_topic,
                 self._cartesian_motion_target_topic,
+                self._cartesian_motion_path_topic,
                 self._motion_execution_topic,
                 self._vacuum_topic,
                 self._payload_command_topic,
@@ -397,12 +411,45 @@ class Arm2MiddlewareNode(Node):
                 j5_target_pos=float(raw_step["j5_target_pos"]),
             )
 
+        if step_type == "move_fixed_path_mf_cartesian":
+            return ActionStep(
+                step_type=step_type,
+                label=label,
+                target_spin_deg=target_spin_deg,
+                waypoints=self._parse_waypoints(raw_step.get("waypoints"), target_spin_deg),
+                j5_target_pos=float(raw_step["j5_target_pos"]),
+            )
+
         raise ValueError(f"unsupported step type: {step_type}")
 
     def _parse_xyz(self, raw_xyz: object, field_name: str) -> Tuple[float, float, float]:
         if not isinstance(raw_xyz, (list, tuple)) or len(raw_xyz) != 3:
             raise ValueError(f"{field_name} must be a length-3 list")
         return (float(raw_xyz[0]), float(raw_xyz[1]), float(raw_xyz[2]))
+
+    def _parse_waypoints(
+        self,
+        raw_waypoints: object,
+        default_target_spin_deg: float,
+    ) -> Tuple[TargetPoint, ...]:
+        if not isinstance(raw_waypoints, list) or len(raw_waypoints) < 2:
+            raise ValueError("waypoints must be a list with at least 2 entries")
+
+        parsed: List[TargetPoint] = []
+        for index, raw_waypoint in enumerate(raw_waypoints):
+            if not isinstance(raw_waypoint, dict):
+                raise ValueError(f"waypoints[{index}] must be a mapping")
+            x, y, z = self._parse_xyz(raw_waypoint.get("xyz"), f"waypoints[{index}].xyz")
+            target_spin_deg = float(raw_waypoint.get("target_spin", default_target_spin_deg))
+            parsed.append(
+                TargetPoint(
+                    x=x,
+                    y=y,
+                    z=z,
+                    target_spin_deg=target_spin_deg,
+                )
+            )
+        return tuple(parsed)
 
     def _parse_delay_sec(self, raw_step: dict) -> float:
         raw_delay = raw_step.get("duration_sec", raw_step.get("delay_sec", raw_step.get("seconds")))
@@ -873,6 +920,20 @@ class Arm2MiddlewareNode(Node):
             self._publish_j5_target(j5_target_pos)
             return
 
+        if step.step_type == "move_fixed_path_mf_cartesian":
+            if not step.waypoints:
+                self._fail_action_set("move_fixed_path_mf_cartesian missing waypoints")
+                return
+            j5_target_pos = step.j5_target_pos
+            self._enter_motion_wait(
+                "waiting on %s waypoint_count=%d j5=%.4f"
+                % (step.step_type, len(step.waypoints), float(j5_target_pos)),
+                j5_target_pos=j5_target_pos,
+            )
+            self._publish_j5_target(j5_target_pos)
+            self._publish_cartesian_motion_path(step.waypoints)
+            return
+
         self._fail_action_set(f"unsupported step type at runtime: {step.step_type}")
 
     def _enter_motion_wait(self, detail: str, j5_target_pos: Optional[float] = None) -> None:
@@ -1076,6 +1137,21 @@ class Arm2MiddlewareNode(Node):
             % ("cartesian" if cartesian else "joint-planned", x, y, z, target_spin_deg, topic)
         )
 
+    def _publish_cartesian_motion_path(self, waypoints: Sequence[TargetPoint]) -> None:
+        msg = Arm2TargetPath()
+        for waypoint in waypoints:
+            target = Arm2TargetPoint()
+            target.xyz.x = float(waypoint.x)
+            target.xyz.y = float(waypoint.y)
+            target.xyz.z = float(waypoint.z)
+            target.target_spin_deg = float(waypoint.target_spin_deg)
+            msg.waypoints.append(target)
+        self._cartesian_motion_path_pub.publish(msg)
+        self.get_logger().info(
+            "published cartesian motion path waypoint_count=%d on %s"
+            % (len(msg.waypoints), self._cartesian_motion_path_topic)
+        )
+
     def _publish_vacuum(self, enabled: bool) -> None:
         msg = Bool()
         msg.data = bool(enabled)
@@ -1110,6 +1186,7 @@ class Arm2MiddlewareNode(Node):
             "move_fixed_pose_mf",
             "move_fixed_pose_mrl",
             "move_fixed_pose_mrl_cartesian",
+            "move_fixed_path_mf_cartesian",
         }
 
     def _is_j5_at_target(self, target_pos: Optional[float]) -> bool:

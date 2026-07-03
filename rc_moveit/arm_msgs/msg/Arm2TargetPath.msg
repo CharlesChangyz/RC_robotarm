@@ -1,0 +1,1 @@
+Arm2TargetPoint[] waypoints

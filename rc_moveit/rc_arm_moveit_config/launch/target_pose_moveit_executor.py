@@ -8,7 +8,7 @@ import math
 import threading
 from typing import Dict, List, Optional, Tuple
 
-from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPoint
+from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPath, Arm2TargetPoint
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit_msgs.action import ExecuteTrajectory, MoveGroup
@@ -111,6 +111,7 @@ class ExecutionRequest:
     target: PoseStamped
     execution_id: Optional[int] = None
     use_cartesian: bool = False
+    cartesian_waypoints: Optional[List[Pose]] = None
 
 
 class TargetPoseMoveItExecutor(Node):
@@ -119,6 +120,7 @@ class TargetPoseMoveItExecutor(Node):
         target_topic: str,
         middleware_target_topic: str,
         middleware_cartesian_target_topic: str,
+        middleware_cartesian_path_topic: str,
         middleware_result_topic: str,
         planning_group: str,
         joint_names: List[str],
@@ -153,6 +155,7 @@ class TargetPoseMoveItExecutor(Node):
         self._manual_target_topic = target_topic
         self._middleware_target_topic = middleware_target_topic
         self._middleware_cartesian_target_topic = middleware_cartesian_target_topic
+        self._middleware_cartesian_path_topic = middleware_cartesian_path_topic
         self._middleware_result_topic = middleware_result_topic
         self._planning_group = planning_group
         self._joint_names = list(joint_names)
@@ -242,6 +245,12 @@ class TargetPoseMoveItExecutor(Node):
             self._on_middleware_cartesian_target,
             20,
         )
+        self.create_subscription(
+            Arm2TargetPath,
+            middleware_cartesian_path_topic,
+            self._on_middleware_cartesian_path,
+            20,
+        )
         self.create_subscription(JointState, joint_state_topic, self._on_joint_state, 20)
         self._timer = self.create_timer(max(0.02, float(check_period)), self._on_timer)
         self._scene_timer = self.create_timer(1.0, self._publish_static_world_scene)
@@ -250,13 +259,14 @@ class TargetPoseMoveItExecutor(Node):
 
         self.get_logger().info(
             "TargetPose->MoveIt executor started: manual_topic=%s middleware_target=%s middleware_result=%s "
-            "middleware_cartesian_target=%s group=%s avoid_collisions=%d world_boxes=%d planning_scene_topic=%s "
+            "middleware_cartesian_target=%s middleware_cartesian_path=%s group=%s avoid_collisions=%d world_boxes=%d planning_scene_topic=%s "
             "cartesian_max_step=%.4f cartesian_min_fraction=%.3f status_tf=%s->%s"
             % (
                 self._manual_target_topic,
                 self._middleware_target_topic,
                 self._middleware_result_topic,
                 self._middleware_cartesian_target_topic,
+                self._middleware_cartesian_path_topic,
                 self._planning_group,
                 1 if self._avoid_collisions else 0,
                 len(self._world_box_configs),
@@ -531,6 +541,9 @@ class TargetPoseMoveItExecutor(Node):
         pose_msg.pose.orientation.w = qw
         return pose_msg
 
+    def _motion_path_to_poses(self, msg: Arm2TargetPath) -> List[PoseStamped]:
+        return [self._motion_target_to_pose(waypoint) for waypoint in msg.waypoints]
+
     def _allocate_execution_id(self) -> int:
         self._next_execution_id += 1
         return self._next_execution_id
@@ -574,6 +587,48 @@ class TargetPoseMoveItExecutor(Node):
 
     def _on_middleware_cartesian_target(self, msg: Arm2TargetPoint) -> None:
         self._handle_middleware_target(msg, use_cartesian=True)
+
+    def _on_middleware_cartesian_path(self, msg: Arm2TargetPath) -> None:
+        waypoints = self._motion_path_to_poses(msg)
+        execution_id = self._allocate_execution_id()
+        if len(waypoints) < 2:
+            self._publish_motion_execution(
+                execution_id,
+                Arm2MotionExecution.STATUS_FAILED,
+                EXECUTION_ERROR_CARTESIAN_PATH_FAILED,
+                "cartesian path requires at least 2 waypoints",
+            )
+            return
+
+        target = waypoints[-1]
+        request = ExecutionRequest(
+            source="middleware",
+            target=target,
+            execution_id=execution_id,
+            use_cartesian=True,
+            cartesian_waypoints=[pose.pose for pose in waypoints],
+        )
+        self._event(
+            "middleware_cartesian_path_rx",
+            target,
+            extra="execution_id=%d waypoint_count=%d"
+            % (request.execution_id, len(request.cartesian_waypoints or [])),
+        )
+
+        if not self._executor_ready():
+            self._fail_middleware_request(
+                request,
+                EXECUTION_ERROR_NOT_READY,
+                "executor not ready",
+            )
+            return
+
+        if self._busy:
+            self._queue_pending_middleware_request(request)
+            return
+
+        self._accept_middleware_request(request)
+        self._start_execution(request)
 
     def _handle_middleware_target(self, msg: Arm2TargetPoint, use_cartesian: bool) -> None:
         pose_msg = self._motion_target_to_pose(msg)
@@ -768,12 +823,13 @@ class TargetPoseMoveItExecutor(Node):
             self._solve_target(request)
 
     def _compute_cartesian_path(self, request: ExecutionRequest) -> None:
+        waypoints = request.cartesian_waypoints or [request.target.pose]
         path_request = GetCartesianPath.Request()
         path_request.header.stamp = self.get_clock().now().to_msg()
         path_request.header.frame_id = request.target.header.frame_id
         path_request.group_name = self._planning_group
         path_request.link_name = self._status_eef_frame
-        path_request.waypoints = [request.target.pose]
+        path_request.waypoints = list(waypoints)
         path_request.max_step = self._cartesian_max_step
         path_request.jump_threshold = 0.0
         path_request.avoid_collisions = self._avoid_collisions
@@ -789,8 +845,8 @@ class TargetPoseMoveItExecutor(Node):
         self._event(
             "cartesian_path_request",
             request.target,
-            extra="max_step=%.4f min_fraction=%.3f"
-            % (self._cartesian_max_step, self._cartesian_min_fraction),
+            extra="waypoint_count=%d max_step=%.4f min_fraction=%.3f"
+            % (len(path_request.waypoints), self._cartesian_max_step, self._cartesian_min_fraction),
         )
         future = self._cartesian_path_client.call_async(path_request)
         future.add_done_callback(
@@ -1082,6 +1138,10 @@ def parse_args():
         "--middleware-cartesian-target-topic",
         default="/arm2/middleware/cartesian_motion_target",
     )
+    parser.add_argument(
+        "--middleware-cartesian-path-topic",
+        default="/arm2/middleware/cartesian_motion_path",
+    )
     parser.add_argument("--middleware-result-topic", default="/arm2/middleware/motion_execution")
     parser.add_argument("--planning-group", default="arm")
     parser.add_argument("--joint-names", default="j1_joint,j2_joint,j3_joint,j4_joint")
@@ -1129,6 +1189,7 @@ def main() -> None:
         target_topic=args.target_topic,
         middleware_target_topic=args.middleware_target_topic,
         middleware_cartesian_target_topic=args.middleware_cartesian_target_topic,
+        middleware_cartesian_path_topic=args.middleware_cartesian_path_topic,
         middleware_result_topic=args.middleware_result_topic,
         planning_group=args.planning_group,
         joint_names=joints,
