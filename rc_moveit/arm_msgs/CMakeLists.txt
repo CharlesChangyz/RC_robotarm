@@ -19,6 +19,7 @@ find_package(geometry_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CanFrame.msg"
   "msg/Arm2TargetPoint.msg"
+  "msg/Arm2TargetPath.msg"
   "msg/Arm2MotionExecution.msg"
   DEPENDENCIES geometry_msgs
 )
