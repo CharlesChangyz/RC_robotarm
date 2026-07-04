@@ -948,7 +948,7 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 95.0
 
-      - type: move_target_offset_mrl_cartesian # j5 负责左右横移动
+      - type: move_target_offset_mrl # j5 负责左右横移动
         label: move_to_default_pose
         offset_xyz: [0.05, 0.0, 0.04]
         j5_target_pos: 0.0
@@ -985,15 +985,19 @@ action_sets:
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose # 放置
-        xyz: [-0.33, -0.0001, 0.48]
-        j5_target_pos: 0.0
+        xyz: [-0.32, -0.0001, 0.48]
+        j5_target_pos: 0.015
         target_spin: 0.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose # 放置
-        xyz: [-0.34, -0.0001, 0.35]
-        j5_target_pos: 0.0  
-        target_spin: 0.0
+        xyz: [-0.33, -0.0001, 0.33]
+        j5_target_pos: 0.015  
+        target_spin: 10.0
 
       - type: set_payload_active
         label: payload_off
@@ -1057,13 +1061,12 @@ action_sets:
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向下吸
-        offset_xyz: [0.0, 0.0, -0.07]
+        offset_xyz: [0.04, 0.0, -0.07]
         j5_target_pos: 0.0
         target_spin: 0.0
 
       - type: delay
         label: wait_after_move
-        duration_sec: 0.5
         duration_sec: 0.5
 
       - type: set_payload_active
@@ -1091,17 +1094,21 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose_mf
         label: move_to_default_pose # 放置
-        xyz: [-0.33, -0.0001, 0.48]
-        j5_target_pos: 0.0
+        xyz: [-0.29, -0.0001, 0.48]
+        j5_target_pos: 0.015
         target_spin: 0.0
 
-      - type: move_fixed_pose_mrl
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
+      - type: move_fixed_pose_mf
         label: move_to_default_pose # 放置
-        xyz: [-0.34, -0.0001, 0.35]
-        j5_target_pos: 0.0  
-        target_spin: 0.0
+        xyz: [-0.31, -0.0001, 0.33]
+        j5_target_pos: 0.015  
+        target_spin: 10.0
 
       - type: set_payload_active
         label: payload_off
@@ -1159,13 +1166,13 @@ action_sets:
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 目标略上方
-        offset_xyz: [0.03, 0.0, 0.05]
+        offset_xyz: [-0.1, 0.0, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向下吸
-        offset_xyz: [0.03, 0.0, -0.07]
+        offset_xyz: [-0.1, 0.0, -0.07]
         j5_target_pos: 0.0
         target_spin: 0.0
 
@@ -1196,15 +1203,19 @@ action_sets:
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose # 放置
-        xyz: [-0.32, -0.0001, 0.48]
-        j5_target_pos: 0.0
+        xyz: [-0.2, -0.0001, 0.48]
+        j5_target_pos: 0.015
         target_spin: 0.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose # 放置
-        xyz: [-0.33, -0.0001, 0.35]
-        j5_target_pos: 0.0  
-        target_spin: 0.0
+        xyz: [-0.26, -0.0001, 0.33]
+        j5_target_pos: 0.015  
+        target_spin: 10.0
 
       - type: set_payload_active
         label: payload_off
@@ -1236,6 +1247,72 @@ action_sets:
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 65.0
+
+  - id: 3 #vision_catch_neg_200_KFS_front_and_store
+    name: vision_catch_neg_200_KFS_front_and_store
+    steps:
+      - type: send_can_frame
+        label: notify # 完成抓取通知
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.18, 0.0, 0.16]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+
+      - type: move_target_offset_mrl
+        label: move_to_default_pose # 目标略上方
+        offset_xyz: [0.04, 0.0, 0.05]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+      - type: move_target_offset_mrl
+        label: move_to_default_pose # 向下吸
+        offset_xyz: [0.04, 0.0, -0.07]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 举高
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 100
+
+      - type: send_can_frame
+        label: notify # 块举起，让车前进
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose # 转180度
+        xyz: [-0.1, -0.0001, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 100
+
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose # 放置
+        xyz: [-0.29, -0.0001, 0.48]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
 
 
   - id: 21 #vision_catch_400_KFS_front_and_store
@@ -1252,7 +1329,7 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
+        xyz: [0.25, 0.0, 0.45]
         j5_target_pos: 0.0
         target_spin: 65.0
       
@@ -1260,17 +1337,17 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
 
-      - type: move_target_offset_mrl_cartesian
-        label: move_to_default_pose # 向前吸
-        offset_xyz: [0.0, 0.0, 0.04]
+      - type: move_target_offset_mrl # j5 负责左右横移动
+        label: move_to_default_pose
+        offset_xyz: [-0.05, 0.0, -0.1]
         j5_target_pos: 0.0
-        target_spin: 76.0
+        target_spin: 95.0
 
-      - type: move_target_offset_mrl_cartesian
-        label: move_to_default_pose # 向前吸
-        offset_xyz: [0.12, 0.0, 0.04]
+      - type: move_target_offset_mrl # j5 负责左右横移动
+        label: move_to_default_pose
+        offset_xyz: [0.07, 0.0, -0.1]
         j5_target_pos: 0.0
-        target_spin: 76.0
+        target_spin: 95.0
 
       - type: delay
         label: wait_after_move
@@ -1301,17 +1378,21 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose_mf
         label: move_to_default_pose # 放置
-        xyz: [-0.34, -0.0001, 0.48]
-        j5_target_pos: 0.0
+        xyz: [-0.2, -0.0001, 0.48]
+        j5_target_pos: 0.015
         target_spin: 0.0
 
-      - type: move_fixed_pose_mrl
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
+      - type: move_fixed_pose_mf
         label: move_to_default_pose # 放置
-        xyz: [-0.35, -0.0001, 0.35]
-        j5_target_pos: 0.0  
-        target_spin: 0.0
+        xyz: [-0.26, -0.0001, 0.33]
+        j5_target_pos: 0.015  
+        target_spin: 10.0
 
       - type: set_payload_active
         label: payload_off
@@ -1340,7 +1421,7 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
+        xyz: [0.35, 0.0, 0.45]
         j5_target_pos: 0.0
         target_spin: 65.0
 
@@ -1400,7 +1481,7 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
+        xyz: [0.18, 0.0, 0.16]
         j5_target_pos: 0.0
         target_spin: 0.0
       
@@ -1648,6 +1729,10 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
         xyz: [0.2171, 0.0, 0.1171]
@@ -1662,15 +1747,25 @@ action_sets:
         label: vacuum_on
         enabled: true
 
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.18, 0.0, 0.16]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+
       - type: move_target_offset_mrl
         label: move_to_default_pose # 目标略上方
-        offset_xyz: [0.0, 0.0, 0.05]
+        offset_xyz: [-0.05, 0.0, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向下吸
-        offset_xyz: [0.0, 0.0, -0.07]
+        offset_xyz: [-0.05, 0.0, -0.1]
         j5_target_pos: 0.0
         target_spin: 0.0
 
@@ -1679,8 +1774,19 @@ action_sets:
         enabled: true
 
       - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 举高
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 100
+
+      - type: send_can_frame
+        label: notify # 块举起，让车前进
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: move_fixed_pose_mf
         label: move_to_default_pose # 左转
-        xyz: [0.0, -0.1, 0.7]
+        xyz: [-0.4, -0.0001, 0.65]
         j5_target_pos: 0.0
         target_spin: 100
 
@@ -1692,10 +1798,9 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
@@ -1760,15 +1865,25 @@ action_sets:
         label: vacuum_on
         enabled: true
 
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+
       - type: move_target_offset_mrl
         label: move_to_default_pose # 目标略上方
-        offset_xyz: [0.0, 0.0, 0.05]
+        offset_xyz: [-0.05, 0.0, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向下吸
-        offset_xyz: [0.0, 0.0, -0.05]
+        offset_xyz: [-0.05, 0.0, -0.07]
         j5_target_pos: 0.0
         target_spin: 0.0
 
@@ -1777,8 +1892,19 @@ action_sets:
         enabled: true
 
       - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 举高
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 100
+
+      - type: send_can_frame
+        label: notify # 块举起，让车前进
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: move_fixed_pose_mf
         label: move_to_default_pose # 左转
-        xyz: [0.0, -0.1, 0.7]
+        xyz: [-0.4, -0.0001, 0.65]
         j5_target_pos: 0.0
         target_spin: 100
 
@@ -1790,10 +1916,9 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
