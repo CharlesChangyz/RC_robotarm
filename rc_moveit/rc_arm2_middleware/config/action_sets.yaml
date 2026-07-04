@@ -2510,4 +2510,92 @@ action_sets:
         j5_target_pos: -0.1172
         target_spin: 0.0
 
-      
+  - id: 76 #vision_catch_200_KFS_front_stand_and_store_waypoints
+    name: vision_catch_200_KFS_front_stand_and_store_waypoints
+    steps:
+      - type: send_can_frame
+        label: notify # 开始抓取通知
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.18, 0.0, 0.16]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+
+      - type: move_target_offset_mrl
+        label: move_to_default_pose # 目标略上方
+        offset_xyz: [0.04, 0.0, 0.05]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+      - type: move_target_offset_mrl
+        label: move_to_default_pose # 向下吸
+        offset_xyz: [0.04, 0.0, -0.07]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+
+      - type: send_can_frame
+        label: notify # 块举起，让车前进
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: move_fixed_path_mf_cartesian
+        label: move_to_default_pose # 举高转向放置途经点
+        j5_target_pos: 0.0
+        target_spin: 100.0
+        waypoints:
+          - xyz: [0.1, 0.0, 0.7]
+          - xyz: [-0.1, -0.0001, 0.7]
+          - xyz: [-0.29, -0.0001, 0.48]
+            target_spin: 0.0
+          - xyz: [-0.31, -0.0001, 0.33]
+            target_spin: 10.0
+
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+
+      - type: send_can_frame
+        label: notify # 气夹收回
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [-0.1, -0.0001, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 100.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 100.0
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 65.0
