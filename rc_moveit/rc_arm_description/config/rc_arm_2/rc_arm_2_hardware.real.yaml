@@ -80,7 +80,7 @@ payload_mass: 0.7
 payload_diaginertia_x: 0.02
 payload_diaginertia_y: 0.02
 payload_diaginertia_z: 0.02
-payload_com_offset_x: 0.32
+payload_com_offset_x: 0.3
 payload_com_offset_y: 0.0
 payload_com_offset_z: 0.0
 payload_box_size_x: 0.0
