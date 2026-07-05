@@ -11,8 +11,16 @@ from typing import Dict, List, Optional, Tuple
 from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPath, Arm2TargetPoint
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
-from moveit_msgs.action import ExecuteTrajectory, MoveGroup
-from moveit_msgs.msg import CollisionObject, Constraints, JointConstraint, PlanningScene
+from moveit_msgs.action import ExecuteTrajectory, MoveGroup, MoveGroupSequence
+from moveit_msgs.msg import (
+    CollisionObject,
+    Constraints,
+    JointConstraint,
+    MotionSequenceItem,
+    OrientationConstraint,
+    PlanningScene,
+    PositionConstraint,
+)
 from moveit_msgs.srv import GetCartesianPath
 from rclpy.action import ActionClient
 from rclpy.node import Node
@@ -35,6 +43,7 @@ EXECUTION_ERROR_PENDING_SUPERSEDED = -8
 EXECUTION_ERROR_REDUNDANT_TARGET = -9
 EXECUTION_ERROR_CARTESIAN_PATH_FAILED = -10
 EXECUTION_ERROR_CARTESIAN_SERVICE_EXCEPTION = -11
+EXECUTION_ERROR_SEQUENCE_PATH_FAILED = -12
 
 
 def _normalize_frame_id(frame_id: str) -> str:
@@ -112,6 +121,9 @@ class ExecutionRequest:
     execution_id: Optional[int] = None
     use_cartesian: bool = False
     cartesian_waypoints: Optional[List[Pose]] = None
+    use_sequence: bool = False
+    sequence_waypoints: Optional[List[PoseStamped]] = None
+    sequence_blend_radius: float = 0.0
 
 
 class TargetPoseMoveItExecutor(Node):
@@ -119,6 +131,7 @@ class TargetPoseMoveItExecutor(Node):
         self,
         target_topic: str,
         middleware_target_topic: str,
+        middleware_motion_path_topic: str,
         middleware_cartesian_target_topic: str,
         middleware_cartesian_path_topic: str,
         middleware_result_topic: str,
@@ -126,6 +139,9 @@ class TargetPoseMoveItExecutor(Node):
         joint_names: List[str],
         default_frame: str,
         move_action_name: str,
+        move_sequence_action_name: str,
+        sequence_pipeline_id: str,
+        sequence_planner_id: str,
         pos_threshold: float,
         rot_threshold: float,
         planning_time: float,
@@ -149,17 +165,22 @@ class TargetPoseMoveItExecutor(Node):
         middleware_preempt_rot_threshold: float,
         cartesian_max_step: float,
         cartesian_min_fraction: float,
+        sequence_position_tolerance: float,
+        sequence_orientation_tolerance: float,
     ) -> None:
         super().__init__("rc_arm_target_pose_moveit_executor")
 
         self._manual_target_topic = target_topic
         self._middleware_target_topic = middleware_target_topic
+        self._middleware_motion_path_topic = middleware_motion_path_topic
         self._middleware_cartesian_target_topic = middleware_cartesian_target_topic
         self._middleware_cartesian_path_topic = middleware_cartesian_path_topic
         self._middleware_result_topic = middleware_result_topic
         self._planning_group = planning_group
         self._joint_names = list(joint_names)
         self._default_frame = _normalize_frame_id(default_frame)
+        self._sequence_pipeline_id = str(sequence_pipeline_id).strip()
+        self._sequence_planner_id = str(sequence_planner_id).strip()
         self._pos_threshold = max(0.0, float(pos_threshold))
         self._rot_threshold = max(0.0, float(rot_threshold))
         self._planning_time = max(0.1, float(planning_time))
@@ -187,6 +208,11 @@ class TargetPoseMoveItExecutor(Node):
         )
         self._cartesian_max_step = max(1.0e-4, float(cartesian_max_step))
         self._cartesian_min_fraction = max(0.0, min(1.0, float(cartesian_min_fraction)))
+        self._sequence_position_tolerance = max(1.0e-4, float(sequence_position_tolerance))
+        self._sequence_orientation_tolerance = max(
+            1.0e-4,
+            float(sequence_orientation_tolerance),
+        )
 
         self._manual_target_lock = threading.Lock()
         self._latest_manual_target: Optional[PoseStamped] = None
@@ -199,6 +225,7 @@ class TargetPoseMoveItExecutor(Node):
         self._canceling_request: Optional[ExecutionRequest] = None
         self._last_preempt_request_sec = -1.0e9
         self._ready_move_action = False
+        self._ready_move_sequence_action = False
         self._ready_cartesian_path = False
         self._ready_execute_trajectory = False
         self._ready_solver = False
@@ -216,6 +243,11 @@ class TargetPoseMoveItExecutor(Node):
             j4_axis=self._j4_axis,
         )
         self._move_group_client = ActionClient(self, MoveGroup, move_action_name)
+        self._move_group_sequence_client = ActionClient(
+            self,
+            MoveGroupSequence,
+            move_sequence_action_name,
+        )
         self._cartesian_path_client = self.create_client(GetCartesianPath, "/compute_cartesian_path")
         self._execute_trajectory_client = ActionClient(
             self,
@@ -240,6 +272,12 @@ class TargetPoseMoveItExecutor(Node):
         self.create_subscription(PoseStamped, target_topic, self._on_manual_target, 20)
         self.create_subscription(Arm2TargetPoint, middleware_target_topic, self._on_middleware_target, 20)
         self.create_subscription(
+            Arm2TargetPath,
+            middleware_motion_path_topic,
+            self._on_middleware_motion_path,
+            20,
+        )
+        self.create_subscription(
             Arm2TargetPoint,
             middleware_cartesian_target_topic,
             self._on_middleware_cartesian_target,
@@ -259,12 +297,13 @@ class TargetPoseMoveItExecutor(Node):
 
         self.get_logger().info(
             "TargetPose->MoveIt executor started: manual_topic=%s middleware_target=%s middleware_result=%s "
-            "middleware_cartesian_target=%s middleware_cartesian_path=%s group=%s avoid_collisions=%d world_boxes=%d planning_scene_topic=%s "
-            "cartesian_max_step=%.4f cartesian_min_fraction=%.3f status_tf=%s->%s"
+            "middleware_motion_path=%s middleware_cartesian_target=%s middleware_cartesian_path=%s group=%s avoid_collisions=%d world_boxes=%d planning_scene_topic=%s "
+            "cartesian_max_step=%.4f cartesian_min_fraction=%.3f sequence_pipeline=%s sequence_planner=%s sequence_pos_tol=%.4f sequence_ori_tol=%.4f status_tf=%s->%s"
             % (
                 self._manual_target_topic,
                 self._middleware_target_topic,
                 self._middleware_result_topic,
+                self._middleware_motion_path_topic,
                 self._middleware_cartesian_target_topic,
                 self._middleware_cartesian_path_topic,
                 self._planning_group,
@@ -273,6 +312,10 @@ class TargetPoseMoveItExecutor(Node):
                 self._planning_scene_topic,
                 self._cartesian_max_step,
                 self._cartesian_min_fraction,
+                self._sequence_pipeline_id or "<default>",
+                self._sequence_planner_id or "<default>",
+                self._sequence_position_tolerance,
+                self._sequence_orientation_tolerance,
                 self._status_base_frame,
                 self._status_eef_frame,
             )
@@ -462,21 +505,24 @@ class TargetPoseMoveItExecutor(Node):
 
     def _update_ready(self) -> None:
         mg_ready = self._move_group_client.server_is_ready()
+        sequence_ready = self._move_group_sequence_client.server_is_ready()
         cartesian_ready = self._cartesian_path_client.service_is_ready()
         execute_ready = self._execute_trajectory_client.server_is_ready()
         solver_ready = self._kinematics is not None
 
         self._ready_move_action = mg_ready
+        self._ready_move_sequence_action = sequence_ready
         self._ready_cartesian_path = cartesian_ready
         self._ready_execute_trajectory = execute_ready
         self._ready_solver = solver_ready
 
-        ready_tuple = (mg_ready, cartesian_ready, execute_ready, solver_ready)
+        ready_tuple = (mg_ready, sequence_ready, cartesian_ready, execute_ready, solver_ready)
         if ready_tuple != self._last_ready_tuple:
             self.get_logger().info(
-                "[STATE] ready move_action=%d cartesian_path=%d execute_trajectory=%d solver=%d %s"
+                "[STATE] ready move_action=%d move_sequence=%d cartesian_path=%d execute_trajectory=%d solver=%d %s"
                 % (
                     1 if mg_ready else 0,
+                    1 if sequence_ready else 0,
                     1 if cartesian_ready else 0,
                     1 if execute_ready else 0,
                     1 if solver_ready else 0,
@@ -485,14 +531,36 @@ class TargetPoseMoveItExecutor(Node):
             )
             self._last_ready_tuple = ready_tuple
 
-    def _executor_ready(self) -> bool:
+    def _executor_ready(
+        self,
+        *,
+        require_move_action: bool = False,
+        require_sequence_action: bool = False,
+        require_cartesian_path: bool = False,
+        require_execute_trajectory: bool = False,
+    ) -> bool:
         self._update_ready()
-        return (
-            self._ready_move_action
-            and self._ready_cartesian_path
-            and self._ready_execute_trajectory
-            and self._ready_solver
-        )
+        if not self._ready_solver:
+            return False
+        if require_move_action and not self._ready_move_action:
+            return False
+        if require_sequence_action and not self._ready_move_sequence_action:
+            return False
+        if require_cartesian_path and not self._ready_cartesian_path:
+            return False
+        if require_execute_trajectory and not self._ready_execute_trajectory:
+            return False
+        return True
+
+    def _request_ready(self, request: ExecutionRequest) -> bool:
+        if request.use_sequence:
+            return self._executor_ready(require_sequence_action=True)
+        if request.use_cartesian:
+            return self._executor_ready(
+                require_cartesian_path=True,
+                require_execute_trajectory=True,
+            )
+        return self._executor_ready(require_move_action=True)
 
     def _log_status(self) -> None:
         event_age = max(0.0, self._now_sec() - self._last_event_time_sec)
@@ -500,11 +568,12 @@ class TargetPoseMoveItExecutor(Node):
             has_manual_target = self._latest_manual_target is not None
         active_source = self._active_request.source if self._active_request is not None else "idle"
         self.get_logger().info(
-            "[STATE] busy=%d ready(move_action=%d,cartesian_path=%d,execute_trajectory=%d,solver=%d) "
+            "[STATE] busy=%d ready(move_action=%d,move_sequence=%d,cartesian_path=%d,execute_trajectory=%d,solver=%d) "
             "manual_target=%d active=%s event=%s(%.2fs) %s"
             % (
                 1 if self._busy else 0,
                 1 if self._ready_move_action else 0,
+                1 if self._ready_move_sequence_action else 0,
                 1 if self._ready_cartesian_path else 0,
                 1 if self._ready_execute_trajectory else 0,
                 1 if self._ready_solver else 0,
@@ -588,6 +657,53 @@ class TargetPoseMoveItExecutor(Node):
     def _on_middleware_cartesian_target(self, msg: Arm2TargetPoint) -> None:
         self._handle_middleware_target(msg, use_cartesian=True)
 
+    def _on_middleware_motion_path(self, msg: Arm2TargetPath) -> None:
+        waypoints = self._motion_path_to_poses(msg)
+        execution_id = self._allocate_execution_id()
+        if len(waypoints) < 2:
+            self._publish_motion_execution(
+                execution_id,
+                Arm2MotionExecution.STATUS_FAILED,
+                EXECUTION_ERROR_SEQUENCE_PATH_FAILED,
+                "motion path requires at least 2 waypoints",
+            )
+            return
+
+        target = waypoints[-1]
+        request = ExecutionRequest(
+            source="middleware",
+            target=target,
+            execution_id=execution_id,
+            use_sequence=True,
+            sequence_waypoints=waypoints,
+            sequence_blend_radius=max(0.0, float(msg.blend_radius)),
+        )
+        self._event(
+            "middleware_motion_path_rx",
+            target,
+            extra="execution_id=%d waypoint_count=%d blend_radius=%.4f"
+            % (
+                request.execution_id,
+                len(request.sequence_waypoints or []),
+                request.sequence_blend_radius,
+            ),
+        )
+
+        if not self._request_ready(request):
+            self._fail_middleware_request(
+                request,
+                EXECUTION_ERROR_NOT_READY,
+                "executor not ready",
+            )
+            return
+
+        if self._busy:
+            self._queue_pending_middleware_request(request)
+            return
+
+        self._accept_middleware_request(request)
+        self._start_execution(request)
+
     def _on_middleware_cartesian_path(self, msg: Arm2TargetPath) -> None:
         waypoints = self._motion_path_to_poses(msg)
         execution_id = self._allocate_execution_id()
@@ -615,7 +731,7 @@ class TargetPoseMoveItExecutor(Node):
             % (request.execution_id, len(request.cartesian_waypoints or [])),
         )
 
-        if not self._executor_ready():
+        if not self._request_ready(request):
             self._fail_middleware_request(
                 request,
                 EXECUTION_ERROR_NOT_READY,
@@ -645,7 +761,7 @@ class TargetPoseMoveItExecutor(Node):
             % (request.execution_id, 1 if request.use_cartesian else 0),
         )
 
-        if not self._executor_ready():
+        if not self._request_ready(request):
             self._fail_middleware_request(
                 request,
                 EXECUTION_ERROR_NOT_READY,
@@ -728,10 +844,10 @@ class TargetPoseMoveItExecutor(Node):
             self._maybe_preempt_active_request()
             return
 
-        if not self._executor_ready():
+        if self._start_pending_request():
             return
 
-        if self._start_pending_request():
+        if not self._executor_ready(require_move_action=True):
             return
 
         with self._manual_target_lock:
@@ -769,6 +885,8 @@ class TargetPoseMoveItExecutor(Node):
         if self._busy or self._pending_request is None:
             return False
         request = self._pending_request
+        if not self._request_ready(request):
+            return False
         self._pending_request = None
         self._start_execution(request)
         return True
@@ -810,17 +928,180 @@ class TargetPoseMoveItExecutor(Node):
             self._last_sent_manual_target = _copy_pose_stamped(request.target)
         self._active_request = request
         self._set_busy(True, "execute_%s" % request.source)
-        extra = "source=%s cartesian=%d" % (
+        extra = "source=%s cartesian=%d sequence=%d" % (
             request.source,
             1 if request.use_cartesian else 0,
+            1 if request.use_sequence else 0,
         )
         if request.execution_id is not None:
             extra += " execution_id=%d" % request.execution_id
         self._event("solve_request", request.target, extra=extra)
-        if request.use_cartesian:
+        if request.use_sequence:
+            self._send_sequence_goal(request)
+        elif request.use_cartesian:
             self._compute_cartesian_path(request)
         else:
             self._solve_target(request)
+
+    def _pose_goal_constraints(self, pose: PoseStamped) -> Constraints:
+        constraints = Constraints()
+
+        pc = PositionConstraint()
+        pc.header.frame_id = pose.header.frame_id
+        pc.link_name = self._status_eef_frame
+        pc.weight = 1.0
+
+        sphere = SolidPrimitive()
+        sphere.type = SolidPrimitive.SPHERE
+        sphere.dimensions = [self._sequence_position_tolerance]
+
+        sphere_pose = Pose()
+        sphere_pose.position.x = float(pose.pose.position.x)
+        sphere_pose.position.y = float(pose.pose.position.y)
+        sphere_pose.position.z = float(pose.pose.position.z)
+        sphere_pose.orientation.w = 1.0
+
+        pc.constraint_region.primitives = [sphere]
+        pc.constraint_region.primitive_poses = [sphere_pose]
+        constraints.position_constraints.append(pc)
+
+        oc = OrientationConstraint()
+        oc.header.frame_id = pose.header.frame_id
+        oc.link_name = self._status_eef_frame
+        oc.orientation = pose.pose.orientation
+        oc.absolute_x_axis_tolerance = self._sequence_orientation_tolerance
+        oc.absolute_y_axis_tolerance = self._sequence_orientation_tolerance
+        oc.absolute_z_axis_tolerance = self._sequence_orientation_tolerance
+        oc.weight = 1.0
+        constraints.orientation_constraints.append(oc)
+
+        return constraints
+
+    def _joint_goal_constraints(self, q_target: Dict[str, float]) -> Constraints:
+        constraints = Constraints()
+        for joint in self._joint_names:
+            jc = JointConstraint()
+            jc.joint_name = joint
+            jc.position = q_target[joint]
+            jc.tolerance_above = self._joint_tolerance
+            jc.tolerance_below = self._joint_tolerance
+            jc.weight = 1.0
+            constraints.joint_constraints.append(jc)
+        return constraints
+
+    def _send_sequence_goal(self, request: ExecutionRequest) -> None:
+        waypoints = request.sequence_waypoints or []
+        if len(waypoints) < 2:
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_SEQUENCE_PATH_FAILED,
+                detail="motion path requires at least 2 waypoints",
+                reason="sequence_path_invalid",
+            )
+            return
+
+        resolved_waypoints = [self._resolve_target_pose(pose) for pose in waypoints]
+        goal = MoveGroupSequence.Goal()
+        blend_radius = max(0.0, float(request.sequence_blend_radius))
+
+        seed = self._current_seed_joints()
+        for index, pose in enumerate(resolved_waypoints):
+            q = pose.pose.orientation
+            pitch_rad = self._kinematics.world_pitch_from_quaternion(
+                (float(q.x), float(q.y), float(q.z), float(q.w))
+            )
+            q_target = self._kinematics.solve_xyz_pitch(
+                float(pose.pose.position.x),
+                float(pose.pose.position.y),
+                float(pose.pose.position.z),
+                pitch_rad,
+                seed_joints=seed,
+            )
+            if q_target is None:
+                detail = (
+                    "sequence IK failed at waypoint[%d] xyz=(%.3f, %.3f, %.3f) pitch=%.3f"
+                    % (
+                        index,
+                        float(pose.pose.position.x),
+                        float(pose.pose.position.y),
+                        float(pose.pose.position.z),
+                        pitch_rad,
+                    )
+                )
+                self._event("sequence_solve_fail", pose, extra=detail)
+                self.get_logger().warn(detail)
+                self._complete_execution(
+                    request,
+                    success=False,
+                    error_code=EXECUTION_ERROR_IK_FAILED,
+                    detail=detail,
+                    reason="sequence_solve_fail",
+                )
+                return
+
+            if any(not math.isfinite(float(q_target[joint])) for joint in self._joint_names):
+                detail = "sequence IK produced non-finite joint target at waypoint[%d]" % index
+                self._event("sequence_solve_fail", pose, extra=detail)
+                self.get_logger().warn(detail)
+                self._complete_execution(
+                    request,
+                    success=False,
+                    error_code=EXECUTION_ERROR_IK_FAILED,
+                    detail=detail,
+                    reason="sequence_solve_fail",
+                )
+                return
+
+            self.get_logger().info(
+                "sequence waypoint[%d] xyz=(%.3f, %.3f, %.3f) pitch=%.3f joints=%s"
+                % (
+                    index,
+                    float(pose.pose.position.x),
+                    float(pose.pose.position.y),
+                    float(pose.pose.position.z),
+                    pitch_rad,
+                    ", ".join(
+                        "%s=%.4f" % (joint, float(q_target[joint]))
+                        for joint in self._joint_names
+                    ),
+                )
+            )
+
+            item = MotionSequenceItem()
+            item.req.group_name = self._planning_group
+            item.req.pipeline_id = self._sequence_pipeline_id
+            item.req.planner_id = self._sequence_planner_id
+            item.req.num_planning_attempts = self._planning_attempts
+            item.req.allowed_planning_time = self._planning_time
+            item.req.max_velocity_scaling_factor = self._vel_scale
+            item.req.max_acceleration_scaling_factor = self._acc_scale
+            item.req.goal_constraints = [self._joint_goal_constraints(q_target)]
+            item.blend_radius = blend_radius if index < len(resolved_waypoints) - 1 else 0.0
+            goal.request.items.append(item)
+            seed = q_target
+
+        goal.planning_options.plan_only = False
+        goal.planning_options.look_around = False
+        goal.planning_options.replan = True
+        goal.planning_options.replan_attempts = 1
+
+        self._event(
+            "sequence_goal_send",
+            request.target,
+            extra="waypoint_count=%d blend_radius=%.4f pipeline=%s planner=%s joint_tol=%.4f"
+            % (
+                len(resolved_waypoints),
+                blend_radius,
+                self._sequence_pipeline_id or "<default>",
+                self._sequence_planner_id or "<default>",
+                self._joint_tolerance,
+            ),
+        )
+        send_future = self._move_group_sequence_client.send_goal_async(goal)
+        send_future.add_done_callback(
+            lambda future, request=request: self._on_sequence_goal_response(future, request)
+        )
 
     def _compute_cartesian_path(self, request: ExecutionRequest) -> None:
         waypoints = request.cartesian_waypoints or [request.target.pose]
@@ -959,15 +1240,7 @@ class TargetPoseMoveItExecutor(Node):
                     start_velocities[joint] for joint in self._joint_names
                 ]
 
-        constraints = Constraints()
-        for joint in self._joint_names:
-            jc = JointConstraint()
-            jc.joint_name = joint
-            jc.position = q_target[joint]
-            jc.tolerance_above = self._joint_tolerance
-            jc.tolerance_below = self._joint_tolerance
-            jc.weight = 1.0
-            constraints.joint_constraints.append(jc)
+        constraints = self._joint_goal_constraints(q_target)
 
         goal.request.goal_constraints = [constraints]
         goal.planning_options.plan_only = False
@@ -979,6 +1252,44 @@ class TargetPoseMoveItExecutor(Node):
         send_future = self._move_group_client.send_goal_async(goal)
         send_future.add_done_callback(
             lambda future, request=request: self._on_goal_response(future, request)
+        )
+
+    def _on_sequence_goal_response(self, future, request: ExecutionRequest) -> None:
+        if self._active_request is not request:
+            return
+
+        try:
+            goal_handle = future.result()
+        except Exception as exc:
+            self._event("sequence_goal_send_exception", request.target, extra="source=%s" % request.source)
+            self.get_logger().warn(f"MoveGroupSequence send exception: {exc}")
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_GOAL_SEND_EXCEPTION,
+                detail=f"MoveGroupSequence send exception: {exc}",
+                reason="sequence_goal_send_exception",
+            )
+            return
+
+        if goal_handle is None or not goal_handle.accepted:
+            self._event("sequence_goal_rejected", request.target, extra="source=%s" % request.source)
+            self.get_logger().warn("MoveGroupSequence goal rejected")
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_GOAL_REJECTED,
+                detail="MoveGroupSequence goal rejected",
+                reason="sequence_goal_rejected",
+            )
+            return
+
+        self._active_goal_handle = goal_handle
+        self._event("sequence_goal_accepted", request.target, extra="source=%s" % request.source)
+        self._maybe_preempt_active_request()
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(
+            lambda future, request=request: self._on_sequence_goal_result(future, request)
         )
 
     def _on_goal_response(self, future, request: ExecutionRequest) -> None:
@@ -1017,6 +1328,63 @@ class TargetPoseMoveItExecutor(Node):
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(
             lambda future, request=request: self._on_goal_result(future, request)
+        )
+
+    def _on_sequence_goal_result(self, future, request: ExecutionRequest) -> None:
+        if self._active_request is not request:
+            return
+
+        try:
+            wrapped = future.result()
+            result = wrapped.result
+        except Exception as exc:
+            self._event("sequence_result_exception", request.target, extra="source=%s" % request.source)
+            self.get_logger().warn(f"MoveGroupSequence result exception: {exc}")
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_RESULT_EXCEPTION,
+                detail=f"MoveGroupSequence result exception: {exc}",
+                reason="sequence_result_exception",
+            )
+            return
+
+        error_code = result.response.error_code
+        if (
+            self._canceling_request is request
+            and self._pending_request is not None
+            and error_code.val != error_code.SUCCESS
+        ):
+            self._event("sequence_goal_preempted", request.target, extra="source=%s" % request.source)
+            self._complete_execution(
+                request,
+                success=False,
+                error_code=EXECUTION_ERROR_PREEMPTED,
+                detail="sequence execution preempted by newer middleware target",
+                reason="sequence_goal_preempted",
+            )
+            return
+
+        if error_code.val == error_code.SUCCESS:
+            self._event("sequence_exec_ok", request.target, extra="source=%s" % request.source)
+            self._complete_execution(
+                request,
+                success=True,
+                error_code=error_code.val,
+                detail="sequence execution succeeded",
+                reason="sequence_goal_done",
+            )
+            return
+
+        detail = "MoveGroupSequence execute failed, error_code=%d" % error_code.val
+        self._event("sequence_exec_fail", request.target, extra="source=%s" % request.source)
+        self.get_logger().warn(detail)
+        self._complete_execution(
+            request,
+            success=False,
+            error_code=error_code.val,
+            detail=detail,
+            reason="sequence_goal_done",
         )
 
     def _on_cancel_response(self, future, request: ExecutionRequest) -> None:
@@ -1134,6 +1502,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Target Pose to MoveIt executor")
     parser.add_argument("--target-topic", default="/rc_arm_2/target_pose")
     parser.add_argument("--middleware-target-topic", default="/arm2/middleware/motion_target")
+    parser.add_argument("--middleware-motion-path-topic", default="/arm2/middleware/motion_path")
     parser.add_argument(
         "--middleware-cartesian-target-topic",
         default="/arm2/middleware/cartesian_motion_target",
@@ -1147,6 +1516,9 @@ def parse_args():
     parser.add_argument("--joint-names", default="j1_joint,j2_joint,j3_joint,j4_joint")
     parser.add_argument("--default-frame", default="world")
     parser.add_argument("--move-action-name", default="/move_action")
+    parser.add_argument("--move-sequence-action-name", default="/sequence_move_group")
+    parser.add_argument("--sequence-pipeline-id", default="pilz_industrial_motion_planner")
+    parser.add_argument("--sequence-planner-id", default="PTP")
     parser.add_argument("--joint-state-topic", default="/joint_states")
     parser.add_argument("--urdf-path", default="")
     parser.add_argument("--pos-threshold", type=float, default=0.003)
@@ -1175,6 +1547,8 @@ def parse_args():
     parser.add_argument("--middleware-preempt-rot-threshold", type=float, default=0.08)
     parser.add_argument("--cartesian-max-step", type=float, default=0.005)
     parser.add_argument("--cartesian-min-fraction", type=float, default=0.99)
+    parser.add_argument("--sequence-position-tolerance", type=float, default=0.005)
+    parser.add_argument("--sequence-orientation-tolerance", type=float, default=0.05)
     return parser.parse_args()
 
 
@@ -1188,6 +1562,7 @@ def main() -> None:
     node = TargetPoseMoveItExecutor(
         target_topic=args.target_topic,
         middleware_target_topic=args.middleware_target_topic,
+        middleware_motion_path_topic=args.middleware_motion_path_topic,
         middleware_cartesian_target_topic=args.middleware_cartesian_target_topic,
         middleware_cartesian_path_topic=args.middleware_cartesian_path_topic,
         middleware_result_topic=args.middleware_result_topic,
@@ -1195,6 +1570,9 @@ def main() -> None:
         joint_names=joints,
         default_frame=args.default_frame,
         move_action_name=args.move_action_name,
+        move_sequence_action_name=args.move_sequence_action_name,
+        sequence_pipeline_id=args.sequence_pipeline_id,
+        sequence_planner_id=args.sequence_planner_id,
         pos_threshold=args.pos_threshold,
         rot_threshold=args.rot_threshold,
         planning_time=args.planning_time,
@@ -1218,6 +1596,8 @@ def main() -> None:
         middleware_preempt_rot_threshold=args.middleware_preempt_rot_threshold,
         cartesian_max_step=args.cartesian_max_step,
         cartesian_min_fraction=args.cartesian_min_fraction,
+        sequence_position_tolerance=args.sequence_position_tolerance,
+        sequence_orientation_tolerance=args.sequence_orientation_tolerance,
     )
 
     try:

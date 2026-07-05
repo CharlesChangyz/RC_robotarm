@@ -96,6 +96,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 72 #no_vision_catch_200_KFS_front_stand_and_store
     name: no_vision_catch_200_KFS_front_stand_and_store
@@ -189,6 +194,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 43 #no_vision_catch_neg_200_KFS_front_and_store
     name: no_vision_catch_neg_200_KFS_front_and_store
@@ -275,6 +285,11 @@ action_sets:
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 44 #no_vision_catch_400_KFS_front_and_store
@@ -366,6 +381,11 @@ action_sets:
 # keep
 
 # keep
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   - id: 200 #no_vision_catch_200_KFS_front_and_keep
     name: no_vision_catch_200_KFS_front_and_keep
     steps:
@@ -398,6 +418,11 @@ action_sets:
         xyz: [0.25, 0.0, 0.45]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 52 #no_vision_catch_200_KFS_front_stand_and_keep
@@ -439,6 +464,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 104 #no_vision_catch_neg_200_KFS_front_and_keep
     name: no_vision_catch_neg_200_KFS_front_and_keep
@@ -472,6 +502,11 @@ action_sets:
         xyz: [0.25, 0.0, 0.45]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 15 #no_vision_catch_400_KFS_front_and_keep
@@ -508,6 +543,11 @@ action_sets:
         target_spin: 0.0
         
 # discard
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   - id: 10 #no_vision_catch_200_KFS_front_and_discard_left
     name: no_vision_catch_200_KFS_front_and_discard_left
     steps:
@@ -554,6 +594,11 @@ action_sets:
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 42 #no_vision_catch_200_KFS_front_and_discard_right
@@ -602,6 +647,11 @@ action_sets:
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 23 #no_vision_catch_200_KFS_front_stand_and_discard_left
@@ -657,6 +707,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 24 #no_vision_catch_200_KFS_front_stand_and_discard_right
     name: no_vision_catch_200_KFS_front_stand_and_discard_right
@@ -711,6 +766,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 25 #no_vision_catch_neg_200_KFS_front_and_discard_left
     name: no_vision_catch_neg_200_KFS_front_and_discard_left
@@ -759,6 +819,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 26 #no_vision_catch_neg_200_KFS_front_and_discard_right
     name: no_vision_catch_neg_200_KFS_front_and_discard_right
@@ -806,6 +871,11 @@ action_sets:
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 27 #no_vision_catch_400_KFS_front_and_discard_left
@@ -859,6 +929,11 @@ action_sets:
         xyz: [0.25, 0.0, 0.4]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 28 #no_vision_catch_400_KFS_front_and_discard_right
@@ -921,6 +996,11 @@ action_sets:
 ############################################################################################################
 # 有视觉
 # store
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   - id: 19 #vision_catch_200_KFS_front_and_store not stand up    name: vision_catch_200_KFS_front_and_store
     steps:
       - type: send_can_frame
@@ -1030,6 +1110,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 65.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 1 #vision_catch_200_KFS_front_stand_and_store
     name: vision_catch_200_KFS_front_stand_and_store
@@ -1045,25 +1130,25 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 看前面
-        xyz: [0.18, 0.0, 0.16]
+        xyz: [0.25, 0.0, 0.0]
         j5_target_pos: 0.0
-        target_spin: 0.0
+        target_spin: 65.0
       
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
 
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
-        offset_xyz: [0.04, 0.0, 0.05]
+      - type: move_target_offset_mrl # j5 负责左右横移动
+        label: move_to_default_pose
+        offset_xyz: [-0.05, 0.0, 0.04]
         j5_target_pos: 0.0
-        target_spin: 0.0
+        target_spin: 95.0
 
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [0.04, 0.0, -0.07]
+      - type: move_target_offset_mrl # j5 负责左右横移动
+        label: move_to_default_pose
+        offset_xyz: [0.07, 0.0, 0.04]
         j5_target_pos: 0.0
-        target_spin: 0.0
+        target_spin: 95.0
 
       - type: delay
         label: wait_after_move
@@ -1096,7 +1181,7 @@ action_sets:
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose # 放置
-        xyz: [-0.29, -0.0001, 0.48]
+        xyz: [-0.30, -0.0001, 0.48]
         j5_target_pos: 0.015
         target_spin: 0.0
 
@@ -1106,7 +1191,7 @@ action_sets:
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose # 放置
-        xyz: [-0.31, -0.0001, 0.33]
+        xyz: [-0.32, -0.0001, 0.33]
         j5_target_pos: 0.015  
         target_spin: 10.0
 
@@ -1141,6 +1226,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 65.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 2 #vision_catch_neg_200_KFS_front_and_store
     name: vision_catch_neg_200_KFS_front_and_store
@@ -1172,7 +1262,7 @@ action_sets:
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向下吸
-        offset_xyz: [-0.1, 0.0, -0.07]
+        offset_xyz: [-0.1, 0.0, -0.09]
         j5_target_pos: 0.0
         target_spin: 0.0
 
@@ -1248,6 +1338,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 65.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
   - id: 3 #vision_catch_neg_200_KFS_front_and_store
     name: vision_catch_neg_200_KFS_front_and_store
     steps:
@@ -1312,6 +1407,11 @@ action_sets:
         xyz: [-0.29, -0.0001, 0.48]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
 
@@ -1425,6 +1525,12 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 65.0
 
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 # keep
 
 # keep
@@ -1463,14 +1569,19 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.3, 0.0, 0.45]
+        xyz: [0.25, 0.0, 0.4]
         j5_target_pos: 0.0
-        target_spin: 0.0
+        target_spin: 10.0
 
       - type: send_can_frame
         label: notify # 块举起，让车前进
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
   - id: 13 #vision_catch_200_KFS_front_stand_and_keep
     name: vision_catch_200_KFS_front_stand_and_keep
@@ -1511,14 +1622,19 @@ action_sets:
 
       - type: move_fixed_pose_mrl
         label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.3, 0.0, 0.45]
+        xyz: [0.25, 0.0, 0.4]
         j5_target_pos: 0.0
-        target_spin: 0.0
+        target_spin: 10.0
       
       - type: send_can_frame
         label: notify # 块举起，让车前进
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 14 #vision_catch_neg_200_KFS_front_and_keep
@@ -1546,7 +1662,7 @@ action_sets:
 
       - type: move_target_offset_mrl
         label: move_to_default_pose # 向下吸
-        offset_xyz: [-0.1, 0.0, -0.07]
+        offset_xyz: [-0.1, 0.0, -0.09]
         j5_target_pos: 0.0
         target_spin: 0.0
 
@@ -1556,14 +1672,19 @@ action_sets:
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.3, 0.0, 0.45]
+        xyz: [0.25, 0.0, 0.4]
         j5_target_pos: 0.0
-        target_spin: 0.0
+        target_spin: 10.0
 
       - type: send_can_frame
         label: notify # 块举起，让车前进
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 54 #vision_catch_400_KFS_front_and_keep (not used)
@@ -1618,6 +1739,11 @@ action_sets:
 
 
 # discard
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   - id: 61 #vision_catch_200_KFS_front_and_discard_left
     name: vision_catch_200_KFS_front_and_discard_left
     steps:
@@ -1675,6 +1801,11 @@ action_sets:
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 62 #vision_catch_200_KFS_front_and_discard_right
@@ -1738,6 +1869,11 @@ action_sets:
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 7 #vision_catch_200_KFS_front_stand_and_discard_left
@@ -1808,6 +1944,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 64 #vision_catch_200_KFS_front_stand_and_discard_right
     name: vision_catch_200_KFS_front_stand_and_discard_right
@@ -1856,6 +1997,11 @@ action_sets:
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 8 #vision_catch_neg_200_KFS_front_and_discard_left
@@ -1926,6 +2072,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 66 #vision_catch_neg_200_KFS_front_and_discard_right
     name: vision_catch_neg_200_KFS_front_and_discard_right
@@ -1974,6 +2125,11 @@ action_sets:
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 67 #vision_catch_400_KFS_front_and_discard_left
@@ -2028,6 +2184,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 68 #vision_catch_400_KFS_front_and_discard_right
     name: vision_catch_400_KFS_front_and_discard_right
@@ -2080,8 +2241,14 @@ action_sets:
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 ##################################################################################################
 # 取出
+
   - id: 70 #KFS_out
     name: KFS_out 
     steps:
@@ -2134,18 +2301,28 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 80.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 71 #KFS_place_second_floor_left
     name: KFS_place_second_floor_left
     steps:
 
-    - type: set_payload_active
-      label: payload_off
-      enabled: false
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
 
-    - type: set_vacuum
-      label: vacuum_off
-      enabled: false
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   
 
 
@@ -2155,6 +2332,7 @@ action_sets:
 ##################################################################################################
 # 其他动作
 # 侧向 keep
+
   - id: 55 #vision_catch_200_KFS_left_and_keep
     name: vision_catch_200_KFS_left_and_keep
     steps:
@@ -2183,6 +2361,11 @@ action_sets:
         xyz: [0.25, 0.0, 0.45]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 56 #vision_catch_neg_200_KFS_left_and_keep
@@ -2214,6 +2397,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 57 #vision_catch_200_KFS_right_and_keep
     name: vision_catch_200_KFS_right_and_keep
@@ -2243,6 +2431,11 @@ action_sets:
         xyz: [0.25, 0.0, 0.45]
         j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 58 #vision_catch_neg_200_KFS_right_and_keep
@@ -2277,6 +2470,11 @@ action_sets:
 # discard
 
 # 通用动作
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   - id: 9 #before_catch_head
     name: before_catch_head
     steps:
@@ -2286,13 +2484,24 @@ action_sets:
         j5_target_pos: -0.1970
         target_spin: 0.0
 
-  - id: 81 #common_watching_front
-    name: common_watching_front
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 81 #error_raise
+    name: error_raise
     steps:
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [0.1170, 0.0, 0.1171]
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 机械臂保持在前上方
+        xyz: [0.2170, 0.0, 0.1171]
+        j5_target_pos: 0.0
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 82 #vision_catch_top
@@ -2318,6 +2527,11 @@ action_sets:
         label: payload_on
         enabled: true
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 83 #vision_catch_side
     name: vision_catch_top
@@ -2342,6 +2556,11 @@ action_sets:
         label: payload_on
         enabled: true
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
   - id: 84 #vision_catch_200_KFS_front_and_store
     name: vision_catch_200_KFS_front_and_store
     steps:
@@ -2350,6 +2569,11 @@ action_sets:
         offset_xyz: [0.0, 0.0, 0.04]
         j5_target_pos: 0.0
         target_spin: 90.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
   - id: 85 #vision_catch_200_KFS_front_and_store
     name: vision_catch_200_KFS_front_and_store
@@ -2367,6 +2591,11 @@ action_sets:
 # store
 
 # 测试
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   - id: 90 #test_front_200
     name: test_front_200
     steps:
@@ -2375,6 +2604,11 @@ action_sets:
         offset_xyz: [0.0, 0.0, 0.0]
         j5_target_pos: 0.0
         target_spin: 90.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 91 #test_front_neg_200
@@ -2386,6 +2620,11 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 92 #test_left_200
     name: test_left_200
@@ -2395,6 +2634,11 @@ action_sets:
         offset_xyz: [0.0, 0.0, 0.0]
         j5_target_pos: 0.0
         target_spin: 90.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
   - id: 93 #test_left_neg_200
@@ -2406,72 +2650,76 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 94 #test_right_200
     name: test_right_200
     steps:
-      - type: move_target_offset_mf
-        label: move_to_default_pose
-        offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-
-  - id: 95 #test_right_neg_200
-    name: test_right_neg_200
-    steps:
-      - type: move_target_offset_mf
-        label: move_to_default_pose
-        offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-
-  - id: 99 #test_watching_front
-    name: test_watching_front
-    steps:
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [0.6570, 0.0, 0.3171]
-        target_spin: 0.0
-
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [0.6570, 0.0, 0.1172]
-        target_spin: 0.0
+      - type: send_can_frame
+        label: notify # 开始抓取通知
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: set_vacuum
         label: vacuum_on
         enabled: true
 
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose # 看前面
+        xyz: [0.25, 0.0, 0.0]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+
+      - type: move_target_offset_mrl # j5 负责左右横移动
+        label: move_to_default_pose
+        offset_xyz: [-0.05, 0.0, 0.04]
+        j5_target_pos: 0.0
+        target_spin: 95.0
+
+      - type: move_target_offset_mrl # j5 负责左右横移动
+        label: move_to_default_pose
+        offset_xyz: [0.07, 0.0, 0.04]
+        j5_target_pos: 0.0
+        target_spin: 95.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
       - type: set_payload_active
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [0.2570, 0.0, 0.7772]
-        target_spin: 95.0
+      - type: move_fixed_path_mrl
+        label: smooth_place_path
+        j5_target_pos: 0.015
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [0.1, 0.0, 0.7]
+            target_spin: 100.0
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [-0.2570, -0.0149, 0.7772]
-        target_spin: 95.0
+          - xyz: [-0.1, -0.0001, 0.7]
+            target_spin: 100.0
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [-0.2870, -0.0149, 0.4672]
-        target_spin: 95.0
+          - xyz: [-0.30, -0.0001, 0.48]
+            target_spin: 0.0
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [-0.2870, -0.0149, 0.4672]
-        target_spin: 0.0
+          - xyz: [-0.32, -0.0001, 0.48]
+            target_spin: 0.0
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [-0.2870, -0.0149, 0.3172]
-        target_spin: 0.0
+      
+      - type: send_can_frame
+        label: notify # 气夹收回
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: set_payload_active
         label: payload_off
@@ -2481,25 +2729,67 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [-0.3070, -0.0149, 0.4172]
-        target_spin: 0.0
+      - type: move_fixed_path_mrl
+        label: smooth_place_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, -0.0001, 0.8]
+            target_spin: 100.0
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [-0.2570, -0.0149, 0.7772]
-        target_spin: 95.0
+          - xyz: [0.1, 0.0, 0.8]
+            target_spin: 100.0
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [0.2570, 0.0, 0.7772]
-        target_spin: 95.0
+          - xyz: [0.2171, 0.0, 0.1171]
+            target_spin: 65.0
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.5]
-        target_spin: 0.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+
+
+  - id: 95 #test_right_neg_200
+    name: test_right_neg_200
+    steps:
+      - type: move_fixed_path_mrl
+        label: smooth_place_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [0.25, 0.0, 0.0]
+            target_spin: 60.0
+
+          - xyz: [0.1, 0.0, 0.7]
+            target_spin: 100.0
+
+          - xyz: [-0.1, -0.0001, 0.7]
+            target_spin: 100.0
+
+          - xyz: [-0.29, -0.0001, 0.48]
+            target_spin: 0.0
+
+
+  - id: 99 #test_watching_front
+    name: test_watching_front
+    steps:
+      - type: move_fixed_path_mrl
+        label: smooth_place_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [0.25, 0.0, 0.1]
+            target_spin: 60.0
+
+          - xyz: [0.25, 0.07, 0.4]
+            target_spin: 0.0
+
+          - xyz: [0.25, -0.07, 0.4]
+            target_spin: 20.0
+
+          - xyz: [0.2170, 0.0, 0.1170]
+            target_spin: 65.0
 
   - id: 22 #home
     name: home
@@ -2509,6 +2799,11 @@ action_sets:
         xyz: [0.0, 0.1172, 0.1172]
         j5_target_pos: -0.1172
         target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
   - id: 76 #vision_catch_200_KFS_front_stand_and_store_waypoints
     name: vision_catch_200_KFS_front_stand_and_store_waypoints
@@ -2528,35 +2823,6 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
-      - type: update_target_point
-        label: update_vision_point
-        timeout_sec: 1.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
-        offset_xyz: [0.04, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [0.04, 0.0, -0.07]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
       - type: move_fixed_path_mf_cartesian
         label: move_to_default_pose # 举高转向放置途经点
         j5_target_pos: 0.0
@@ -2565,7 +2831,6 @@ action_sets:
           - xyz: [0.1, 0.0, 0.7]
           - xyz: [-0.1, -0.0001, 0.7]
           - xyz: [-0.29, -0.0001, 0.48]
-            target_spin: 0.0
           - xyz: [-0.31, -0.0001, 0.33]
             target_spin: 10.0
 
@@ -2599,3 +2864,8 @@ action_sets:
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 65.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]

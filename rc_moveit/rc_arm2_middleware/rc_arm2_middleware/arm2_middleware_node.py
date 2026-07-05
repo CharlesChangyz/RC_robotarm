@@ -48,6 +48,7 @@ class ActionStep:
     step_type: str
     label: str
     target_spin_deg: float = 0.0
+    blend_radius: float = 0.0
     offset_xyz: Optional[Tuple[float, float, float]] = None
     xyz: Optional[Tuple[float, float, float]] = None
     waypoints: Optional[Tuple[TargetPoint, ...]] = None
@@ -118,6 +119,7 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("target_point_topic", "/arm2/middleware/target_point")
         self.declare_parameter("run_action_set_topic", "/arm2/middleware/run_action_set")
         self.declare_parameter("motion_target_topic", "/arm2/middleware/motion_target")
+        self.declare_parameter("motion_path_topic", "/arm2/middleware/motion_path")
         self.declare_parameter(
             "cartesian_motion_target_topic",
             "/arm2/middleware/cartesian_motion_target",
@@ -145,11 +147,16 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("dm_serial_command_base_id", 0x400)
         self.declare_parameter("dm_serial_complete_id", 0x500)
         self.declare_parameter("dm_serial_allowed_action_set_ids", "")
+        self.declare_parameter("target_point_guard_enabled", True)
+        self.declare_parameter("target_point_guard_max_x", 0.73)
+        self.declare_parameter("target_point_guard_max_abs_y", 0.14)
+        self.declare_parameter("target_point_guard_recovery_action_set_id", 81)
 
         self._action_sets_file = Path(self.get_parameter("action_sets_file").value)
         self._target_point_topic = str(self.get_parameter("target_point_topic").value)
         self._run_action_set_topic = str(self.get_parameter("run_action_set_topic").value)
         self._motion_target_topic = str(self.get_parameter("motion_target_topic").value)
+        self._motion_path_topic = str(self.get_parameter("motion_path_topic").value)
         self._cartesian_motion_target_topic = str(
             self.get_parameter("cartesian_motion_target_topic").value
         )
@@ -185,6 +192,18 @@ class Arm2MiddlewareNode(Node):
         self._dm_serial_allowed_action_set_ids = self.get_parameter(
             "dm_serial_allowed_action_set_ids"
         ).value
+        self._target_point_guard_enabled = bool(
+            self.get_parameter("target_point_guard_enabled").value
+        )
+        self._target_point_guard_max_x = float(
+            self.get_parameter("target_point_guard_max_x").value
+        )
+        self._target_point_guard_max_abs_y = float(
+            self.get_parameter("target_point_guard_max_abs_y").value
+        )
+        self._target_point_guard_recovery_action_set_id = int(
+            self.get_parameter("target_point_guard_recovery_action_set_id").value
+        )
 
         self._state = MiddlewareState.IDLE
         self._cached_target_point: Optional[TargetPoint] = None
@@ -203,6 +222,11 @@ class Arm2MiddlewareNode(Node):
         self._refresh_dm_serial_bridge()
 
         self._motion_target_pub = self.create_publisher(Arm2TargetPoint, self._motion_target_topic, 10)
+        self._motion_path_pub = self.create_publisher(
+            Arm2TargetPath,
+            self._motion_path_topic,
+            10,
+        )
         self._cartesian_motion_target_pub = self.create_publisher(
             Arm2TargetPoint,
             self._cartesian_motion_target_topic,
@@ -234,17 +258,19 @@ class Arm2MiddlewareNode(Node):
 
         self.get_logger().info(
             "arm2_middleware ready: action_sets_file=%s action_sets=%s target_point=%s run_action_set=%s "
-            "motion_target=%s cartesian_motion_target=%s cartesian_motion_path=%s "
+            "motion_target=%s motion_path=%s cartesian_motion_target=%s cartesian_motion_path=%s "
             "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s j5_command=%s j5_position=%s "
             "j5_tolerance=%.4f laser_distance=%s laser_threshold=%d laser_wait_timeout=%.2f tracking_publish_rate=%.2f "
             "dm_serial_bridge=%d dm_serial_rx=%s dm_serial_tx=%s dm_serial_command_base_id=0x%X "
-            "dm_serial_complete_id=0x%X dm_serial_allowed_action_set_ids=%s"
+            "dm_serial_complete_id=0x%X dm_serial_allowed_action_set_ids=%s "
+            "target_point_guard=%d max_x=%.4f max_abs_y=%.4f recovery_action_set=%d"
             % (
                 self._action_sets_file,
                 sorted(self._action_sets.keys()),
                 self._target_point_topic,
                 self._run_action_set_topic,
                 self._motion_target_topic,
+                self._motion_path_topic,
                 self._cartesian_motion_target_topic,
                 self._cartesian_motion_path_topic,
                 self._motion_execution_topic,
@@ -264,6 +290,10 @@ class Arm2MiddlewareNode(Node):
                 self._dm_serial_command_base_id,
                 self._dm_serial_complete_id,
                 str(self._dm_serial_allowed_action_set_ids),
+                1 if self._target_point_guard_enabled else 0,
+                self._target_point_guard_max_x,
+                self._target_point_guard_max_abs_y,
+                self._target_point_guard_recovery_action_set_id,
             )
         )
 
@@ -411,6 +441,19 @@ class Arm2MiddlewareNode(Node):
                 j5_target_pos=float(raw_step["j5_target_pos"]),
             )
 
+        if step_type == "move_fixed_path_mrl":
+            return ActionStep(
+                step_type=step_type,
+                label=label,
+                blend_radius=self._parse_blend_radius(raw_step),
+                waypoints=self._parse_waypoints(
+                    raw_step.get("waypoints"),
+                    target_spin_deg,
+                    require_target_spin=True,
+                ),
+                j5_target_pos=float(raw_step["j5_target_pos"]),
+            )
+
         if step_type == "move_fixed_path_mf_cartesian":
             return ActionStep(
                 step_type=step_type,
@@ -431,6 +474,7 @@ class Arm2MiddlewareNode(Node):
         self,
         raw_waypoints: object,
         default_target_spin_deg: float,
+        require_target_spin: bool = False,
     ) -> Tuple[TargetPoint, ...]:
         if not isinstance(raw_waypoints, list) or len(raw_waypoints) < 2:
             raise ValueError("waypoints must be a list with at least 2 entries")
@@ -440,6 +484,8 @@ class Arm2MiddlewareNode(Node):
             if not isinstance(raw_waypoint, dict):
                 raise ValueError(f"waypoints[{index}] must be a mapping")
             x, y, z = self._parse_xyz(raw_waypoint.get("xyz"), f"waypoints[{index}].xyz")
+            if require_target_spin and "target_spin" not in raw_waypoint:
+                raise ValueError(f"waypoints[{index}].target_spin is required")
             target_spin_deg = float(raw_waypoint.get("target_spin", default_target_spin_deg))
             parsed.append(
                 TargetPoint(
@@ -450,6 +496,12 @@ class Arm2MiddlewareNode(Node):
                 )
             )
         return tuple(parsed)
+
+    def _parse_blend_radius(self, raw_step: dict) -> float:
+        blend_radius = float(raw_step.get("blend_radius", 0.03))
+        if blend_radius < 0.0:
+            raise ValueError("blend_radius must be non-negative")
+        return blend_radius
 
     def _parse_delay_sec(self, raw_step: dict) -> float:
         raw_delay = raw_step.get("duration_sec", raw_step.get("delay_sec", raw_step.get("seconds")))
@@ -746,8 +798,6 @@ class Arm2MiddlewareNode(Node):
                     for result in run.results
                 ]
             )
-            if run.trigger_source == "dm_serial":
-                self._send_dm_serial_completion(run.action_set.action_id)
             self._active_run = None
             self._set_state(MiddlewareState.IDLE, "ready for next action set")
             return
@@ -851,7 +901,8 @@ class Arm2MiddlewareNode(Node):
                 "waiting on move_target_offset_noj5 x=%.4f y=%.4f z=%.4f spin=%.2f"
                 % (x, y, z, target_spin_deg),
             )
-            self._publish_motion_target(x, y, z, target_spin_deg)
+            if not self._publish_motion_target(x, y, z, target_spin_deg):
+                return
             return
 
         if step.step_type in {
@@ -878,13 +929,14 @@ class Arm2MiddlewareNode(Node):
                 % (step.step_type, x, y, z, target_spin_deg, float(j5_target_pos)),
                 j5_target_pos=j5_target_pos,
             )
-            self._publish_motion_target(
+            if not self._publish_motion_target(
                 x,
                 y,
                 z,
                 target_spin_deg,
                 cartesian=step.step_type.endswith("_cartesian"),
-            )
+            ):
+                return
             self._publish_j5_target(j5_target_pos)
             return
 
@@ -893,7 +945,8 @@ class Arm2MiddlewareNode(Node):
             self._enter_motion_wait(
                 f"waiting on fixed_pose x={x:.4f} y={y:.4f} z={z:.4f} spin={step.target_spin_deg:.2f}",
             )
-            self._publish_motion_target(x, y, z, step.target_spin_deg)
+            if not self._publish_motion_target(x, y, z, step.target_spin_deg):
+                return
             return
 
         if step.step_type in {
@@ -910,13 +963,34 @@ class Arm2MiddlewareNode(Node):
                 % (step.step_type, x, y, z, step.target_spin_deg, float(j5_target_pos)),
                 j5_target_pos=j5_target_pos,
             )
-            self._publish_motion_target(
+            if not self._publish_motion_target(
                 x,
                 y,
                 z,
                 step.target_spin_deg,
                 cartesian=step.step_type.endswith("_cartesian"),
+            ):
+                return
+            self._publish_j5_target(j5_target_pos)
+            return
+
+        if step.step_type == "move_fixed_path_mrl":
+            if not step.waypoints:
+                self._fail_action_set("move_fixed_path_mrl missing waypoints")
+                return
+            j5_target_pos = step.j5_target_pos
+            self._enter_motion_wait(
+                "waiting on %s waypoint_count=%d blend_radius=%.4f j5=%.4f"
+                % (
+                    step.step_type,
+                    len(step.waypoints),
+                    float(step.blend_radius),
+                    float(j5_target_pos),
+                ),
+                j5_target_pos=j5_target_pos,
             )
+            if not self._publish_motion_path(step.waypoints, step.blend_radius):
+                return
             self._publish_j5_target(j5_target_pos)
             return
 
@@ -930,8 +1004,9 @@ class Arm2MiddlewareNode(Node):
                 % (step.step_type, len(step.waypoints), float(j5_target_pos)),
                 j5_target_pos=j5_target_pos,
             )
+            if not self._publish_cartesian_motion_path(step.waypoints):
+                return
             self._publish_j5_target(j5_target_pos)
-            self._publish_cartesian_motion_path(step.waypoints)
             return
 
         self._fail_action_set(f"unsupported step type at runtime: {step.step_type}")
@@ -1036,7 +1111,8 @@ class Arm2MiddlewareNode(Node):
         y = target_point.y + float(step.offset_xyz[1])
         z = target_point.z + float(step.offset_xyz[2])
         target_spin_deg = target_point.target_spin_deg
-        self._publish_motion_target(x, y, z, target_spin_deg)
+        if not self._publish_motion_target(x, y, z, target_spin_deg):
+            return
         run.last_target_offset_command = TargetPoint(
             x=float(x),
             y=float(y),
@@ -1123,7 +1199,10 @@ class Arm2MiddlewareNode(Node):
         z: float,
         target_spin_deg: float,
         cartesian: bool = False,
-    ) -> None:
+    ) -> bool:
+        if not self._check_motion_target_guard(x, y, z):
+            return False
+
         msg = Arm2TargetPoint()
         msg.xyz.x = float(x)
         msg.xyz.y = float(y)
@@ -1136,9 +1215,36 @@ class Arm2MiddlewareNode(Node):
             "published %s motion target x=%.4f y=%.4f z=%.4f spin=%.2f deg on %s"
             % ("cartesian" if cartesian else "joint-planned", x, y, z, target_spin_deg, topic)
         )
+        return True
 
-    def _publish_cartesian_motion_path(self, waypoints: Sequence[TargetPoint]) -> None:
+    def _publish_motion_path(self, waypoints: Sequence[TargetPoint], blend_radius: float) -> bool:
+        for waypoint in waypoints:
+            if not self._check_motion_target_guard(waypoint.x, waypoint.y, waypoint.z):
+                return False
+
         msg = Arm2TargetPath()
+        msg.blend_radius = float(blend_radius)
+        for waypoint in waypoints:
+            target = Arm2TargetPoint()
+            target.xyz.x = float(waypoint.x)
+            target.xyz.y = float(waypoint.y)
+            target.xyz.z = float(waypoint.z)
+            target.target_spin_deg = float(waypoint.target_spin_deg)
+            msg.waypoints.append(target)
+        self._motion_path_pub.publish(msg)
+        self.get_logger().info(
+            "published motion path waypoint_count=%d blend_radius=%.4f on %s"
+            % (len(msg.waypoints), float(blend_radius), self._motion_path_topic)
+        )
+        return True
+
+    def _publish_cartesian_motion_path(self, waypoints: Sequence[TargetPoint]) -> bool:
+        for waypoint in waypoints:
+            if not self._check_motion_target_guard(waypoint.x, waypoint.y, waypoint.z):
+                return False
+
+        msg = Arm2TargetPath()
+        msg.blend_radius = 0.0
         for waypoint in waypoints:
             target = Arm2TargetPoint()
             target.xyz.x = float(waypoint.x)
@@ -1150,6 +1256,45 @@ class Arm2MiddlewareNode(Node):
         self.get_logger().info(
             "published cartesian motion path waypoint_count=%d on %s"
             % (len(msg.waypoints), self._cartesian_motion_path_topic)
+        )
+        return True
+
+    def _check_motion_target_guard(self, x: float, y: float, z: float) -> bool:
+        if not self._target_point_guard_enabled:
+            return True
+
+        if float(x) <= self._target_point_guard_max_x and abs(float(y)) <= self._target_point_guard_max_abs_y:
+            return True
+
+        self._abort_current_run_for_invalid_target(
+            "invalid motion target x=%.4f y=%.4f z=%.4f exceeds guard max_x=%.4f max_abs_y=%.4f"
+            % (
+                float(x),
+                float(y),
+                float(z),
+                self._target_point_guard_max_x,
+                self._target_point_guard_max_abs_y,
+            )
+        )
+        return False
+
+    def _abort_current_run_for_invalid_target(self, detail: str) -> None:
+        run = self._active_run
+        if (
+            run is not None
+            and run.action_set.action_id == self._target_point_guard_recovery_action_set_id
+        ):
+            self._fail_action_set(detail)
+            return
+
+        self.get_logger().warn(
+            "%s; aborting current action set and starting recovery id=%d"
+            % (detail, self._target_point_guard_recovery_action_set_id)
+        )
+        self._fail_action_set(detail)
+        self._try_start_action_set(
+            self._target_point_guard_recovery_action_set_id,
+            source="target_point_guard",
         )
 
     def _publish_vacuum(self, enabled: bool) -> None:
@@ -1186,6 +1331,7 @@ class Arm2MiddlewareNode(Node):
             "move_fixed_pose_mf",
             "move_fixed_pose_mrl",
             "move_fixed_pose_mrl_cartesian",
+            "move_fixed_path_mrl",
             "move_fixed_path_mf_cartesian",
         }
 
@@ -1333,26 +1479,6 @@ class Arm2MiddlewareNode(Node):
             % (frame.can_id, frame.dlc, action_id)
         )
         self._try_start_action_set(action_id, source="dm_serial", can_id=frame.can_id)
-
-    def _send_dm_serial_completion(self, action_set_id: int) -> None:
-        if self._dm_serial_bridge is None or self._dm_serial_tx_pub is None:
-            return
-
-        frame = self._dm_serial_bridge.completion_frame()
-        if not self._publish_dm_serial_frame(
-            frame.can_id,
-            frame.data[: frame.dlc],
-            is_extended=frame.is_extended,
-            is_remote=frame.is_remote,
-            is_fd=frame.is_fd,
-            dlc=frame.dlc,
-        ):
-            return
-
-        self.get_logger().info(
-            "sent DM serial completion id=0x%X for action_set=%d on %s"
-            % (frame.can_id, action_set_id, self._dm_serial_tx_topic)
-        )
 
     def _publish_dm_serial_frame(
         self,

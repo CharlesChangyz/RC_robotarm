@@ -93,7 +93,20 @@ def generate_launch_description():
     robot_description_planning = {"robot_description_planning": joint_limits_yaml}
 
     ompl_planning_yaml = load_yaml("rc_arm_moveit_config", "config/rc_arm_2/ompl_planning.yaml")
-    ompl_planning_pipeline_config = {"move_group": ompl_planning_yaml}
+    pilz_planning_yaml = load_yaml(
+        "moveit_configs_utils",
+        "default_configs/pilz_industrial_motion_planner_planning.yaml",
+    )
+    planning_pipeline_config = {
+        "planning_pipelines": ["ompl", "pilz_industrial_motion_planner"],
+        "default_planning_pipeline": "ompl",
+        "ompl": ompl_planning_yaml,
+        "pilz_industrial_motion_planner": pilz_planning_yaml,
+        "capabilities": (
+            "pilz_industrial_motion_planner/MoveGroupSequenceAction "
+            "pilz_industrial_motion_planner/MoveGroupSequenceService"
+        ),
+    }
 
     moveit_controllers_yaml = load_yaml("rc_arm_moveit_config", "config/rc_arm_2/moveit_controllers.yaml")
 
@@ -162,7 +175,7 @@ def generate_launch_description():
             robot_description_semantic,
             robot_description_planning,
             kinematics_yaml,
-            ompl_planning_pipeline_config,
+            planning_pipeline_config,
             trajectory_execution,
             moveit_controllers_yaml,
             planning_scene_monitor_parameters,
