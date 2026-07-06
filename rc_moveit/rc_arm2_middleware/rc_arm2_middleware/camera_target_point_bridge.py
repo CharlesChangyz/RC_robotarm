@@ -83,16 +83,16 @@ class CameraTargetPointBridge(Node):
 
         out = transform_target_point(msg, transform)
         self._publisher.publish(out)
-        self.get_logger().info(
-            "published target point in %s: x=%.4f y=%.4f z=%.4f spin=%.2f deg"
-            % (
-                self._target_frame,
-                out.xyz.x,
-                out.xyz.y,
-                out.xyz.z,
-                out.target_spin_deg,
-            )
-        )
+        # self.get_logger().info(
+        #     "published target point in %s: x=%.4f y=%.4f z=%.4f spin=%.2f deg"
+        #     % (
+        #         self._target_frame,
+        #         out.xyz.x,
+        #         out.xyz.y,
+        #         out.xyz.z,
+        #         out.target_spin_deg,
+        #     )
+        # )
 
 
 def main(args: list[str] | None = None) -> None:
