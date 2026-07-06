@@ -654,7 +654,7 @@ action_sets:
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
-  - id: 23 #no_vision_catch_200_KFS_front_stand_and_discard_left
+  - id: 823 #no_vision_catch_200_KFS_front_stand_and_discard_left
     name: no_vision_catch_200_KFS_front_stand_and_discard_left
     steps:
       - type: set_vacuum
@@ -713,7 +713,7 @@ action_sets:
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 
-  - id: 24 #no_vision_catch_200_KFS_front_stand_and_discard_right
+  - id: 824 #no_vision_catch_200_KFS_front_stand_and_discard_right
     name: no_vision_catch_200_KFS_front_stand_and_discard_right
     steps:
       - type: set_vacuum
@@ -2869,3 +2869,57 @@ action_sets:
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 23 #Reach out to grab the block
+    name: Reach out to grab the block
+    steps:
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+
+        - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose # 举高
+        xyz: [0.1, 0.0, 0.83]
+        j5_target_pos: 0.0
+        target_spin: 110.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+      
+  - id: 23 #Reach down after grabing the block
+    name: Reach down after grabing the block
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+
+        - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose # 举高
+        xyz: [0.0, 0.1, 0.83]
+        j5_target_pos: 0.0
+        target_spin: 110.0  
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.0, 0.1172, 0.1172]
+        j5_target_pos: -0.1172
+        target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+      
+
+      
