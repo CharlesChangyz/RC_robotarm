@@ -212,6 +212,50 @@ GUI 主要行为：
 - `System Control`：可直接启动 `run_rc_arm_mujoco.sh`、`run_rc_arm_mujoco_bridge.sh`、`run_rc_arm_real.sh`，以及单次发送 `Vacuum ON/OFF`、`Payload ON/OFF`、`Run Action Set` 和独立 J5 目标
 - `J5 target (m)`：单次发布 `std_msgs/Float64` 到 `/rc_arm_2/j5/command_position`，并显示 `/rc_arm_2/j5/actual_position` 当前反馈
 
+## Arm2 middleware 动作集
+
+`rc_arm_2_robot.launch.py` 默认启动 `rc_arm2_middleware` 动作集节点，可用 `use_arm2_middleware:=false` 关闭。动作集配置文件是：
+
+```text
+rc_moveit/rc_arm2_middleware/config/action_sets.yaml
+```
+
+GUI 的 `Run Action Set` 只发布动作集 ID 到 `/arm2/middleware/run_action_set`，不会覆盖外部视觉发布到 `/arm2/middleware/target_point` 的目标点。middleware 会在动作启动时捕获当前缓存目标点，`update_target_point` 步骤会等待并刷新视觉目标。
+
+也可以通过 DM serial 原始 CAN 帧触发动作集：默认 `middleware_dm_serial_command_base_id=0x400`，标准帧 `0x400 + action_id` 会映射到对应动作集。例如 `0x401 -> id 1`、`0x40A -> id 10`、`0x451 -> id 81`。动作成功完成后默认回传 `0x500`。
+
+当前动作集 ID：
+
+```text
+1   视觉抓取 200 KFS 正前方，站立后入库
+2   视觉抓取 -200 KFS 正前方，入库
+7   视觉抓取 200 KFS 正前方，站立后左侧丢弃
+8   视觉抓取 -200 KFS 正前方，左侧丢弃
+9   抓取前抬头预备位
+10  未存储侧放
+13  视觉抓取 200 KFS 正前方，站立后保持
+14  视觉抓取 -200 KFS 正前方，保持
+19  视觉抓取 200 KFS 正前方，非站立入库
+20  视觉抓取 200 KFS 正前方，保持
+21  视觉抓取 400 KFS 正前方，入库
+22  回到初始位
+23  伸出抓取方块
+24  抓取方块后下探
+25  视觉抓取 400 KFS 正前方入库前预备位
+51  视觉抓取 200 KFS 正前方，站立后入库（路径版）
+52  视觉抓取 -200 KFS 正前方，入库（路径版）
+57  视觉抓取 200 KFS 正前方，站立后左侧丢弃（路径版）
+58  视觉抓取 -200 KFS 正前方，左侧丢弃（路径版）
+63  视觉抓取 200 KFS 正前方，站立后保持（路径版）
+64  视觉抓取 -200 KFS 正前方，保持（路径版）
+69  1019 动作路径
+70  视觉抓取 200 KFS 正前方，保持（路径版）
+71  视觉抓取 400 KFS 正前方，入库（路径版）
+74  抓取方块后下探（路径版）
+75  视觉抓取 400 KFS 正前方入库前预备位（路径版）
+81  视觉观看动作
+```
+
 这条 GUI 目标链不再调用 MoveIt 的 `/compute_ik`。`/compute_ik` 仍保留给 teleop 等其他链路使用；当前 GUI / target executor 链只把 MoveIt 用在 joint-goal 规划、碰撞检查和执行上。
 
 默认快捷键：
@@ -541,7 +585,51 @@ DDS discovery traffic through the firewall. This remote-control path does not
 add an application-level safety lock; any trusted machine in the same ROS 2
 domain can send the exposed control requests.
 
-The GUI uses `j4 world` semantics: `0 deg` means the tool is level in the arm's radial vertical plane. It keeps `Editing target`, `Last sent target`, and `Actual current pose` separate, publishes only on `Send`, and supports `Reset to current`, `Home`, `Send if changed only`, `Vacuum ON/OFF`, payload commands, action-set triggers, independent `J5 target (m)` commands, MuJoCo / Real start-stop buttons, and approximate reachability feedback. `Run Action Set` publishes only the action-set ID; it does not overwrite the middleware target point supplied by an external vision publisher. This GUI/executor chain no longer calls MoveIt's `/compute_ik`; `/compute_ik` remains available for teleop and other chains.
+The GUI uses `j4 world` semantics: `0 deg` means the tool is level in the arm's radial vertical plane. It keeps `Editing target`, `Last sent target`, and `Actual current pose` separate, publishes only on `Send`, and supports `Reset to current`, `Home`, `Send if changed only`, `Vacuum ON/OFF`, payload commands, action-set triggers, independent `J5 target (m)` commands, MuJoCo / Real start-stop buttons, and approximate reachability feedback. This GUI/executor chain no longer calls MoveIt's `/compute_ik`; `/compute_ik` remains available for teleop and other chains.
+
+## Arm2 Middleware Action Sets
+
+`rc_arm_2_robot.launch.py` starts the `rc_arm2_middleware` action-set node by default. Disable it with `use_arm2_middleware:=false`. The action-set file is:
+
+```text
+rc_moveit/rc_arm2_middleware/config/action_sets.yaml
+```
+
+The GUI `Run Action Set` control publishes only the action-set ID to `/arm2/middleware/run_action_set`; it does not overwrite the target point supplied by an external vision publisher on `/arm2/middleware/target_point`. The middleware captures the currently cached target point when an action starts, and `update_target_point` steps wait for a fresh vision target.
+
+DM serial raw CAN frames can also trigger action sets. By default `middleware_dm_serial_command_base_id=0x400`, so standard frame ID `0x400 + action_id` maps to an action set. Examples: `0x401 -> id 1`, `0x40A -> id 10`, `0x451 -> id 81`. Successful completion returns `0x500` by default.
+
+Current action-set IDs:
+
+```text
+1   vision_catch_200_KFS_front_stand_and_store
+2   vision_catch_neg_200_KFS_front_and_store
+7   vision_catch_200_KFS_front_stand_and_discard_left
+8   vision_catch_neg_200_KFS_front_and_discard_left
+9   before_catch_head
+10  side_place_without_store
+13  vision_catch_200_KFS_front_stand_and_keep
+14  vision_catch_neg_200_KFS_front_and_keep
+19  vision_catch_200_KFS_front_and_store not stand up
+20  vision_catch_200_KFS_front_and_keep
+21  vision_catch_400_KFS_front_and_store
+22  home
+23  Reach out to grab the block
+24  Reach down after grabing the block
+25  pre_vision_catch_400_KFS_front_and_store
+51  vision_catch_200_KFS_front_stand_and_store_path
+52  vision_catch_neg_200_KFS_front_and_store_path
+57  vision_catch_200_KFS_front_stand_and_discard_left_path
+58  vision_catch_neg_200_KFS_front_and_discard_left_path
+63  vision_catch_200_KFS_front_stand_and_keep_path
+64  vision_catch_neg_200_KFS_front_and_keep_path
+69  1019_path
+70  vision_catch_200_KFS_front_and_keep_path
+71  vision_catch_400_KFS_front_and_store_path
+74  Reach down after grabing the block_path
+75  pre_vision_catch_400_KFS_front_and_store_path
+81  vision_watching_action
+```
 
 Common target executor options:
 

@@ -447,7 +447,7 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 10.0
 
-       - type: send_can_frame
+      - type: send_can_frame
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
