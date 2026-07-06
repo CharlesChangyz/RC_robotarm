@@ -441,7 +441,7 @@ class Arm2MiddlewareNode(Node):
                 j5_target_pos=float(raw_step["j5_target_pos"]),
             )
 
-        if step_type == "move_fixed_path_mrl":
+        if step_type in {"move_fixed_path_mrl", "move_target_offset_path_mrl"}:
             return ActionStep(
                 step_type=step_type,
                 label=label,
@@ -546,16 +546,16 @@ class Arm2MiddlewareNode(Node):
             target_spin_deg=float(msg.target_spin_deg),
         )
         self._target_point_sequence += 1
-        self.get_logger().info(
-            "cached target point seq=%d x=%.4f y=%.4f z=%.4f spin=%.2f deg"
-            % (
-                self._target_point_sequence,
-                self._cached_target_point.x,
-                self._cached_target_point.y,
-                self._cached_target_point.z,
-                self._cached_target_point.target_spin_deg,
-            )
-        )
+        # self.get_logger().info(
+        #     "cached target point seq=%d x=%.4f y=%.4f z=%.4f spin=%.2f deg"
+        #     % (
+        #         self._target_point_sequence,
+        #         self._cached_target_point.x,
+        #         self._cached_target_point.y,
+        #         self._cached_target_point.z,
+        #         self._cached_target_point.target_spin_deg,
+        #     )
+        # )
         run = self._active_run
         if (
             run is not None
@@ -974,6 +974,41 @@ class Arm2MiddlewareNode(Node):
             self._publish_j5_target(j5_target_pos)
             return
 
+        if step.step_type == "move_target_offset_path_mrl":
+            target_point = run.target_point
+            if target_point is None:
+                self._fail_action_set(
+                    "move_target_offset_path_mrl requested but no target point was captured at action start"
+                )
+                return
+            if not step.waypoints:
+                self._fail_action_set("move_target_offset_path_mrl missing waypoints")
+                return
+            waypoints = tuple(
+                TargetPoint(
+                    x=target_point.x + waypoint.x,
+                    y=target_point.y + waypoint.y,
+                    z=target_point.z + waypoint.z,
+                    target_spin_deg=waypoint.target_spin_deg,
+                )
+                for waypoint in step.waypoints
+            )
+            j5_target_pos = float(target_point.y) + float(step.j5_target_pos)
+            self._enter_motion_wait(
+                "waiting on %s waypoint_count=%d blend_radius=%.4f j5=%.4f"
+                % (
+                    step.step_type,
+                    len(waypoints),
+                    float(step.blend_radius),
+                    float(j5_target_pos),
+                ),
+                j5_target_pos=j5_target_pos,
+            )
+            if not self._publish_motion_path(waypoints, step.blend_radius):
+                return
+            self._publish_j5_target(j5_target_pos)
+            return
+
         if step.step_type == "move_fixed_path_mrl":
             if not step.waypoints:
                 self._fail_action_set("move_fixed_path_mrl missing waypoints")
@@ -1263,17 +1298,16 @@ class Arm2MiddlewareNode(Node):
         if not self._target_point_guard_enabled:
             return True
 
-        if float(x) <= self._target_point_guard_max_x and abs(float(y)) <= self._target_point_guard_max_abs_y:
+        if float(x) <= self._target_point_guard_max_x:
             return True
 
         self._abort_current_run_for_invalid_target(
-            "invalid motion target x=%.4f y=%.4f z=%.4f exceeds guard max_x=%.4f max_abs_y=%.4f"
+            "invalid motion target x=%.4f y=%.4f z=%.4f exceeds guard max_x=%.4f"
             % (
                 float(x),
                 float(y),
                 float(z),
                 self._target_point_guard_max_x,
-                self._target_point_guard_max_abs_y,
             )
         )
         return False
@@ -1332,6 +1366,7 @@ class Arm2MiddlewareNode(Node):
             "move_fixed_pose_mrl",
             "move_fixed_pose_mrl_cartesian",
             "move_fixed_path_mrl",
+            "move_target_offset_path_mrl",
             "move_fixed_path_mf_cartesian",
         }
 

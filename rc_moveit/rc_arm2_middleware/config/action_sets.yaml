@@ -1,1242 +1,110 @@
 action_sets:
-  # Assumptions for fixed points:
-  # - default point: [0.25, 0.0, 0.24]
-  # - staging point: [0.30, -0.10, 0.20]
-  # - warehouse point: temporarily reuse [0.30, -0.10, 0.20], replace as needed
-#######################################################################################################
-# 核心动作
-# 统计: 当前核心块共 32 个动作
-# 说明: 若按 无视觉/有视觉 x store/keep/discard x 200/200stand/neg200/400 统计应为 24，
-#       但当前 discard 额外拆分为 left/right，因此实际是 32 个。
-# 无视觉
-# store
-  - id: 41 #no_vision_catch_200_KFS_front_and_store
-    name: no_vision_catch_200_KFS_front_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.18]
-        j5_target_pos: 0.0
-        target_spin: 100.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.65, 0.0, 0.18]
-        j5_target_pos: 0.0
-        target_spin: 100.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.33, -0.0001, 0.48]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.34, -0.0001, 0.35]
-        j5_target_pos: 0.0  
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 72 #no_vision_catch_200_KFS_front_stand_and_store
-    name: no_vision_catch_200_KFS_front_stand_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.12]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.33, -0.0001, 0.48]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.34, -0.0001, 0.35]
-        j5_target_pos: 0.0  
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 43 #no_vision_catch_neg_200_KFS_front_and_store
-    name: no_vision_catch_neg_200_KFS_front_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, 0.0]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, -0.08]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.33, -0.0001, 0.48]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.34, -0.0001, 0.35]
-        j5_target_pos: 0.0  
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 44 #no_vision_catch_400_KFS_front_and_store
-    name: no_vision_catch_400_KFS_front_and_store
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.75, 0.0, 0.35]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.33, -0.0001, 0.48]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 放置
-        xyz: [-0.34, -0.0001, 0.35]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.35, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-# keep
-
-# keep
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-  - id: 200 #no_vision_catch_200_KFS_front_and_keep
-    name: no_vision_catch_200_KFS_front_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.18]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.65, 0.0, 0.18]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 52 #no_vision_catch_200_KFS_front_stand_and_keep
-    name: no_vision_catch_200_KFS_front_stand_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: -15.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: -15.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.12]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 104 #no_vision_catch_neg_200_KFS_front_and_keep
-    name: no_vision_catch_neg_200_KFS_front_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, 0.0]
-        j5_target_pos: 0.0
-        target_spin: -15.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, -0.08]
-        j5_target_pos: 0.0
-        target_spin: -15.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 15 #no_vision_catch_400_KFS_front_and_keep
-    name: no_vision_catch_400_KFS_front_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.75, 0.0, 0.35]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-        
-# discard
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-  - id: 10 #no_vision_catch_200_KFS_front_and_discard_left
-    name: no_vision_catch_200_KFS_front_and_discard_left
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.18]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.65, 0.0, 0.18]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 左转
-        xyz: [0.0, -0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 42 #no_vision_catch_200_KFS_front_and_discard_right
-    name: no_vision_catch_200_KFS_front_and_discard_right
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.18]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.65, 0.0, 0.18]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 右转
-        xyz: [0.0, 0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 823 #no_vision_catch_200_KFS_front_stand_and_discard_left
-    name: no_vision_catch_200_KFS_front_stand_and_discard_left
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.12]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 左转
-        xyz: [0.0, -0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 824 #no_vision_catch_200_KFS_front_stand_and_discard_right
-    name: no_vision_catch_200_KFS_front_stand_and_discard_right
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        xyz: [0.25, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.2]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.66, 0.0, 0.12]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 右转
-        xyz: [0.0, 0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 25 #no_vision_catch_neg_200_KFS_front_and_discard_left
-    name: no_vision_catch_neg_200_KFS_front_and_discard_left
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, 0.0]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, -0.08]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 左转
-        xyz: [0.0, -0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 26 #no_vision_catch_neg_200_KFS_front_and_discard_right
-    name: no_vision_catch_neg_200_KFS_front_and_discard_right
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, 0.0]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.795, 0.0, -0.08]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 右转
-        xyz: [0.0, 0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 27 #no_vision_catch_400_KFS_front_and_discard_left
-    name: no_vision_catch_400_KFS_front_and_discard_left
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.75, 0.0, 0.35]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
-        xyz: [0.0, -0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.25, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 28 #no_vision_catch_400_KFS_front_and_discard_right
-    name: no_vision_catch_400_KFS_front_and_discard_right
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.75, 0.0, 0.35]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
-        xyz: [0.0, 0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.25, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-
-############################################################################################################
-# 有视觉
-# store
-
-############################################################################################################
-# 有视觉
-# store
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-  - id: 19 #vision_catch_200_KFS_front_and_store not stand up    name: vision_catch_200_KFS_front_and_store
-    steps:
-      - type: send_can_frame
-        label: notify # 开始抓取通知
-        can_id: 0x601
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 65.0
-      
-      - type: update_target_point
-        label: update_vision_point
-        timeout_sec: 1.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [-0.1, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [0.05, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 放置
-        xyz: [-0.32, -0.0001, 0.48]
-        j5_target_pos: 0.015
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 放置
-        xyz: [-0.33, -0.0001, 0.33]
-        j5_target_pos: 0.015  
-        target_spin: 10.0
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 气夹收回
-        can_id: 0x603
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100.0
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100.0
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 65.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
   - id: 1 #vision_catch_200_KFS_front_stand_and_store
     name: vision_catch_200_KFS_front_stand_and_store
     steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
       - type: send_can_frame
-        label: notify # 开始抓取通知
+        label: notify
         can_id: 0x601
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
+        label: move_to_default_pose
         xyz: [0.25, 0.0, 0.0]
         j5_target_pos: 0.0
         target_spin: 65.0
-      
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
+      - type: move_target_offset_mrl
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, 0.04]
         j5_target_pos: 0.0
         target_spin: 95.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
+      - type: move_target_offset_mrl
         label: move_to_default_pose
         offset_xyz: [0.07, 0.0, 0.04]
         j5_target_pos: 0.0
         target_spin: 95.0
-
       - type: delay
         label: wait_after_move
         duration_sec: 0.5
-
       - type: set_payload_active
         label: payload_on
         enabled: true
-
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
+        label: move_to_default_pose
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: 0.0
         target_spin: 100
-
       - type: send_can_frame
-        label: notify # 块举起，让车前进
+        label: notify
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
+        label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: 0.0
         target_spin: 100
-
       - type: delay
         label: wait_after_move
         duration_sec: 0.5
-
       - type: move_fixed_pose_mf
-        label: move_to_default_pose # 放置
-        xyz: [-0.30, -0.0001, 0.48]
+        label: move_to_default_pose
+        xyz: [-0.3, -0.0001, 0.48]
         j5_target_pos: 0.015
         target_spin: 0.0
-
       - type: delay
         label: wait_after_move
         duration_sec: 0.5
-
       - type: move_fixed_pose_mf
-        label: move_to_default_pose # 放置
+        label: move_to_default_pose
         xyz: [-0.32, -0.0001, 0.33]
-        j5_target_pos: 0.015  
+        j5_target_pos: 0.015
         target_spin: 10.0
-
       - type: set_payload_active
         label: payload_off
         enabled: false
-
       - type: set_vacuum
         label: vacuum_off
         enabled: false
-
       - type: send_can_frame
-        label: notify # 气夹收回
+        label: notify
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
-
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
-
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
+        label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 65.0
-
       - type: send_can_frame
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-
   - id: 2 #vision_catch_neg_200_KFS_front_and_store
     name: vision_catch_neg_200_KFS_front_and_store
     steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+
       - type: send_can_frame
-        label: notify # 完成抓取通知
+        label: notify
         can_id: 0x601
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
@@ -1245,23 +113,23 @@ action_sets:
         enabled: true
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
+        label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
-      
+
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
 
       - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
+        label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
 
       - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
+        label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, -0.09]
         j5_target_pos: 0.0
         target_spin: 0.0
@@ -1275,24 +143,24 @@ action_sets:
         enabled: true
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
+        label: move_to_default_pose
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: 0.0
         target_spin: 100
 
       - type: send_can_frame
-        label: notify # 块举起，让车前进
+        label: notify
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mf
-        label: move_to_default_pose # 转180度
+        label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: 0.0
-        target_spin: 100
+        target_spin: 100.0
 
       - type: move_fixed_pose_mf
-        label: move_to_default_pose # 放置
+        label: move_to_default_pose
         xyz: [-0.2, -0.0001, 0.48]
         j5_target_pos: 0.015
         target_spin: 0.0
@@ -1302,196 +170,9 @@ action_sets:
         duration_sec: 0.5
 
       - type: move_fixed_pose_mf
-        label: move_to_default_pose # 放置
+        label: move_to_default_pose
         xyz: [-0.26, -0.0001, 0.33]
-        j5_target_pos: 0.015  
-        target_spin: 10.0
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 气夹收回
-        can_id: 0x603
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100.0
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100.0
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 65.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-  - id: 3 #vision_catch_neg_200_KFS_front_and_store
-    name: vision_catch_neg_200_KFS_front_and_store
-    steps:
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x601
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.18, 0.0, 0.16]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-      
-      - type: update_target_point
-        label: update_vision_point
-        timeout_sec: 1.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
-        offset_xyz: [0.04, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [0.04, 0.0, -0.07]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 放置
-        xyz: [-0.29, -0.0001, 0.48]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-
-  - id: 21 #vision_catch_400_KFS_front_and_store
-    name: vision_catch_400_KFS_front_and_store
-    steps:
-      - type: send_can_frame
-        label: notify # 完成抓取通知
-        can_id: 0x601
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.25, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 65.0
-      
-      - type: update_target_point
-        label: update_vision_point
-        timeout_sec: 1.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [-0.05, 0.0, -0.1]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [0.07, 0.0, -0.1]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 转180度
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 放置
-        xyz: [-0.22, -0.0001, 0.48]
         j5_target_pos: 0.015
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 放置
-        xyz: [-0.28, -0.0001, 0.33]
-        j5_target_pos: 0.015  
         target_spin: 10.0
 
       - type: set_payload_active
@@ -1503,404 +184,62 @@ action_sets:
         enabled: false
 
       - type: send_can_frame
-        label: notify # 气夹收回
+        label: notify
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
 
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.35, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 65.0
-
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-# keep
-
-# keep
-  - id: 20 #vision_catch_200_KFS_front_and_keep
-    name: vision_catch_200_KFS_front_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 65.0
-      
-      - type: update_target_point
-        label: update_vision_point
-        timeout_sec: 1.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [-0.1, 0.0, -0.05]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: move_target_offset_mrl_cartesian
-        label: move_to_default_pose # 向前吸
-        offset_xyz: [0.05, 0.0, -0.05]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 10.0
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-  - id: 13 #vision_catch_200_KFS_front_stand_and_keep
-    name: vision_catch_200_KFS_front_stand_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.18, 0.0, 0.16]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-      
-      - type: update_target_point
-        label: update_vision_point
-        timeout_sec: 1.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
-        offset_xyz: [-0.1, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [-0.1, 0.0, -0.07]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 10.0
-      
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 14 #vision_catch_neg_200_KFS_front_and_keep
-    name: vision_catch_neg_200_KFS_front_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-      
-      - type: update_target_point
-        label: update_vision_point
-        timeout_sec: 1.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
-        offset_xyz: [-0.1, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [-0.1, 0.0, -0.09]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
       - type: move_fixed_pose_mf
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 10.0
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 54 #vision_catch_400_KFS_front_and_keep (not used)
-    name: vision_catch_400_KFS_front_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.25, 0.0, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 65.0
-      
-      - type: update_target_point
-        label: update_vision_point
-        timeout_sec: 1.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
         label: move_to_default_pose
-        offset_xyz: [-0.5, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_target_offset_mrl_cartesian
-        label: move_to_default_pose # 向前吸
-        offset_xyz: [0.05, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.5]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-
-
-# discard
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-  - id: 61 #vision_catch_200_KFS_front_and_discard_left
-    name: vision_catch_200_KFS_front_and_discard_left
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 65.0
-      
-      - type: update_target_point
-        label: update_vision_point
-        timeout_sec: 1.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [-0.1, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: move_target_offset_mrl_cartesian
-        label: move_to_default_pose # 向前伸出吸住
-        offset_xyz: [0.05, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 左转
-        xyz: [0.0, -0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
 
       - type: send_can_frame
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 62 #vision_catch_200_KFS_front_and_discard_right
-    name: vision_catch_200_KFS_front_and_discard_right
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 65.0
-      
-      - type: update_target_point
-        label: update_vision_point
-        timeout_sec: 1.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [-0.1, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: move_target_offset_mrl_cartesian
-        label: move_to_default_pose # 向前伸出吸住
-        offset_xyz: [0.05, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 右转
-        xyz: [0.0, 0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
 
   - id: 7 #vision_catch_200_KFS_front_stand_and_discard_left
     name: vision_catch_200_KFS_front_stand_and_discard_left
     steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+
       - type: set_vacuum
         label: vacuum_on
         enabled: true
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
+        label: move_to_default_pose
         xyz: [0.18, 0.0, 0.16]
         j5_target_pos: 0.0
         target_spin: 0.0
-      
+
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
 
       - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
+        label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
 
       - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
+        label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, -0.1]
         j5_target_pos: 0.0
         target_spin: 0.0
@@ -1910,18 +249,18 @@ action_sets:
         enabled: true
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
+        label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
         target_spin: 100
 
       - type: send_can_frame
-        label: notify # 块举起，让车前进
+        label: notify
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mf
-        label: move_to_default_pose # 左转
+        label: move_to_default_pose
         xyz: [-0.4, -0.0001, 0.65]
         j5_target_pos: 0.0
         target_spin: 100
@@ -1939,7 +278,7 @@ action_sets:
         duration_sec: 0.5
 
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
+        label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
@@ -1948,533 +287,70 @@ action_sets:
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 64 #vision_catch_200_KFS_front_stand_and_discard_right
-    name: vision_catch_200_KFS_front_stand_and_discard_right
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
-        offset_xyz: [0.0, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 右转
-        xyz: [0.0, 0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
 
   - id: 8 #vision_catch_neg_200_KFS_front_and_discard_left
     name: vision_catch_neg_200_KFS_front_and_discard_left
     steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
+        label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
-      
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
-
       - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
+        label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
-
       - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
+        label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, -0.07]
         j5_target_pos: 0.0
         target_spin: 0.0
-
       - type: set_payload_active
         label: payload_on
         enabled: true
-
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 举高
+        label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
         target_spin: 100
-
       - type: send_can_frame
-        label: notify # 块举起，让车前进
+        label: notify
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
       - type: move_fixed_pose_mf
-        label: move_to_default_pose # 左转
+        label: move_to_default_pose
         xyz: [-0.4, -0.0001, 0.65]
         j5_target_pos: 0.0
         target_spin: 100
-
       - type: set_payload_active
         label: payload_off
         enabled: false
-
       - type: set_vacuum
         label: vacuum_off
         enabled: false
-
       - type: delay
         label: wait_after_move
         duration_sec: 0.5
-
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
+        label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 0.0
-
       - type: send_can_frame
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-
-  - id: 66 #vision_catch_neg_200_KFS_front_and_discard_right
-    name: vision_catch_neg_200_KFS_front_and_discard_right
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
-        offset_xyz: [0.0, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 右转
-        xyz: [0.0, 0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 67 #vision_catch_400_KFS_front_and_discard_left
-    name: vision_catch_400_KFS_front_and_discard_left
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [-0.35, 0.0, -0.05]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_target_offset_mrl_cartesian
-        label: move_to_default_pose # 向前吸
-        offset_xyz: [0.15, 0.0, -0.05]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 左转
-        xyz: [0.0, -0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 68 #vision_catch_400_KFS_front_and_discard_right
-    name: vision_catch_400_KFS_front_and_discard_right
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [-0.35, 0.0, -0.05]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_target_offset_mrl_cartesian
-        label: move_to_default_pose # 向前吸
-        offset_xyz: [0.15, 0.0, -0.05]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 右转
-        xyz: [0.0, 0.1, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: send_can_frame
-        label: notify # 块举起，让车前进
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-##################################################################################################
-# 取出
-
-  - id: 70 #KFS_out
-    name: KFS_out 
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 举高
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100.0
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose 
-        xyz: [-0.2, -0.0001, 0.35]
-        j5_target_pos: 0.0  
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 向下吸
-        xyz: [-0.2, -0.0001, 0.27]
-        j5_target_pos: 0.0  
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: notify # 取块
-        can_id: 0x601
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose 
-        xyz: [-0.2, -0.0001, 0.35]
-        j5_target_pos: 0.0  
-        target_spin: 0.0
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100.0
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 80.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 71 #KFS_place_second_floor_left
-    name: KFS_place_second_floor_left
-    steps:
-
-      - type: set_payload_active
-        label: payload_off
-        enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-  
-
-
-##################################################################################################
-# 测试
-
-##################################################################################################
-# 其他动作
-# 侧向 keep
-
-  - id: 55 #vision_catch_200_KFS_left_and_keep
-    name: vision_catch_200_KFS_left_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 向左看
-        xyz: [0.0, -0.25, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_target_offset_mf
-        label: move_to_default_pose # 向左吸
-        offset_xyz: [0.0, -0.15, -0.05]
-        j5_target_pos: -0.14
-        target_spin: 90.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 56 #vision_catch_neg_200_KFS_left_and_keep
-    name: vision_catch_neg_200_KFS_left_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 向左看
-        xyz: [0.0, -0.25, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_target_offset_mf
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: -0.14
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 57 #vision_catch_200_KFS_right_and_keep
-    name: vision_catch_200_KFS_right_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 向右看
-        xyz: [0.0, 0.25, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_target_offset_mf
-        label: move_to_default_pose # 向右吸
-        offset_xyz: [0.0, 0.15, -0.05]
-        j5_target_pos: 0.14
-        target_spin: 90.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 58 #vision_catch_neg_200_KFS_right_and_keep
-    name: vision_catch_neg_200_KFS_right_and_keep
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose # 向右看
-        xyz: [0.0, 0.25, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: move_target_offset_mf
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [0.0, 0.0, -0.05]
-        j5_target_pos: 0.14
-        target_spin: 90.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.25, 0.0, 0.45]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-# discard
-
-# 通用动作
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   - id: 9 #before_catch_head
     name: before_catch_head
     steps:
@@ -2489,382 +365,340 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 81 #error_raise
-    name: error_raise
+  - id: 13 #vision_catch_200_KFS_front_stand_and_keep
+    name: vision_catch_200_KFS_front_stand_and_keep
     steps:
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 机械臂保持在前上方
-        xyz: [0.2170, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 82 #vision_catch_top
-    name: vision_catch_top
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
-        offset_xyz: [0.04, 0.0, 0.05]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [0.04, 0.0, -0.1]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 83 #vision_catch_side
-    name: vision_catch_top
-    steps:
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 目标略上方
-        offset_xyz: [-0.05, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: move_target_offset_mrl
-        label: move_to_default_pose # 向下吸
-        offset_xyz: [0.05, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-  - id: 84 #vision_catch_200_KFS_front_and_store
-    name: vision_catch_200_KFS_front_and_store
-    steps:
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [0.0, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-  - id: 85 #vision_catch_200_KFS_front_and_store
-    name: vision_catch_200_KFS_front_and_store
-    steps:
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [0.04, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-
-
-#######################################################################################################
-# 无视觉
-# store
-
-# 测试
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-  - id: 90 #test_front_200
-    name: test_front_200
-    steps:
-      - type: move_target_offset_mrl
-        label: move_to_default_pose
-        offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 91 #test_front_neg_200
-    name: test_front_neg_200
-    steps:
-      - type: move_target_offset_mrl
-        label: move_to_default_pose
-        offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 92 #test_left_200
-    name: test_left_200
-    steps:
-      - type: move_target_offset_mf
-        label: move_to_default_pose
-        offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0
-        target_spin: 90.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 93 #test_left_neg_200
-    name: test_left_neg_200
-    steps:
-      - type: move_target_offset_mf
-        label: move_to_default_pose
-        offset_xyz: [0.0, 0.0, 0.0]
-        j5_target_pos: 0.0
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 94 #test_right_200
-    name: test_right_200
-    steps:
-      - type: send_can_frame
-        label: notify # 开始抓取通知
-        can_id: 0x601
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.25, 0.0, 0.0]
-        j5_target_pos: 0.0
-        target_spin: 65.0
-      
-      - type: update_target_point
-        label: update_vision_point
-        timeout_sec: 1.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [-0.05, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: move_target_offset_mrl # j5 负责左右横移动
-        label: move_to_default_pose
-        offset_xyz: [0.07, 0.0, 0.04]
-        j5_target_pos: 0.0
-        target_spin: 95.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: move_fixed_path_mrl
-        label: smooth_place_path
-        j5_target_pos: 0.015
-        blend_radius: 0.0
-        waypoints:
-          - xyz: [0.1, 0.0, 0.7]
-            target_spin: 100.0
-
-          - xyz: [-0.1, -0.0001, 0.7]
-            target_spin: 100.0
-
-          - xyz: [-0.30, -0.0001, 0.48]
-            target_spin: 0.0
-
-          - xyz: [-0.32, -0.0001, 0.48]
-            target_spin: 0.0
-
-      
-      - type: send_can_frame
-        label: notify # 气夹收回
-        can_id: 0x603
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
       - type: set_payload_active
         label: payload_off
         enabled: false
-
-      - type: set_vacuum
-        label: vacuum_off
-        enabled: false
-
-      - type: move_fixed_path_mrl
-        label: smooth_place_path
-        j5_target_pos: 0.0
-        blend_radius: 0.0
-        waypoints:
-          - xyz: [-0.1, -0.0001, 0.8]
-            target_spin: 100.0
-
-          - xyz: [0.1, 0.0, 0.8]
-            target_spin: 100.0
-
-          - xyz: [0.2171, 0.0, 0.1171]
-            target_spin: 65.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-
-  - id: 95 #test_right_neg_200
-    name: test_right_neg_200
-    steps:
-      - type: move_fixed_path_mrl
-        label: smooth_place_path
-        j5_target_pos: 0.0
-        blend_radius: 0.0
-        waypoints:
-          - xyz: [0.25, 0.0, 0.0]
-            target_spin: 60.0
-
-          - xyz: [0.1, 0.0, 0.7]
-            target_spin: 100.0
-
-          - xyz: [-0.1, -0.0001, 0.7]
-            target_spin: 100.0
-
-          - xyz: [-0.29, -0.0001, 0.48]
-            target_spin: 0.0
-
-
-  - id: 99 #test_watching_front
-    name: test_watching_front
-    steps:
-      - type: move_fixed_path_mrl
-        label: smooth_place_path
-        j5_target_pos: 0.0
-        blend_radius: 0.0
-        waypoints:
-          - xyz: [0.25, 0.0, 0.1]
-            target_spin: 60.0
-
-          - xyz: [0.25, 0.07, 0.4]
-            target_spin: 0.0
-
-          - xyz: [0.25, -0.07, 0.4]
-            target_spin: 20.0
-
-          - xyz: [0.2170, 0.0, 0.1170]
-            target_spin: 65.0
-
-  - id: 22 #home
-    name: home
-    steps:
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.0, 0.1172, 0.1172]
-        j5_target_pos: -0.1172
-        target_spin: 0.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-  - id: 76 #vision_catch_200_KFS_front_stand_and_store_waypoints
-    name: vision_catch_200_KFS_front_stand_and_store_waypoints
-    steps:
-      - type: send_can_frame
-        label: notify # 开始抓取通知
-        can_id: 0x601
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
       - type: set_vacuum
         label: vacuum_on
         enabled: true
-
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
+        label: move_to_default_pose
         xyz: [0.18, 0.0, 0.16]
         j5_target_pos: 0.0
         target_spin: 0.0
-
-      - type: move_fixed_path_mf_cartesian
-        label: move_to_default_pose # 举高转向放置途经点
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_mrl
+        label: move_to_default_pose
+        offset_xyz: [-0.1, 0.0, 0.05]
         j5_target_pos: 0.0
-        target_spin: 100.0
-        waypoints:
-          - xyz: [0.1, 0.0, 0.7]
-          - xyz: [-0.1, -0.0001, 0.7]
-          - xyz: [-0.29, -0.0001, 0.48]
-          - xyz: [-0.31, -0.0001, 0.33]
-            target_spin: 10.0
+        target_spin: 0.0
+      - type: move_target_offset_mrl
+        label: move_to_default_pose
+        offset_xyz: [-0.1, 0.0, -0.07]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.4]
+        j5_target_pos: 0.0
+        target_spin: 10.0
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
+  - id: 14 #vision_catch_neg_200_KFS_front_and_keep
+    name: vision_catch_neg_200_KFS_front_and_keep
+    steps:
       - type: set_payload_active
         label: payload_off
         enabled: false
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_mrl
+        label: move_to_default_pose
+        offset_xyz: [-0.1, 0.0, 0.05]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      - type: move_target_offset_mrl
+        label: move_to_default_pose
+        offset_xyz: [-0.1, 0.0, -0.09]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.4]
+        j5_target_pos: 0.0
+        target_spin: 10.0
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
+  - id: 19 # vision_catch_200_KFS_front_and_store not stand up
+    name: vision_catch_200_KFS_front_and_store not stand up
+    steps:
+      - type: send_can_frame
+        label: notify
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_mrl
+        label: move_to_default_pose
+        offset_xyz: [-0.1, 0.0, 0.04]
+        j5_target_pos: 0.0
+        target_spin: 95.0
+      - type: move_target_offset_mrl
+        label: move_to_default_pose
+        offset_xyz: [0.05, 0.0, 0.04]
+        j5_target_pos: 0.0
+        target_spin: 95.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.1, -0.0001, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.32, -0.0001, 0.48]
+        j5_target_pos: 0.015
+        target_spin: 0.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.33, -0.0001, 0.33]
+        j5_target_pos: 0.015
+        target_spin: 10.0
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
       - type: set_vacuum
         label: vacuum_off
         enabled: false
-
       - type: send_can_frame
-        label: notify # 气夹收回
+        label: notify
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.1, -0.0001, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 100.0
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 100.0
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
+  - id: 20 #vision_catch_200_KFS_front_and_keep
+    name: vision_catch_200_KFS_front_and_keep
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_mrl
+        label: move_to_default_pose
+        offset_xyz: [-0.1, 0.0, -0.05]
+        j5_target_pos: 0.0
+        target_spin: 95.0
+      - type: move_target_offset_mrl_cartesian
+        label: move_to_default_pose
+        offset_xyz: [0.05, 0.0, -0.05]
+        j5_target_pos: 0.0
+        target_spin: 95.0
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.4]
+        j5_target_pos: 0.0
+        target_spin: 10.0
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 21 #vision_catch_400_KFS_front_and_store
+    name: vision_catch_400_KFS_front_and_store
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: send_can_frame
+        label: notify
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.3, 0.0, 0.26]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_mrl
+        label: move_to_default_pose
+        offset_xyz: [-0.05, 0.0, -0.1]
+        j5_target_pos: 0.0
+        target_spin: 95.0
+      - type: move_target_offset_mrl
+        label: move_to_default_pose
+        offset_xyz: [0.05, 0.0, -0.1]
+        j5_target_pos: 0.0
+        target_spin: 95.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [-0.1, -0.0001, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.22, -0.0001, 0.48]
+        j5_target_pos: 0.015
+        target_spin: 0.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.28, -0.0001, 0.33]
+        j5_target_pos: 0.015
+        target_spin: 10.0
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+      - type: send_can_frame
+        label: notify
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
-
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
-
       - type: move_fixed_pose_mrl
-        label: move_to_default_pose # 看前面
-        xyz: [0.2171, 0.0, 0.1171]
+        label: move_to_default_pose
+        xyz: [0.35, 0.0, 0.45]
         j5_target_pos: 0.0
         target_spin: 65.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
+  - id: 22 #home
+    name: home
+    steps:
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [0.0, 0.1172, 0.1172]
+        j5_target_pos: 0.0
+        target_spin: 0.0
       - type: send_can_frame
         label: dm_serial_complete
         can_id: 0x500
@@ -2876,50 +710,721 @@ action_sets:
       - type: set_payload_active
         label: payload_on
         enabled: true
-
-        - type: set_vacuum
+      - type: set_vacuum
         label: vacuum_on
         enabled: true
-
       - type: move_fixed_pose_mf
-        label: move_to_default_pose # 举高
+        label: move_to_default_pose
         xyz: [0.1, 0.0, 0.83]
         j5_target_pos: 0.0
         target_spin: 110.0
-
       - type: send_can_frame
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-      
-  - id: 23 #Reach down after grabing the block
+
+  - id: 24 #Reach down after grabing the block
     name: Reach down after grabing the block
     steps:
       - type: set_payload_active
         label: payload_off
         enabled: false
-
-        - type: set_vacuum
+      - type: set_vacuum
         label: vacuum_off
         enabled: false
-
       - type: move_fixed_pose_mf
-        label: move_to_default_pose # 举高
+        label: move_to_default_pose
         xyz: [0.0, 0.1, 0.83]
         j5_target_pos: 0.0
-        target_spin: 110.0  
-
+        target_spin: 110.0
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.0, 0.1172, 0.1172]
         j5_target_pos: -0.1172
         target_spin: 0.0
-
       - type: send_can_frame
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-      
+  - id: 25 #pre_vision_catch_400_KFS_front_and_store
+    name: pre_vision_catch_400_KFS_front_and_store
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [0.0, 0.3, 0.26]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [0.3, 0.0, 0.26]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
+  - id: 51 #vision_catch_200_KFS_front_stand_and_store_path
+    name: vision_catch_200_KFS_front_stand_and_store_path
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: send_can_frame
+        label: notify
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.0]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_path_mrl
+        label: smooth_target_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.05, 0.0, 0.04]
+            target_spin: 95.0
+          - xyz: [0.07, 0.0, 0.04]
+            target_spin: 95.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
       
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: move_fixed_path_mrl
+        label: smooth_fixed_path
+        j5_target_pos: 0.015
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [0.1, 0.0, 0.7]
+            target_spin: 100.0
+
+          - xyz: [-0.1, -0.0001, 0.7]
+            target_spin: 100.0
+
+          - xyz: [-0.3, -0.0001, 0.48]
+            target_spin: 0.0
+
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [-0.32, -0.0001, 0.33]
+        j5_target_pos: 0.015
+        target_spin: 10.0
+
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+      - type: send_can_frame
+        label: notify
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_path_mrl
+        label: smooth_fixed_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, -0.0001, 0.8]
+            target_spin: 100.0
+          - xyz: [0.1, 0.0, 0.8]
+            target_spin: 100.0
+          - xyz: [0.2171, 0.0, 0.1171]
+            target_spin: 65.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 52 #vision_catch_neg_200_KFS_front_and_store_path
+    name: vision_catch_neg_200_KFS_front_and_store_path
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: send_can_frame
+        label: notify
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_path_mrl
+        label: smooth_target_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, 0.0, 0.05]
+            target_spin: 0.0
+          - xyz: [-0.1, 0.0, -0.09]
+            target_spin: 0.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_path_mrl
+        label: smooth_fixed_path
+        j5_target_pos: 0.015
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, -0.0001, 0.7]
+            target_spin: 100.0
+          - xyz: [-0.2, -0.0001, 0.48]
+            target_spin: 0.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.26, -0.0001, 0.33]
+        j5_target_pos: 0.015
+        target_spin: 10.0
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+      - type: send_can_frame
+        label: notify
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_path_mrl
+        label: smooth_fixed_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, -0.0001, 0.8]
+            target_spin: 100.0
+          - xyz: [0.1, 0.0, 0.8]
+            target_spin: 100.0
+          - xyz: [0.2171, 0.0, 0.1171]
+            target_spin: 65.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 57 #vision_catch_200_KFS_front_stand_and_discard_left_path
+    name: vision_catch_200_KFS_front_stand_and_discard_left_path
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.18, 0.0, 0.16]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_path_mrl
+        label: smooth_target_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.05, 0.0, 0.05]
+            target_spin: 0.0
+          - xyz: [-0.05, 0.0, -0.1]
+            target_spin: 0.0
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.4, -0.0001, 0.65]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 58 #vision_catch_neg_200_KFS_front_and_discard_left_path
+    name: vision_catch_neg_200_KFS_front_and_discard_left_path
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_path_mrl
+        label: smooth_target_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.05, 0.0, 0.05]
+            target_spin: 0.0
+          - xyz: [-0.05, 0.0, -0.07]
+            target_spin: 0.0
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.8]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.4, -0.0001, 0.65]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 63 #vision_catch_200_KFS_front_stand_and_keep_path
+    name: vision_catch_200_KFS_front_stand_and_keep_path
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.18, 0.0, 0.16]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_path_mrl
+        label: smooth_target_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, 0.0, 0.05]
+            target_spin: 0.0
+          - xyz: [-0.1, 0.0, -0.07]
+            target_spin: 0.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.4]
+        j5_target_pos: 0.0
+        target_spin: 10.0
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 64 #vision_catch_neg_200_KFS_front_and_keep_path
+    name: vision_catch_neg_200_KFS_front_and_keep_path
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_path_mrl
+        label: smooth_target_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, 0.0, 0.05]
+            target_spin: 0.0
+          - xyz: [-0.1, 0.0, -0.09]
+            target_spin: 0.0
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.4]
+        j5_target_pos: 0.0
+        target_spin: 10.0
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 69 #1019_path
+    name: 1019_path
+    steps:
+      - type: send_can_frame
+        label: notify
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_path_mrl
+        label: smooth_target_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, 0.0, 0.04]
+            target_spin: 95.0
+          - xyz: [0.05, 0.0, 0.04]
+            target_spin: 95.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.1, -0.0001, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.32, -0.0001, 0.48]
+        j5_target_pos: 0.015
+        target_spin: 0.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.33, -0.0001, 0.33]
+        j5_target_pos: 0.015
+        target_spin: 10.0
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+      - type: send_can_frame
+        label: notify
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_path_mrl
+        label: smooth_fixed_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, -0.0001, 0.8]
+            target_spin: 100.0
+          - xyz: [0.1, 0.0, 0.8]
+            target_spin: 100.0
+          - xyz: [0.2171, 0.0, 0.1171]
+            target_spin: 65.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 70 #vision_catch_200_KFS_front_and_keep_path
+    name: vision_catch_200_KFS_front_and_keep_path
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.2171, 0.0, 0.1171]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_path_mrl
+        label: smooth_target_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, 0.0, -0.05]
+            target_spin: 95.0
+          - xyz: [0.05, 0.0, -0.05]
+            target_spin: 95.0
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.25, 0.0, 0.4]
+        j5_target_pos: 0.0
+        target_spin: 10.0
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 71 #vision_catch_400_KFS_front_and_store_path
+    name: vision_catch_400_KFS_front_and_store_path
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: send_can_frame
+        label: notify
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.3, 0.0, 0.26]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+      - type: update_target_point
+        label: update_vision_point
+        timeout_sec: 1.0
+      - type: move_target_offset_path_mrl
+        label: smooth_target_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.05, 0.0, -0.1]
+            target_spin: 95.0
+          - xyz: [0.05, 0.0, -0.1]
+            target_spin: 95.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: send_can_frame
+        label: notify
+        can_id: 0x602
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_pose_mrl
+        label: move_to_default_pose
+        xyz: [-0.1, -0.0001, 0.7]
+        j5_target_pos: 0.0
+        target_spin: 100
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.22, -0.0001, 0.48]
+        j5_target_pos: 0.015
+        target_spin: 0.0
+      - type: delay
+        label: wait_after_move
+        duration_sec: 0.5
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.28, -0.0001, 0.33]
+        j5_target_pos: 0.015
+        target_spin: 10.0
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+      - type: send_can_frame
+        label: notify
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: move_fixed_path_mrl
+        label: smooth_fixed_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, -0.0001, 0.8]
+            target_spin: 100.0
+          - xyz: [0.1, 0.0, 0.8]
+            target_spin: 100.0
+          - xyz: [0.35, 0.0, 0.45]
+            target_spin: 65.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 74 #Reach down after grabing the block_path
+    name: Reach down after grabing the block_path
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+      - type: move_fixed_path_mrl
+        label: smooth_fixed_path
+        j5_target_pos: -0.1172
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [0.0, 0.1, 0.83]
+            target_spin: 110.0
+          - xyz: [0.0, 0.1172, 0.1172]
+            target_spin: 0.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 75 #pre_vision_catch_400_KFS_front_and_store_path
+    name: pre_vision_catch_400_KFS_front_and_store_path
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+      - type: move_fixed_path_mrl
+        label: smooth_fixed_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [0.0, 0.3, 0.26]
+            target_spin: 65.0
+          - xyz: [0.3, 0.0, 0.26]
+            target_spin: 65.0
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
