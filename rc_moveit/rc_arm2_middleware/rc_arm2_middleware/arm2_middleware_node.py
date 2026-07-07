@@ -428,7 +428,7 @@ class Arm2MiddlewareNode(Node):
                 j5_target_pos=float(raw_step["j5_target_pos"]),
             )
 
-        if step_type in {"move_fixed_path_mrl", "move_target_offset_path_mrl"}:
+        if step_type in {"move_fixed_path_mf", "move_target_offset_path_mrl"}:
             return ActionStep(
                 step_type=step_type,
                 label=label,
@@ -987,9 +987,9 @@ class Arm2MiddlewareNode(Node):
             self._publish_j5_target(j5_target_pos)
             return
 
-        if step.step_type == "move_fixed_path_mrl":
+        if step.step_type == "move_fixed_path_mf":
             if not step.waypoints:
-                self._fail_action_set("move_fixed_path_mrl missing waypoints")
+                self._fail_action_set("move_fixed_path_mf missing waypoints")
                 return
             j5_target_pos = step.j5_target_pos
             self._enter_motion_wait(
@@ -1307,7 +1307,7 @@ class Arm2MiddlewareNode(Node):
             "move_fixed_pose_mf",
             "move_fixed_pose_mrl",
             "move_fixed_pose_mrl_cartesian",
-            "move_fixed_path_mrl",
+            "move_fixed_path_mf",
             "move_target_offset_path_mrl",
         }
 

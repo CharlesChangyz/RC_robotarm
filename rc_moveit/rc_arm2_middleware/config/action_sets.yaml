@@ -961,7 +961,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.015
         blend_radius: 0.0
@@ -994,7 +994,7 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1057,7 +1057,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.015
         blend_radius: 0.0
@@ -1088,7 +1088,7 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1145,7 +1145,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1163,7 +1163,7 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1218,7 +1218,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1236,7 +1236,7 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1408,7 +1408,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.015
         blend_radius: 0.0
@@ -1441,7 +1441,7 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1554,7 +1554,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.015
         blend_radius: 0.0
@@ -1587,7 +1587,7 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1637,7 +1637,7 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: -0.1172
         blend_radius: 0.0
@@ -1659,7 +1659,7 @@ action_sets:
         label: payload_off
         enabled: false
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
