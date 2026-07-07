@@ -120,7 +120,8 @@ log "starting TF target GUI"
   cd "${WORKSPACE_DIR}/scripts"
   exec ./run_tf_cli_domain55.sh
 ) >>"${TF_LOG}" 2>&1 &
-children+=("$!")
+tf_pid="$!"
+children+=("${tf_pid}")
 
 log "starting KFS camera ROS publisher: script=${KFS_SCRIPT}, conda_env=${KFS_CONDA_ENV}"
 (
@@ -135,7 +136,8 @@ log "starting KFS camera ROS publisher: script=${KFS_SCRIPT}, conda_env=${KFS_CO
     exec /home/rc2/miniconda3/condabin/conda run --no-capture-output -n "${KFS_CONDA_ENV}" python3 -u "${KFS_SCRIPT}"
   fi
 ) >>"${KFS_LOG}" 2>&1 &
-children+=("$!")
+kfs_pid="$!"
+children+=("${kfs_pid}")
 
 log "waiting ${START_REAL_DELAY_SEC}s before requesting start_real"
 sleep "${START_REAL_DELAY_SEC}"
@@ -154,8 +156,19 @@ for attempt in $(seq 1 "${START_REAL_RETRIES}"); do
   sleep "${START_REAL_RETRY_DELAY_SEC}"
 done
 
-log "autostart processes are running; waiting for exit"
-wait -n "${children[@]}"
+log "autostart processes are running; waiting for TF GUI exit"
+kfs_reported=0
+while kill -0 "${tf_pid}" >/dev/null 2>&1; do
+  if (( ! kfs_reported )) && ! kill -0 "${kfs_pid}" >/dev/null 2>&1; then
+    wait "${kfs_pid}" >/dev/null 2>&1
+    kfs_status=$?
+    log "KFS camera process exited with status ${kfs_status}; keeping TF GUI and arm stack running"
+    kfs_reported=1
+  fi
+  sleep 1
+done
+
+wait "${tf_pid}" >/dev/null 2>&1
 status=$?
-log "one child exited with status ${status}; stopping the rest"
+log "TF target GUI exited with status ${status}; stopping the rest"
 exit "${status}"
