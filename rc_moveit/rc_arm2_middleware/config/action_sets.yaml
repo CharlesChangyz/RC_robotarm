@@ -1,34 +1,35 @@
 # 动作集 ID 说明：
-# - id 1：视觉抓取 200 KFS 正前方，站立后入库
-# - id 2：视觉抓取 -200 KFS 正前方，入库
-# - id 7：视觉抓取 200 KFS 正前方，站立后左侧丢弃
-# - id 8：视觉抓取 -200 KFS 正前方，左侧丢弃
+# - id 1：视觉抓取 200 KFS 正前方，站立后入库（路径版）
+# - id 2：视觉抓取 -200 KFS 正前方，入库（路径版）
+# - id 7：视觉抓取 200 KFS 正前方，站立后左侧丢弃（路径版）
+# - id 8：视觉抓取 -200 KFS 正前方，左侧丢弃（路径版）
 # - id 9：抓取前抬头预备位
-# - id 10：未存储侧放
-# - id 13：视觉抓取 200 KFS 正前方，站立后保持
-# - id 14：视觉抓取 -200 KFS 正前方，保持
-# - id 19：视觉抓取 200 KFS 正前方，非站立入库
-# - id 20：视觉抓取 200 KFS 正前方，保持
-# - id 21：视觉抓取 400 KFS 正前方，入库
-# - id 22：回到初始位
+# - id 13：视觉抓取 200 KFS 正前方，站立后保持（路径版）
+# - id 14：视觉抓取 -200 KFS 正前方，保持（路径版）
+# - id 19：1019 动作路径
+# - id 20：视觉抓取 200 KFS 正前方，保持（路径版）
+# - id 21：视觉抓取 400 KFS 正前方，入库（路径版）
 # - id 23：伸出抓取方块
-# - id 24：抓取方块后下探
-# - id 25：视觉抓取 400 KFS 正前方入库前预备位
-# - id 51：视觉抓取 200 KFS 正前方，站立后入库（路径版）
-# - id 52：视觉抓取 -200 KFS 正前方，入库（路径版）
-# - id 57：视觉抓取 200 KFS 正前方，站立后左侧丢弃（路径版）
-# - id 58：视觉抓取 -200 KFS 正前方，左侧丢弃（路径版）
-# - id 63：视觉抓取 200 KFS 正前方，站立后保持（路径版）
-# - id 64：视觉抓取 -200 KFS 正前方，保持（路径版）
-# - id 69：1019 动作路径
-# - id 70：视觉抓取 200 KFS 正前方，保持（路径版）
-# - id 71：视觉抓取 400 KFS 正前方，入库（路径版）
-# - id 74：抓取方块后下探（路径版）
-# - id 75：视觉抓取 400 KFS 正前方入库前预备位（路径版）
+# - id 24：抓取方块后下探（路径版）
+# - id 25：视觉抓取 400 KFS 正前方入库前预备位（路径版）
+# - id 51：视觉抓取 200 KFS 正前方，站立后入库
+# - id 52：视觉抓取 -200 KFS 正前方，入库
+# - id 57：视觉抓取 200 KFS 正前方，站立后左侧丢弃
+# - id 58：视觉抓取 -200 KFS 正前方，左侧丢弃
+# - id 59：抓取前抬头预备位
+# - id 63：视觉抓取 200 KFS 正前方，站立后保持
+# - id 64：视觉抓取 -200 KFS 正前方，保持
+# - id 69：视觉抓取 200 KFS 正前方，非站立入库
+# - id 70：视觉抓取 200 KFS 正前方，保持
+# - id 71：视觉抓取 400 KFS 正前方，入库
+# - id 72：回到初始位
+# - id 73：伸出抓取方块
+# - id 74：抓取方块后下探
+# - id 75：视觉抓取 400 KFS 正前方入库前预备位
 # - id 81：视觉观看动作
 
 action_sets:
-  - id: 51 #vision_catch_200_KFS_front_stand_and_store
+  - id: 51 # 视觉抓取 200 KFS 正前方，站立后入库
     name: vision_catch_200_KFS_front_stand_and_store
     steps:
       - type: set_payload_active
@@ -147,7 +148,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 52 #vision_catch_neg_200_KFS_front_and_store
+  - id: 52 # 视觉抓取 -200 KFS 正前方，入库
     name: vision_catch_neg_200_KFS_front_and_store
     steps:
       - type: set_payload_active
@@ -262,7 +263,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 57 #vision_catch_200_KFS_front_stand_and_discard_left
+  - id: 57 # 视觉抓取 200 KFS 正前方，站立后左侧丢弃
     name: vision_catch_200_KFS_front_stand_and_discard_left
     steps:
       - type: set_payload_active
@@ -339,7 +340,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 58 #vision_catch_neg_200_KFS_front_and_discard_left
+  - id: 58 # 视觉抓取 -200 KFS 正前方，左侧丢弃
     name: vision_catch_neg_200_KFS_front_and_discard_left
     steps:
       - type: set_payload_active
@@ -416,7 +417,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 59 #before_catch_head
+  - id: 59 # 抓取前抬头预备位
     name: before_catch_head
     steps:
       - type: move_fixed_pose_mrl
@@ -430,7 +431,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 63 #vision_catch_200_KFS_front_stand_and_keep
+  - id: 63 # 视觉抓取 200 KFS 正前方，站立后保持
     name: vision_catch_200_KFS_front_stand_and_keep
     steps:
       - type: set_payload_active
@@ -487,7 +488,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 64 #vision_catch_neg_200_KFS_front_and_keep
+  - id: 64 # 视觉抓取 -200 KFS 正前方，保持
     name: vision_catch_neg_200_KFS_front_and_keep
     steps:
       - type: set_payload_active
@@ -540,7 +541,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 69 # vision_catch_200_KFS_front_and_store not stand up
+  - id: 69 # 视觉抓取 200 KFS 正前方，非站立入库
     name: vision_catch_200_KFS_front_and_store not stand up
     steps:
       - type: send_can_frame
@@ -655,7 +656,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 70 #vision_catch_200_KFS_front_and_keep
+  - id: 70 # 视觉抓取 200 KFS 正前方，保持
     name: vision_catch_200_KFS_front_and_keep
     steps:
       - type: set_payload_active
@@ -708,7 +709,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 71 #vision_catch_400_KFS_front_and_store
+  - id: 71 # 视觉抓取 400 KFS 正前方，入库
     name: vision_catch_400_KFS_front_and_store
     steps:
       - type: set_payload_active
@@ -827,7 +828,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 72 #home
+  - id: 72 # 回到初始位
     name: home
     steps:
       - type: move_fixed_pose_mf
@@ -841,7 +842,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 73 #Reach out to grab the block
+  - id: 73 # 伸出抓取方块
     name: Reach out to grab the block
     steps:
       - type: set_payload_active
@@ -863,7 +864,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 74 #Reach down after grabing the block
+  - id: 74 # 抓取方块后下探
     name: Reach down after grabing the block
     steps:
       - type: set_payload_active
@@ -891,7 +892,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 75 #pre_vision_catch_400_KFS_front_and_store
+  - id: 75 # 视觉抓取 400 KFS 正前方入库前预备位
     name: pre_vision_catch_400_KFS_front_and_store
     steps:
       - type: set_payload_active
@@ -915,7 +916,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 1 #vision_catch_200_KFS_front_stand_and_store_path
+  - id: 1 # 视觉抓取 200 KFS 正前方，站立后入库（路径版）
     name: vision_catch_200_KFS_front_stand_and_store_path
     steps:
       - type: set_payload_active
@@ -1010,7 +1011,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 2 #vision_catch_neg_200_KFS_front_and_store_path
+  - id: 2 # 视觉抓取 -200 KFS 正前方，入库（路径版）
     name: vision_catch_neg_200_KFS_front_and_store_path
     steps:
       - type: set_payload_active
@@ -1055,7 +1056,7 @@ action_sets:
         label: notify
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-      
+
       - type: move_fixed_path_mrl
         label: smooth_fixed_path
         j5_target_pos: 0.015
@@ -1104,7 +1105,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 7 #vision_catch_200_KFS_front_stand_and_discard_left_path
+  - id: 7 # 视觉抓取 200 KFS 正前方，站立后左侧丢弃（路径版）
     name: vision_catch_200_KFS_front_stand_and_discard_left_path
     steps:
       - type: set_payload_active
@@ -1138,7 +1139,7 @@ action_sets:
       - type: set_payload_active
         label: payload_on
         enabled: true
-      
+
       - type: send_can_frame
         label: notify
         can_id: 0x602
@@ -1177,7 +1178,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 8 #vision_catch_neg_200_KFS_front_and_discard_left_path
+  - id: 8 # 视觉抓取 -200 KFS 正前方，左侧丢弃（路径版）
     name: vision_catch_neg_200_KFS_front_and_discard_left_path
     steps:
       - type: set_payload_active
@@ -1250,10 +1251,9 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 9 #before_catch_head
+  - id: 9 # 抓取前抬头预备位
     name: before_catch_head
     steps:
-
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.0, 0.1172, 0.1172]
@@ -1265,7 +1265,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 13 #vision_catch_200_KFS_front_stand_and_keep_path
+  - id: 13 # 视觉抓取 200 KFS 正前方，站立后保持（路径版）
     name: vision_catch_200_KFS_front_stand_and_keep_path
     steps:
       - type: set_payload_active
@@ -1295,6 +1295,7 @@ action_sets:
             target_spin: 0.0
           - xyz: [-0.1, 0.0, -0.07]
             target_spin: 0.0
+
       - type: set_payload_active
         label: payload_on
         enabled: true
@@ -1315,7 +1316,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 14 #vision_catch_neg_200_KFS_front_and_keep_path
+  - id: 14 # 视觉抓取 -200 KFS 正前方，保持（路径版）
     name: vision_catch_neg_200_KFS_front_and_keep_path
     steps:
       - type: set_payload_active
@@ -1366,7 +1367,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 19 #1019_path
+  - id: 19 # 1019 动作路径
     name: 1019_path
     steps:
       - type: send_can_frame
@@ -1457,7 +1458,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 20 #vision_catch_200_KFS_front_and_keep_path
+  - id: 20 # 视觉抓取 200 KFS 正前方，保持（路径版）
     name: vision_catch_200_KFS_front_and_keep_path
     steps:
       - type: set_payload_active
@@ -1508,7 +1509,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 21 #vision_catch_400_KFS_front_and_store_path
+  - id: 21 # 视觉抓取 400 KFS 正前方，入库（路径版）
     name: vision_catch_400_KFS_front_and_store_path
     steps:
       - type: set_payload_active
@@ -1603,26 +1604,29 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 23 #Reach out to grab the block
+  - id: 23 # 伸出抓取方块
     name: Reach out to grab the block
     steps:
       - type: set_payload_active
         label: payload_on
         enabled: true
+
       - type: set_vacuum
         label: vacuum_on
         enabled: true
+
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.83]
         j5_target_pos: 0.0
         target_spin: 110.0
+
       - type: send_can_frame
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 24 #Reach down after grabing the block_path
+  - id: 24 # 抓取方块后下探（路径版）
     name: Reach down after grabing the block_path
     steps:
       - type: set_payload_active
@@ -1648,7 +1652,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 25 #pre_vision_catch_400_KFS_front_and_store_path
+  - id: 25 # 视觉抓取 400 KFS 正前方入库前预备位（路径版）
     name: pre_vision_catch_400_KFS_front_and_store_path
     steps:
       - type: set_payload_active
