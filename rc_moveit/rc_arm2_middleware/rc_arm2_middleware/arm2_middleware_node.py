@@ -124,10 +124,6 @@ class Arm2MiddlewareNode(Node):
             "cartesian_motion_target_topic",
             "/arm2/middleware/cartesian_motion_target",
         )
-        self.declare_parameter(
-            "cartesian_motion_path_topic",
-            "/arm2/middleware/cartesian_motion_path",
-        )
         self.declare_parameter("motion_execution_topic", "/arm2/middleware/motion_execution")
         self.declare_parameter("vacuum_topic", "/rc_arm_2/vacuum_activate")
         self.declare_parameter("payload_command_topic", "/rc_arm_2/payload_active_command")
@@ -159,9 +155,6 @@ class Arm2MiddlewareNode(Node):
         self._motion_path_topic = str(self.get_parameter("motion_path_topic").value)
         self._cartesian_motion_target_topic = str(
             self.get_parameter("cartesian_motion_target_topic").value
-        )
-        self._cartesian_motion_path_topic = str(
-            self.get_parameter("cartesian_motion_path_topic").value
         )
         self._motion_execution_topic = str(self.get_parameter("motion_execution_topic").value)
         self._vacuum_topic = str(self.get_parameter("vacuum_topic").value)
@@ -232,11 +225,6 @@ class Arm2MiddlewareNode(Node):
             self._cartesian_motion_target_topic,
             10,
         )
-        self._cartesian_motion_path_pub = self.create_publisher(
-            Arm2TargetPath,
-            self._cartesian_motion_path_topic,
-            10,
-        )
         self._vacuum_pub = self.create_publisher(Bool, self._vacuum_topic, 10)
         self._payload_command_pub = self.create_publisher(Bool, self._payload_command_topic, 10)
         self._j5_command_pub = self.create_publisher(Float64, self._j5_command_topic, 10)
@@ -258,7 +246,7 @@ class Arm2MiddlewareNode(Node):
 
         self.get_logger().info(
             "arm2_middleware ready: action_sets_file=%s action_sets=%s target_point=%s run_action_set=%s "
-            "motion_target=%s motion_path=%s cartesian_motion_target=%s cartesian_motion_path=%s "
+            "motion_target=%s motion_path=%s cartesian_motion_target=%s "
             "motion_execution=%s vacuum=%s payload_command=%s payload_active=%s j5_command=%s j5_position=%s "
             "j5_tolerance=%.4f laser_distance=%s laser_threshold=%d laser_wait_timeout=%.2f tracking_publish_rate=%.2f "
             "dm_serial_bridge=%d dm_serial_rx=%s dm_serial_tx=%s dm_serial_command_base_id=0x%X "
@@ -272,7 +260,6 @@ class Arm2MiddlewareNode(Node):
                 self._motion_target_topic,
                 self._motion_path_topic,
                 self._cartesian_motion_target_topic,
-                self._cartesian_motion_path_topic,
                 self._motion_execution_topic,
                 self._vacuum_topic,
                 self._payload_command_topic,
@@ -451,15 +438,6 @@ class Arm2MiddlewareNode(Node):
                     target_spin_deg,
                     require_target_spin=True,
                 ),
-                j5_target_pos=float(raw_step["j5_target_pos"]),
-            )
-
-        if step_type == "move_fixed_path_mf_cartesian":
-            return ActionStep(
-                step_type=step_type,
-                label=label,
-                target_spin_deg=target_spin_deg,
-                waypoints=self._parse_waypoints(raw_step.get("waypoints"), target_spin_deg),
                 j5_target_pos=float(raw_step["j5_target_pos"]),
             )
 
@@ -1029,21 +1007,6 @@ class Arm2MiddlewareNode(Node):
             self._publish_j5_target(j5_target_pos)
             return
 
-        if step.step_type == "move_fixed_path_mf_cartesian":
-            if not step.waypoints:
-                self._fail_action_set("move_fixed_path_mf_cartesian missing waypoints")
-                return
-            j5_target_pos = step.j5_target_pos
-            self._enter_motion_wait(
-                "waiting on %s waypoint_count=%d j5=%.4f"
-                % (step.step_type, len(step.waypoints), float(j5_target_pos)),
-                j5_target_pos=j5_target_pos,
-            )
-            if not self._publish_cartesian_motion_path(step.waypoints):
-                return
-            self._publish_j5_target(j5_target_pos)
-            return
-
         self._fail_action_set(f"unsupported step type at runtime: {step.step_type}")
 
     def _enter_motion_wait(self, detail: str, j5_target_pos: Optional[float] = None) -> None:
@@ -1273,27 +1236,6 @@ class Arm2MiddlewareNode(Node):
         )
         return True
 
-    def _publish_cartesian_motion_path(self, waypoints: Sequence[TargetPoint]) -> bool:
-        for waypoint in waypoints:
-            if not self._check_motion_target_guard(waypoint.x, waypoint.y, waypoint.z):
-                return False
-
-        msg = Arm2TargetPath()
-        msg.blend_radius = 0.0
-        for waypoint in waypoints:
-            target = Arm2TargetPoint()
-            target.xyz.x = float(waypoint.x)
-            target.xyz.y = float(waypoint.y)
-            target.xyz.z = float(waypoint.z)
-            target.target_spin_deg = float(waypoint.target_spin_deg)
-            msg.waypoints.append(target)
-        self._cartesian_motion_path_pub.publish(msg)
-        self.get_logger().info(
-            "published cartesian motion path waypoint_count=%d on %s"
-            % (len(msg.waypoints), self._cartesian_motion_path_topic)
-        )
-        return True
-
     def _check_motion_target_guard(self, x: float, y: float, z: float) -> bool:
         if not self._target_point_guard_enabled:
             return True
@@ -1367,7 +1309,6 @@ class Arm2MiddlewareNode(Node):
             "move_fixed_pose_mrl_cartesian",
             "move_fixed_path_mrl",
             "move_target_offset_path_mrl",
-            "move_fixed_path_mf_cartesian",
         }
 
     def _is_j5_at_target(self, target_pos: Optional[float]) -> bool:
