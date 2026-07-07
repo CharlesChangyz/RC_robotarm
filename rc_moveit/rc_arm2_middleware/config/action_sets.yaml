@@ -28,11 +28,7 @@
 # - id 81：视觉观看动作
 
 action_sets:
-<<<<<<< HEAD
   - id: 51 #vision_catch_200_KFS_front_stand_and_store
-=======
-  - id: 1 # 视觉抓取 200 KFS 正前方，站立后入库
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_200_KFS_front_stand_and_store
     steps:
       - type: set_payload_active
@@ -151,11 +147,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 52 #vision_catch_neg_200_KFS_front_and_store
-=======
-  - id: 2 # 视觉抓取 -200 KFS 正前方，入库
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_neg_200_KFS_front_and_store
     steps:
       - type: set_payload_active
@@ -270,11 +262,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 57 #vision_catch_200_KFS_front_stand_and_discard_left
-=======
-  - id: 7 # 视觉抓取 200 KFS 正前方，站立后左侧丢弃
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_200_KFS_front_stand_and_discard_left
     steps:
       - type: set_payload_active
@@ -351,11 +339,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 58 #vision_catch_neg_200_KFS_front_and_discard_left
-=======
-  - id: 8 # 视觉抓取 -200 KFS 正前方，左侧丢弃
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_neg_200_KFS_front_and_discard_left
     steps:
       - type: set_payload_active
@@ -432,11 +416,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 59 #before_catch_head
-=======
-  - id: 9 # 抓取前抬头预备位
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: before_catch_head
     steps:
       - type: move_fixed_pose_mrl
@@ -450,34 +430,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 63 #vision_catch_200_KFS_front_stand_and_keep
-=======
-  - id: 10 # 未存储侧放
-    name: side_place_without_store
-    steps:
-      - type: set_payload_active
-        label: payload_on
-        enabled: true
-
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [0.0, -0.25, 0.4]
-        j5_target_pos: 0.0
-        target_spin: 10.0
-
-      - type: send_can_frame
-        label: dm_serial_complete
-        can_id: 0x500
-        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-
-  - id: 13 # 视觉抓取 200 KFS 正前方，站立后保持
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_200_KFS_front_stand_and_keep
     steps:
       - type: set_payload_active
@@ -534,11 +487,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 64 #vision_catch_neg_200_KFS_front_and_keep
-=======
-  - id: 14 # 视觉抓取 -200 KFS 正前方，保持
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_neg_200_KFS_front_and_keep
     steps:
       - type: set_payload_active
@@ -591,11 +540,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 69 # vision_catch_200_KFS_front_and_store not stand up
-=======
-  - id: 19 # 视觉抓取 200 KFS 正前方，非站立入库
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_200_KFS_front_and_store not stand up
     steps:
       - type: send_can_frame
@@ -710,11 +655,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 70 #vision_catch_200_KFS_front_and_keep
-=======
-  - id: 20 # 视觉抓取 200 KFS 正前方，保持
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_200_KFS_front_and_keep
     steps:
       - type: set_payload_active
@@ -767,11 +708,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 71 #vision_catch_400_KFS_front_and_store
-=======
-  - id: 21 # 视觉抓取 400 KFS 正前方，入库
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_400_KFS_front_and_store
     steps:
       - type: set_payload_active
@@ -890,11 +827,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 72 #home
-=======
-  - id: 22 # 回到初始位
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: home
     steps:
       - type: move_fixed_pose_mf
@@ -908,11 +841,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 73 #Reach out to grab the block
-=======
-  - id: 23 # 伸出抓取方块
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: Reach out to grab the block
     steps:
       - type: set_payload_active
@@ -934,11 +863,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 74 #Reach down after grabing the block
-=======
-  - id: 24 # 抓取方块后下探
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: Reach down after grabing the block
     steps:
       - type: set_payload_active
@@ -966,11 +891,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 75 #pre_vision_catch_400_KFS_front_and_store
-=======
-  - id: 25 # 视觉抓取 400 KFS 正前方入库前预备位
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: pre_vision_catch_400_KFS_front_and_store
     steps:
       - type: set_payload_active
@@ -994,11 +915,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 1 #vision_catch_200_KFS_front_stand_and_store_path
-=======
-  - id: 51 # 视觉抓取 200 KFS 正前方，站立后入库（路径版）
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_200_KFS_front_stand_and_store_path
     steps:
       - type: set_payload_active
@@ -1034,13 +951,6 @@ action_sets:
           - xyz: [0.07, 0.0, 0.04]
             target_spin: 95.0
 
-<<<<<<< HEAD
-=======
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: set_payload_active
         label: payload_on
         enabled: true
@@ -1100,11 +1010,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 2 #vision_catch_neg_200_KFS_front_and_store_path
-=======
-  - id: 52 # 视觉抓取 -200 KFS 正前方，入库（路径版）
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_neg_200_KFS_front_and_store_path
     steps:
       - type: set_payload_active
@@ -1141,35 +1047,15 @@ action_sets:
           - xyz: [-0.1, 0.0, -0.09]
             target_spin: 0.0
 
-<<<<<<< HEAD
-=======
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: set_payload_active
         label: payload_on
         enabled: true
 
-<<<<<<< HEAD
-=======
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: send_can_frame
         label: notify
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-<<<<<<< HEAD
       
-=======
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: move_fixed_path_mrl
         label: smooth_fixed_path
         j5_target_pos: 0.015
@@ -1182,13 +1068,6 @@ action_sets:
           - xyz: [-0.2, -0.0001, 0.48]
             target_spin: 0.0
 
-<<<<<<< HEAD
-=======
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [-0.26, -0.0001, 0.33]
@@ -1225,11 +1104,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 7 #vision_catch_200_KFS_front_stand_and_discard_left_path
-=======
-  - id: 57 # 视觉抓取 200 KFS 正前方，站立后左侧丢弃（路径版）
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_200_KFS_front_stand_and_discard_left_path
     steps:
       - type: set_payload_active
@@ -1263,23 +1138,12 @@ action_sets:
       - type: set_payload_active
         label: payload_on
         enabled: true
-<<<<<<< HEAD
       
-=======
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: send_can_frame
         label: notify
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-<<<<<<< HEAD
       - type: move_fixed_path_mrl
         label: smooth_fixed_path
         j5_target_pos: 0.0
@@ -1289,13 +1153,6 @@ action_sets:
             target_spin: 100.0
           - xyz:  [-0.4, -0.0001, 0.65]
             target_spin: 100.0
-=======
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [-0.4, -0.0001, 0.65]
-        j5_target_pos: 0.0
-        target_spin: 100
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
 
       - type: set_payload_active
         label: payload_off
@@ -1305,7 +1162,6 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-<<<<<<< HEAD
       - type: move_fixed_path_mrl
         label: smooth_fixed_path
         j5_target_pos: 0.0
@@ -1315,28 +1171,13 @@ action_sets:
             target_spin: 100.0
           - xyz: [0.2171, 0.0, 0.1171]
             target_spin: 65.0
-=======
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
 
       - type: send_can_frame
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 8 #vision_catch_neg_200_KFS_front_and_discard_left_path
-=======
-  - id: 58 # 视觉抓取 -200 KFS 正前方，左侧丢弃（路径版）
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_neg_200_KFS_front_and_discard_left_path
     steps:
       - type: set_payload_active
@@ -1371,21 +1212,11 @@ action_sets:
         label: payload_on
         enabled: true
 
-<<<<<<< HEAD
-=======
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.8]
-        j5_target_pos: 0.0
-        target_spin: 100
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: send_can_frame
         label: notify
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-<<<<<<< HEAD
       - type: move_fixed_path_mrl
         label: smooth_fixed_path
         j5_target_pos: 0.0
@@ -1395,13 +1226,6 @@ action_sets:
             target_spin: 100.0
           - xyz:  [-0.4, -0.0001, 0.65]
             target_spin: 100.0
-=======
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [-0.4, -0.0001, 0.65]
-        j5_target_pos: 0.0
-        target_spin: 100
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
 
       - type: set_payload_active
         label: payload_off
@@ -1411,7 +1235,6 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-<<<<<<< HEAD
       - type: move_fixed_path_mrl
         label: smooth_fixed_path
         j5_target_pos: 0.0
@@ -1421,24 +1244,12 @@ action_sets:
             target_spin: 100.0
           - xyz: [0.2171, 0.0, 0.1171]
             target_spin: 65.0
-=======
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
-        target_spin: 0.0
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
 
       - type: send_can_frame
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 9 #before_catch_head
     name: before_catch_head
     steps:
@@ -1455,9 +1266,6 @@ action_sets:
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
   - id: 13 #vision_catch_200_KFS_front_stand_and_keep_path
-=======
-  - id: 63 # 视觉抓取 200 KFS 正前方，站立后保持（路径版）
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_200_KFS_front_stand_and_keep_path
     steps:
       - type: set_payload_active
@@ -1487,14 +1295,6 @@ action_sets:
             target_spin: 0.0
           - xyz: [-0.1, 0.0, -0.07]
             target_spin: 0.0
-<<<<<<< HEAD
-=======
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: set_payload_active
         label: payload_on
         enabled: true
@@ -1515,11 +1315,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 14 #vision_catch_neg_200_KFS_front_and_keep_path
-=======
-  - id: 64 # 视觉抓取 -200 KFS 正前方，保持（路径版）
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_neg_200_KFS_front_and_keep_path
     steps:
       - type: set_payload_active
@@ -1570,11 +1366,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 19 #1019_path
-=======
-  - id: 69 # 1019 动作路径
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: 1019_path
     steps:
       - type: send_can_frame
@@ -1606,32 +1398,15 @@ action_sets:
           - xyz: [0.05, 0.0, 0.04]
             target_spin: 95.0
 
-<<<<<<< HEAD
-=======
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: set_payload_active
         label: payload_on
         enabled: true
 
-<<<<<<< HEAD
-=======
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: send_can_frame
         label: notify
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-<<<<<<< HEAD
       - type: move_fixed_path_mrl
         label: smooth_fixed_path
         j5_target_pos: 0.015
@@ -1645,27 +1420,6 @@ action_sets:
 
           - xyz: [-0.32, -0.0001, 0.48]
             target_spin: 0.0
-=======
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [-0.32, -0.0001, 0.48]
-        j5_target_pos: 0.015
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose
@@ -1703,11 +1457,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 20 #vision_catch_200_KFS_front_and_keep_path
-=======
-  - id: 70 # 视觉抓取 200 KFS 正前方，保持（路径版）
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_200_KFS_front_and_keep_path
     steps:
       - type: set_payload_active
@@ -1758,11 +1508,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 21 #vision_catch_400_KFS_front_and_store_path
-=======
-  - id: 71 # 视觉抓取 400 KFS 正前方，入库（路径版）
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: vision_catch_400_KFS_front_and_store_path
     steps:
       - type: set_payload_active
@@ -1798,32 +1544,15 @@ action_sets:
           - xyz: [0.05, 0.0, -0.1]
             target_spin: 95.0
 
-<<<<<<< HEAD
-=======
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: set_payload_active
         label: payload_on
         enabled: true
 
-<<<<<<< HEAD
-=======
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
       - type: send_can_frame
         label: notify
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-<<<<<<< HEAD
       - type: move_fixed_path_mrl
         label: smooth_fixed_path
         j5_target_pos: 0.015
@@ -1837,27 +1566,6 @@ action_sets:
 
           - xyz: [-0.22, -0.0001, 0.48]
             target_spin: 0.0
-=======
-      - type: move_fixed_pose_mrl
-        label: move_to_default_pose
-        xyz: [-0.1, -0.0001, 0.7]
-        j5_target_pos: 0.0
-        target_spin: 100
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
-
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [-0.22, -0.0001, 0.48]
-        j5_target_pos: 0.015
-        target_spin: 0.0
-
-      - type: delay
-        label: wait_after_move
-        duration_sec: 0.5
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose
@@ -1895,7 +1603,6 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 23 #Reach out to grab the block
     name: Reach out to grab the block
     steps:
@@ -1916,9 +1623,6 @@ action_sets:
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
   - id: 24 #Reach down after grabing the block_path
-=======
-  - id: 74 # 抓取方块后下探（路径版）
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: Reach down after grabing the block_path
     steps:
       - type: set_payload_active
@@ -1944,11 +1648,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-<<<<<<< HEAD
   - id: 25 #pre_vision_catch_400_KFS_front_and_store_path
-=======
-  - id: 75 # 视觉抓取 400 KFS 正前方入库前预备位（路径版）
->>>>>>> 03e6ba3a50309f20edb0c1c6b125d5fba878a6e9
     name: pre_vision_catch_400_KFS_front_and_store_path
     steps:
       - type: set_payload_active
