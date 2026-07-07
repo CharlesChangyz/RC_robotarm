@@ -880,10 +880,10 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 110.0
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [0.0, 0.1172, 0.1172]
-        j5_target_pos: -0.1172
+        j5_target_pos: 0.0
         target_spin: 0.0
 
       - type: send_can_frame
