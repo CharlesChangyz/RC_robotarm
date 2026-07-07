@@ -12,6 +12,7 @@
 # - id 23：伸出抓取方块
 # - id 24：抓取方块后下探（路径版）
 # - id 25：视觉抓取 400 KFS 正前方入库前预备位（路径版）
+# - id 30：回零点（安全版）
 # - id 51：视觉抓取 200 KFS 正前方，站立后入库
 # - id 52：视觉抓取 -200 KFS 正前方，入库
 # - id 57：视觉抓取 200 KFS 正前方，站立后左侧丢弃
@@ -1685,8 +1686,31 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose_mf
         label: move_to_default_pose
-        xyz: [0.0, 0.2172, 0.1171]
+        xyz: [0.2172, 0.0, 0.1171]
         j5_target_pos: 0.0
         target_spin: 65.0
+
+  - id: 30 # 回零点（安全版）
+    name: return_to_home(safe)
+    steps:
+      - type: set_payload_active
+        label: payload_off
+        enabled: false
+
+      - type: set_vacuum
+        label: vacuum_off
+        enabled: false
+
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [0.0, 0.1172, 0.7171]
+        j5_target_pos: 0.0
+        target_spin: 65.0
+
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [0.1172, 0.0, 0.1172]
+        j5_target_pos: 0.0
+        target_spin: 0.0
