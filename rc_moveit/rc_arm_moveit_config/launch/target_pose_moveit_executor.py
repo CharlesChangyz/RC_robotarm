@@ -142,6 +142,8 @@ class TargetPoseMoveItExecutor(Node):
         move_sequence_action_name: str,
         sequence_pipeline_id: str,
         sequence_planner_id: str,
+        single_pipeline_id: str,
+        single_planner_id: str,
         pos_threshold: float,
         rot_threshold: float,
         planning_time: float,
@@ -181,6 +183,8 @@ class TargetPoseMoveItExecutor(Node):
         self._default_frame = _normalize_frame_id(default_frame)
         self._sequence_pipeline_id = str(sequence_pipeline_id).strip()
         self._sequence_planner_id = str(sequence_planner_id).strip()
+        self._single_pipeline_id = str(single_pipeline_id).strip()
+        self._single_planner_id = str(single_planner_id).strip()
         self._pos_threshold = max(0.0, float(pos_threshold))
         self._rot_threshold = max(0.0, float(rot_threshold))
         self._planning_time = max(0.1, float(planning_time))
@@ -298,7 +302,8 @@ class TargetPoseMoveItExecutor(Node):
         self.get_logger().info(
             "TargetPose->MoveIt executor started: manual_topic=%s middleware_target=%s middleware_result=%s "
             "middleware_motion_path=%s middleware_cartesian_target=%s middleware_cartesian_path=%s group=%s avoid_collisions=%d world_boxes=%d planning_scene_topic=%s "
-            "cartesian_max_step=%.4f cartesian_min_fraction=%.3f sequence_pipeline=%s sequence_planner=%s sequence_pos_tol=%.4f sequence_ori_tol=%.4f status_tf=%s->%s"
+            "cartesian_max_step=%.4f cartesian_min_fraction=%.3f sequence_pipeline=%s sequence_planner=%s single_pipeline=%s single_planner=%s "
+            "sequence_pos_tol=%.4f sequence_ori_tol=%.4f status_tf=%s->%s"
             % (
                 self._manual_target_topic,
                 self._middleware_target_topic,
@@ -314,6 +319,8 @@ class TargetPoseMoveItExecutor(Node):
                 self._cartesian_min_fraction,
                 self._sequence_pipeline_id or "<default>",
                 self._sequence_planner_id or "<default>",
+                self._single_pipeline_id or "<default>",
+                self._single_planner_id or "<default>",
                 self._sequence_position_tolerance,
                 self._sequence_orientation_tolerance,
                 self._status_base_frame,
@@ -1222,6 +1229,10 @@ class TargetPoseMoveItExecutor(Node):
     def _send_goal(self, request: ExecutionRequest, q_target: Dict[str, float]) -> None:
         goal = MoveGroup.Goal()
         goal.request.group_name = self._planning_group
+        if self._single_pipeline_id:
+            goal.request.pipeline_id = self._single_pipeline_id
+        if self._single_planner_id:
+            goal.request.planner_id = self._single_planner_id
         goal.request.num_planning_attempts = self._planning_attempts
         goal.request.allowed_planning_time = self._planning_time
         goal.request.max_velocity_scaling_factor = self._vel_scale
@@ -1248,7 +1259,16 @@ class TargetPoseMoveItExecutor(Node):
         goal.planning_options.replan = True
         goal.planning_options.replan_attempts = 1
 
-        self._event("goal_send", request.target, extra="source=%s" % request.source)
+        self._event(
+            "goal_send",
+            request.target,
+            extra="source=%s pipeline=%s planner=%s"
+            % (
+                request.source,
+                self._single_pipeline_id or "<default>",
+                self._single_planner_id or "<default>",
+            ),
+        )
         send_future = self._move_group_client.send_goal_async(goal)
         send_future.add_done_callback(
             lambda future, request=request: self._on_goal_response(future, request)
@@ -1519,6 +1539,8 @@ def parse_args():
     parser.add_argument("--move-sequence-action-name", default="/sequence_move_group")
     parser.add_argument("--sequence-pipeline-id", default="pilz_industrial_motion_planner")
     parser.add_argument("--sequence-planner-id", default="PTP")
+    parser.add_argument("--single-pipeline-id", default="pilz_industrial_motion_planner")
+    parser.add_argument("--single-planner-id", default="PTP")
     parser.add_argument("--joint-state-topic", default="/joint_states")
     parser.add_argument("--urdf-path", default="")
     parser.add_argument("--pos-threshold", type=float, default=0.003)
@@ -1573,6 +1595,8 @@ def main() -> None:
         move_sequence_action_name=args.move_sequence_action_name,
         sequence_pipeline_id=args.sequence_pipeline_id,
         sequence_planner_id=args.sequence_planner_id,
+        single_pipeline_id=args.single_pipeline_id,
+        single_planner_id=args.single_planner_id,
         pos_threshold=args.pos_threshold,
         rot_threshold=args.rot_threshold,
         planning_time=args.planning_time,
