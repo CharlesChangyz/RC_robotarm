@@ -1639,7 +1639,7 @@ action_sets:
 
       - type: move_fixed_path_mrl
         label: smooth_fixed_path
-        j5_target_pos: -0.1172
+        j5_target_pos: 0.0
         blend_radius: 0.0
         waypoints:
           - xyz: [0.0, 0.1, 0.83]
@@ -1685,8 +1685,63 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [0.0, 0.2172, 0.1171]
         j5_target_pos: 0.0
         target_spin: 65.0
+
+  - id: 80 #KFS_out
+    name: KFS_out 
+    steps:
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_fixed_path_mrl
+        label: smooth_fixed_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [0.1, 0.0, 0.8]
+            target_spin: 100.0
+          - xyz: [-0.2, -0.0001, 0.35]
+            target_spin: 0.0
+          - xyz: [-0.2, -0.0001, 0.27]
+            target_spin: 0.0
+
+      - type: send_can_frame
+        label: notify
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: set_payload_active
+        label: payload_on
+        enabled: true
+
+      - type: move_fixed_path_mrl
+        label: smooth_fixed_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.2, -0.0001, 0.27]
+            target_spin: 0.0
+          - xyz: [-0.1, -0.0001, 0.8]
+            target_spin: 100.0
+          - xyz: [0.1, 0.0, 0.78]
+            target_spin: 110.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 82 # 视觉观看动作
+    name: vision_watching_action
+    steps:
+
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [0.1, 0.0, 0.78]
+        j5_target_pos: 0.0
+        target_spin: 110.0

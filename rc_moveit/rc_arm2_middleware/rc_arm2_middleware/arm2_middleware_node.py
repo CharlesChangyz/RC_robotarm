@@ -148,7 +148,7 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("dm_serial_complete_id", 0x500)
         self.declare_parameter("dm_serial_allowed_action_set_ids", "")
         self.declare_parameter("target_point_guard_enabled", True)
-        self.declare_parameter("target_point_guard_max_x", 0.73)
+        self.declare_parameter("target_point_guard_max_x", 0.8)
         self.declare_parameter("target_point_guard_max_abs_y", 0.14)
         self.declare_parameter("target_point_guard_recovery_action_set_id", 81)
 
