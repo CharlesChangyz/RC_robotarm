@@ -9,10 +9,17 @@
 # - id 19：1019 动作路径
 # - id 20：视觉抓取 200 KFS 正前方，保持（路径版）
 # - id 21：视觉抓取 400 KFS 正前方，入库（路径版）
+# - id 22: gohmoe
 # - id 23：伸出抓取方块
 # - id 24：抓取方块后下探（路径版）
 # - id 25：视觉抓取 400 KFS 正前方入库前预备位（路径版）
 # - id 30：回零点（安全版）
+
+
+
+
+#########################################################
+# 不用
 # - id 51：视觉抓取 200 KFS 正前方，站立后入库
 # - id 52：视觉抓取 -200 KFS 正前方，入库
 # - id 57：视觉抓取 200 KFS 正前方，站立后左侧丢弃
@@ -33,6 +40,11 @@ action_sets:
   - id: 51 # 视觉抓取 200 KFS 正前方，站立后入库
     name: vision_catch_200_KFS_front_stand_and_store
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -60,13 +72,13 @@ action_sets:
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, 0.04]
         j5_target_pos: 0.0
-        target_spin: 95.0
+        target_spin: 90.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose
         offset_xyz: [0.07, 0.0, 0.04]
         j5_target_pos: 0.0
-        target_spin: 95.0
+        target_spin: 90.0
 
       - type: delay
         label: wait_after_move
@@ -100,7 +112,7 @@ action_sets:
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [-0.3, -0.0001, 0.48]
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         target_spin: 0.0
 
       - type: delay
@@ -110,7 +122,7 @@ action_sets:
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [-0.32, -0.0001, 0.33]
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         target_spin: 10.0
 
       - type: set_payload_active
@@ -152,6 +164,11 @@ action_sets:
   - id: 52 # 视觉抓取 -200 KFS 正前方，入库
     name: vision_catch_neg_200_KFS_front_and_store
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -215,7 +232,7 @@ action_sets:
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [-0.2, -0.0001, 0.48]
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         target_spin: 0.0
 
       - type: delay
@@ -225,7 +242,7 @@ action_sets:
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [-0.26, -0.0001, 0.33]
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         target_spin: 10.0
 
       - type: set_payload_active
@@ -267,6 +284,12 @@ action_sets:
   - id: 57 # 视觉抓取 200 KFS 正前方，站立后左侧丢弃
     name: vision_catch_200_KFS_front_stand_and_discard_left
     steps:
+
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -344,6 +367,11 @@ action_sets:
   - id: 58 # 视觉抓取 -200 KFS 正前方，左侧丢弃
     name: vision_catch_neg_200_KFS_front_and_discard_left
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -421,6 +449,11 @@ action_sets:
   - id: 59 # 抓取前抬头预备位
     name: before_catch_head
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.0, 0.1172, 0.1172]
@@ -435,6 +468,11 @@ action_sets:
   - id: 63 # 视觉抓取 200 KFS 正前方，站立后保持
     name: vision_catch_200_KFS_front_stand_and_keep
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -492,6 +530,11 @@ action_sets:
   - id: 64 # 视觉抓取 -200 KFS 正前方，保持
     name: vision_catch_neg_200_KFS_front_and_keep
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -546,6 +589,11 @@ action_sets:
     name: vision_catch_200_KFS_front_and_store not stand up
     steps:
       - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: send_can_frame
         label: notify
         can_id: 0x601
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
@@ -568,13 +616,13 @@ action_sets:
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, 0.04]
         j5_target_pos: 0.0
-        target_spin: 95.0
+        target_spin: 90.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose
         offset_xyz: [0.05, 0.0, 0.04]
         j5_target_pos: 0.0
-        target_spin: 95.0
+        target_spin: 90.0
 
       - type: delay
         label: wait_after_move
@@ -608,7 +656,7 @@ action_sets:
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [-0.32, -0.0001, 0.48]
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         target_spin: 0.0
 
       - type: delay
@@ -618,7 +666,7 @@ action_sets:
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [-0.33, -0.0001, 0.33]
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         target_spin: 10.0
 
       - type: set_payload_active
@@ -660,6 +708,11 @@ action_sets:
   - id: 70 # 视觉抓取 200 KFS 正前方，保持
     name: vision_catch_200_KFS_front_and_keep
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -682,13 +735,13 @@ action_sets:
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, -0.05]
         j5_target_pos: 0.0
-        target_spin: 95.0
+        target_spin: 90.0
 
       - type: move_target_offset_mrl_cartesian
         label: move_to_default_pose
         offset_xyz: [0.05, 0.0, -0.05]
         j5_target_pos: 0.0
-        target_spin: 95.0
+        target_spin: 90.0
 
       - type: set_payload_active
         label: payload_on
@@ -713,6 +766,11 @@ action_sets:
   - id: 71 # 视觉抓取 400 KFS 正前方，入库
     name: vision_catch_400_KFS_front_and_store
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -740,13 +798,13 @@ action_sets:
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, -0.1]
         j5_target_pos: 0.0
-        target_spin: 95.0
+        target_spin: 90.0
 
       - type: move_target_offset_mrl
         label: move_to_default_pose
         offset_xyz: [0.05, 0.0, -0.1]
         j5_target_pos: 0.0
-        target_spin: 95.0
+        target_spin: 90.0
 
       - type: delay
         label: wait_after_move
@@ -780,7 +838,7 @@ action_sets:
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [-0.22, -0.0001, 0.48]
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         target_spin: 0.0
 
       - type: delay
@@ -790,7 +848,7 @@ action_sets:
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [-0.28, -0.0001, 0.33]
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         target_spin: 10.0
 
       - type: set_payload_active
@@ -832,6 +890,11 @@ action_sets:
   - id: 72 # 回到初始位
     name: home
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [0.0, 0.1172, 0.1172]
@@ -846,6 +909,11 @@ action_sets:
   - id: 73 # 伸出抓取方块
     name: Reach out to grab the block
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_on
         enabled: true
@@ -868,6 +936,11 @@ action_sets:
   - id: 74 # 抓取方块后下探
     name: Reach down after grabing the block
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -896,6 +969,11 @@ action_sets:
   - id: 75 # 视觉抓取 400 KFS 正前方入库前预备位
     name: pre_vision_catch_400_KFS_front_and_store
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -920,6 +998,11 @@ action_sets:
   - id: 1 # 视觉抓取 200 KFS 正前方，站立后入库（路径版）
     name: vision_catch_200_KFS_front_stand_and_store_path
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -949,9 +1032,9 @@ action_sets:
         blend_radius: 0.0
         waypoints:
           - xyz: [-0.05, 0.0, 0.04]
-            target_spin: 95.0
+            target_spin: 90.0
           - xyz: [0.07, 0.0, 0.04]
-            target_spin: 95.0
+            target_spin: 90.0
 
       - type: set_payload_active
         label: payload_on
@@ -964,7 +1047,7 @@ action_sets:
 
       - type: move_fixed_path_mf
         label: smooth_fixed_path
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.7]
@@ -979,7 +1062,7 @@ action_sets:
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [-0.32, -0.0001, 0.33]
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         target_spin: 10.0
 
       - type: set_payload_active
@@ -1015,6 +1098,11 @@ action_sets:
   - id: 2 # 视觉抓取 -200 KFS 正前方，入库（路径版）
     name: vision_catch_neg_200_KFS_front_and_store_path
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -1060,7 +1148,7 @@ action_sets:
 
       - type: move_fixed_path_mf
         label: smooth_fixed_path
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.7]
@@ -1073,7 +1161,7 @@ action_sets:
       - type: move_fixed_pose_mf
         label: move_to_default_pose
         xyz: [-0.26, -0.0001, 0.33]
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         target_spin: 10.0
 
       - type: set_payload_active
@@ -1182,6 +1270,11 @@ action_sets:
   - id: 8 # 视觉抓取 -200 KFS 正前方，左侧丢弃（路径版）
     name: vision_catch_neg_200_KFS_front_and_discard_left_path
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -1255,6 +1348,11 @@ action_sets:
   - id: 9 # 抓取前抬头预备位
     name: before_catch_head
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: move_fixed_pose_mrl
         label: move_to_default_pose
         xyz: [0.0, 0.1172, 0.1172]
@@ -1269,6 +1367,11 @@ action_sets:
   - id: 13 # 视觉抓取 200 KFS 正前方，站立后保持（路径版）
     name: vision_catch_200_KFS_front_stand_and_keep_path
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -1320,6 +1423,11 @@ action_sets:
   - id: 14 # 视觉抓取 -200 KFS 正前方，保持（路径版）
     name: vision_catch_neg_200_KFS_front_and_keep_path
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -1372,6 +1480,11 @@ action_sets:
     name: 1019_path
     steps:
       - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: send_can_frame
         label: notify
         can_id: 0x601
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
@@ -1396,9 +1509,9 @@ action_sets:
         blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, 0.0, 0.04]
-            target_spin: 95.0
+            target_spin: 90.0
           - xyz: [0.05, 0.0, 0.04]
-            target_spin: 95.0
+            target_spin: 90.0
 
       - type: set_payload_active
         label: payload_on
@@ -1411,7 +1524,7 @@ action_sets:
 
       - type: move_fixed_path_mf
         label: smooth_fixed_path
-        j5_target_pos: 0.015
+        j5_target_pos: 0.0
         blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.7]
@@ -1420,13 +1533,13 @@ action_sets:
           - xyz: [-0.1, -0.0001, 0.7]
             target_spin: 100.0
 
-          - xyz: [-0.32, -0.0001, 0.48]
+          - xyz: [-0.31, -0.0001, 0.48]
             target_spin: 0.0
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose
-        xyz: [-0.33, -0.0001, 0.33]
-        j5_target_pos: 0.015
+        xyz: [-0.32, -0.0001, 0.33]
+        j5_target_pos: 0.01
         target_spin: 10.0
 
       - type: set_payload_active
@@ -1462,6 +1575,11 @@ action_sets:
   - id: 20 # 视觉抓取 200 KFS 正前方，保持（路径版）
     name: vision_catch_200_KFS_front_and_keep_path
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -1486,9 +1604,9 @@ action_sets:
         blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, 0.0, -0.05]
-            target_spin: 95.0
+            target_spin: 90.0
           - xyz: [0.05, 0.0, -0.05]
-            target_spin: 95.0
+            target_spin: 90.0
 
       - type: set_payload_active
         label: payload_on
@@ -1513,6 +1631,11 @@ action_sets:
   - id: 21 # 视觉抓取 400 KFS 正前方，入库（路径版）
     name: vision_catch_400_KFS_front_and_store_path
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -1542,9 +1665,9 @@ action_sets:
         blend_radius: 0.0
         waypoints:
           - xyz: [-0.05, 0.0, -0.1]
-            target_spin: 95.0
+            target_spin: 90.0
           - xyz: [0.05, 0.0, -0.1]
-            target_spin: 95.0
+            target_spin: 90.0
 
       - type: set_payload_active
         label: payload_on
@@ -1557,7 +1680,7 @@ action_sets:
 
       - type: move_fixed_path_mf
         label: smooth_fixed_path
-        j5_target_pos: 0.015
+        j5_target_pos: 0.01
         blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.7]
@@ -1566,13 +1689,13 @@ action_sets:
           - xyz: [-0.1, -0.0001, 0.7]
             target_spin: 100.0
 
-          - xyz: [-0.22, -0.0001, 0.48]
+          - xyz: [-0.2, -0.0001, 0.48]
             target_spin: 0.0
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose
-        xyz: [-0.28, -0.0001, 0.33]
-        j5_target_pos: 0.015
+        xyz: [-0.22, -0.0001, 0.33]
+        j5_target_pos: 0.01
         target_spin: 10.0
 
       - type: set_payload_active
@@ -1605,9 +1728,33 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
+  - id: 22 # 回到初始位
+    name: home
+    steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [0.0, 0.1172, 0.1172]
+        j5_target_pos: 0.0
+        target_spin: 0.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
   - id: 23 # 伸出抓取方块
     name: Reach out to grab the block
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_on
         enabled: true
@@ -1630,6 +1777,11 @@ action_sets:
   - id: 24 # 抓取方块后下探（路径版）
     name: Reach down after grabing the block_path
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -1656,6 +1808,11 @@ action_sets:
   - id: 25 # 视觉抓取 400 KFS 正前方入库前预备位（路径版）
     name: pre_vision_catch_400_KFS_front_and_store_path
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -1678,6 +1835,7 @@ action_sets:
   - id: 81 # 视觉观看动作
     name: vision_watching_action
     steps:
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -1695,6 +1853,11 @@ action_sets:
   - id: 30 # 回零点（安全版）
     name: return_to_home(safe)
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_payload_active
         label: payload_off
         enabled: false
@@ -1715,14 +1878,19 @@ action_sets:
         j5_target_pos: 0.0
         target_spin: 0.0
 
-  - id: 80 #KFS_out
+  - id: 26 #KFS_out
     name: KFS_out 
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
       - type: set_vacuum
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1743,7 +1911,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_path_mrl
+      - type: move_fixed_path_mf
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1763,6 +1931,10 @@ action_sets:
   - id: 82 # 视觉观看动作
     name: vision_watching_action
     steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_pose_mf
         label: move_to_default_pose

@@ -965,7 +965,7 @@ class Arm2MiddlewareNode(Node):
             waypoints = tuple(
                 TargetPoint(
                     x=target_point.x + waypoint.x,
-                    y=target_point.y + waypoint.y,
+                    y=waypoint.y,
                     z=target_point.z + waypoint.z,
                     target_spin_deg=waypoint.target_spin_deg,
                 )
