@@ -5,6 +5,14 @@ WORKSPACE_DIR="${RC_ROBOTARM_WORKSPACE:-/home/rc2/RC_robotarm}"
 KFS_DIR="${KFS_DIR:-/home/rc2/KFS}"
 KFS_SCRIPT="${KFS_SCRIPT:-7_1_copy.py}"
 KFS_CONDA_ENV="${KFS_CONDA_ENV:-camera_gpu}"
+REALSENSE_SERIAL="${REALSENSE_SERIAL:-auto}"
+KFS_RESTART="${KFS_RESTART:-1}"
+KFS_READY_CHECK="${KFS_READY_CHECK:-1}"
+KFS_READY_TIMEOUT_SEC="${KFS_READY_TIMEOUT_SEC:-60}"
+KFS_RETRY_INITIAL_SEC="${KFS_RETRY_INITIAL_SEC:-2}"
+KFS_RETRY_MAX_SEC="${KFS_RETRY_MAX_SEC:-10}"
+KFS_RS_FRAME_TIMEOUT_MS="${KFS_RS_FRAME_TIMEOUT_MS:-5000}"
+KFS_ROS_TOPIC="${KFS_ROS_TOPIC:-/arm2/camera_raw_dat}"
 LOG_DIR="${RC_ARM2_AUTOSTART_LOG_DIR:-${HOME}/.local/state/rc-arm2-autostart}"
 CONDA_SH="${CONDA_SH:-/home/rc2/miniconda3/etc/profile.d/conda.sh}"
 TF_SERVICE="${TF_SERVICE:-/rc_arm_2/remote/start_real}"
@@ -103,6 +111,128 @@ if [[ ! -f "${KFS_DIR}/${KFS_SCRIPT}" ]]; then
   exit 1
 fi
 
+if [[ ! -f "${WORKSPACE_DIR}/autostart/resolve_realsense_serial.py" ]]; then
+  log "missing RealSense resolver: ${WORKSPACE_DIR}/autostart/resolve_realsense_serial.py"
+  exit 1
+fi
+
+truthy() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+kfs_watchdog() {
+  cd "${KFS_DIR}"
+  unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+
+  if [[ -f "${CONDA_SH}" ]]; then
+    # shellcheck disable=SC1090
+    source "${CONDA_SH}"
+    conda activate "${KFS_CONDA_ENV}"
+  else
+    echo "[KFS] ERROR: conda profile not found: ${CONDA_SH}"
+    return 1
+  fi
+
+  local retry_sec="${KFS_RETRY_INITIAL_SEC}"
+  local selected_serial=""
+  local kfs_child=""
+  local kfs_status=0
+
+  while true; do
+    echo "[KFS] resolving RealSense: requested=${REALSENSE_SERIAL}"
+    if ! selected_serial="$(
+      python3 -u "${WORKSPACE_DIR}/autostart/resolve_realsense_serial.py" \
+        --serial "${REALSENSE_SERIAL}" \
+        --frame-timeout-ms "${KFS_RS_FRAME_TIMEOUT_MS}"
+    )"; then
+      echo "[KFS] RealSense resolve/preflight failed; retry in ${retry_sec}s"
+      sleep "${retry_sec}"
+      if (( retry_sec < KFS_RETRY_MAX_SEC )); then
+        retry_sec=$(( retry_sec * 2 ))
+        if (( retry_sec > KFS_RETRY_MAX_SEC )); then
+          retry_sec="${KFS_RETRY_MAX_SEC}"
+        fi
+      fi
+      continue
+    fi
+
+    echo "[KFS] selected RealSense serial=${selected_serial}"
+    echo "[KFS] starting ${KFS_SCRIPT} --rs-serial ${selected_serial}"
+    python3 -u "${KFS_SCRIPT}" --rs-serial "${selected_serial}" &
+    kfs_child="$!"
+
+    if ! wait_for_kfs_ros_publisher "${kfs_child}"; then
+      echo "[KFS] ROS publisher check failed; stopping KFS pid=${kfs_child}"
+      kill -TERM "${kfs_child}" >/dev/null 2>&1 || true
+      sleep 1
+      kill -KILL "${kfs_child}" >/dev/null 2>&1 || true
+    fi
+
+    set +e
+    wait "${kfs_child}"
+    kfs_status=$?
+    set -e
+    echo "[KFS] process exited with status ${kfs_status}"
+
+    if ! truthy "${KFS_RESTART}"; then
+      return "${kfs_status}"
+    fi
+
+    echo "[KFS] restarting after ${retry_sec}s"
+    sleep "${retry_sec}"
+    if (( retry_sec < KFS_RETRY_MAX_SEC )); then
+      retry_sec=$(( retry_sec * 2 ))
+      if (( retry_sec > KFS_RETRY_MAX_SEC )); then
+        retry_sec="${KFS_RETRY_MAX_SEC}"
+      fi
+    fi
+  done
+}
+
+wait_for_kfs_ros_publisher() {
+  local child_pid="$1"
+  local deadline=$((SECONDS + KFS_READY_TIMEOUT_SEC))
+  local info=""
+  local publishers=""
+
+  if ! truthy "${KFS_READY_CHECK}"; then
+    echo "[KFS] ROS publisher readiness check disabled"
+    return 0
+  fi
+
+  echo "[KFS] waiting for ROS publisher on ${KFS_ROS_TOPIC} timeout=${KFS_READY_TIMEOUT_SEC}s"
+  while kill -0 "${child_pid}" >/dev/null 2>&1; do
+    info="$(
+      ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" \
+      ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY}" \
+      bash -lc '
+        source /opt/ros/humble/setup.bash >/dev/null 2>&1
+        source "$1/rc_moveit/install/setup.bash" >/dev/null 2>&1
+        ros2 topic info --no-daemon --spin-time 1 "$2"
+      ' _ "${WORKSPACE_DIR}" "${KFS_ROS_TOPIC}" 2>&1 || true
+    )"
+    publishers="$(awk -F': ' '/Publisher count/ {print $2; exit}' <<<"${info}")"
+    if [[ "${publishers:-0}" =~ ^[0-9]+$ ]] && (( publishers > 0 )); then
+      echo "[KFS] ROS publisher ready: ${KFS_ROS_TOPIC} publisher_count=${publishers}"
+      return 0
+    fi
+    if (( SECONDS >= deadline )); then
+      echo "[KFS] ERROR: no ROS publisher on ${KFS_ROS_TOPIC}; last topic info:"
+      printf '%s\n' "${info}"
+      return 1
+    fi
+    sleep 1
+  done
+
+  echo "[KFS] process exited before ROS publisher became ready"
+  return 1
+}
+
 if [[ "${DISPLAY}" == :* ]]; then
   display_num="${DISPLAY#:}"
   display_num="${display_num%%.*}"
@@ -123,18 +253,9 @@ log "starting TF target GUI"
 tf_pid="$!"
 children+=("${tf_pid}")
 
-log "starting KFS camera ROS publisher: script=${KFS_SCRIPT}, conda_env=${KFS_CONDA_ENV}"
+log "starting KFS camera watchdog: script=${KFS_SCRIPT}, conda_env=${KFS_CONDA_ENV}, realsense=${REALSENSE_SERIAL}"
 (
-  cd "${KFS_DIR}"
-  unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
-  if [[ -f "${CONDA_SH}" ]]; then
-    # shellcheck disable=SC1090
-    source "${CONDA_SH}"
-    conda activate "${KFS_CONDA_ENV}"
-    exec python3 -u "${KFS_SCRIPT}"
-  else
-    exec /home/rc2/miniconda3/condabin/conda run --no-capture-output -n "${KFS_CONDA_ENV}" python3 -u "${KFS_SCRIPT}"
-  fi
+  kfs_watchdog
 ) >>"${KFS_LOG}" 2>&1 &
 kfs_pid="$!"
 children+=("${kfs_pid}")
@@ -160,15 +281,19 @@ log "autostart processes are running; waiting for TF GUI exit"
 kfs_reported=0
 while kill -0 "${tf_pid}" >/dev/null 2>&1; do
   if (( ! kfs_reported )) && ! kill -0 "${kfs_pid}" >/dev/null 2>&1; then
+    set +e
     wait "${kfs_pid}" >/dev/null 2>&1
     kfs_status=$?
-    log "KFS camera process exited with status ${kfs_status}; keeping TF GUI and arm stack running"
+    set -e
+    log "KFS camera watchdog exited with status ${kfs_status}; keeping TF GUI and arm stack running"
     kfs_reported=1
   fi
   sleep 1
 done
 
+set +e
 wait "${tf_pid}" >/dev/null 2>&1
 status=$?
+set -e
 log "TF target GUI exited with status ${status}; stopping the rest"
 exit "${status}"

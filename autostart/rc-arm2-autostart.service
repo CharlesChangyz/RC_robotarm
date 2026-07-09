@@ -10,6 +10,9 @@ WorkingDirectory=@RC_ROBOTARM_WORKSPACE@
 Environment=RC_ROBOTARM_WORKSPACE=@RC_ROBOTARM_WORKSPACE@
 Environment=KFS_SCRIPT=7_1_copy.py
 Environment=KFS_CONDA_ENV=camera_gpu
+Environment=REALSENSE_SERIAL=auto
+Environment=KFS_RESTART=1
+Environment=KFS_READY_CHECK=1
 Environment=ROS_DOMAIN_ID=55
 Environment=ROS_LOCALHOST_ONLY=0
 Environment=DISPLAY=:0
