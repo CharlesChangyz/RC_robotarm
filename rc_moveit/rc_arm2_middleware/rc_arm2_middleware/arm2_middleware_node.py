@@ -133,9 +133,9 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("j5_position_tolerance", 0.02)
         self.declare_parameter("laser_distance_topic", "/rc_arm_2/laser_distance")
         self.declare_parameter("laser_distance_threshold", 50)
-        self.declare_parameter("motion_wait_timeout_sec", 30.0)
+        self.declare_parameter("motion_wait_timeout_sec", 10.0)
         self.declare_parameter("payload_wait_timeout_sec", 5.0)
-        self.declare_parameter("laser_wait_timeout_sec", 30.0)
+        self.declare_parameter("laser_wait_timeout_sec", 5.0)
         self.declare_parameter("tracking_publish_rate_hz", 10.0)
         self.declare_parameter("dm_serial_bridge_enabled", True)
         self.declare_parameter("dm_serial_rx_topic", "/rc_arm_2/dm_serial_rx")
@@ -750,7 +750,7 @@ class Arm2MiddlewareNode(Node):
         if elapsed < int(timeout_sec * 1_000_000_000):
             return
 
-        self._fail_action_set(timeout_detail)
+        self._timeout_current_step(timeout_detail)
 
     def _start_next_step(self) -> None:
         run = self._active_run
@@ -1369,6 +1369,33 @@ class Arm2MiddlewareNode(Node):
         run.waiting_j5_target_pos = None
         run.last_j5_command_pos = None
         self._record_step_result(True, detail)
+        run.step_index += 1
+        self._start_next_step()
+
+    def _timeout_current_step(self, detail: str) -> None:
+        run = self._active_run
+        if run is None:
+            return
+        run.waiting_started_ns = None
+        run.waiting_execution_baseline_id = self._latest_motion_execution_id
+        run.waiting_execution_id = None
+        run.waiting_target_point_baseline_sequence = None
+        run.desired_payload_active = None
+        run.last_target_offset_command = None
+        run.target_offset_publish_count = 0
+        run.waiting_motion_succeeded = False
+        run.waiting_j5_target_pos = None
+        run.last_j5_command_pos = None
+        self.get_logger().warn(
+            "step timeout action_set=%d step=%d label=%s detail=%s; continuing to next step"
+            % (
+                run.action_set.action_id,
+                run.step_index,
+                run.current_step.label if run.current_step is not None else "none",
+                detail,
+            )
+        )
+        self._record_step_result(False, detail)
         run.step_index += 1
         self._start_next_step()
 
