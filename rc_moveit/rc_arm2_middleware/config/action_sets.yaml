@@ -1886,9 +1886,11 @@ action_sets:
         can_id: 0x604
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
+      - type: send_can_frame
+        label: notify
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
 
       - type: move_fixed_path_mf
         label: smooth_fixed_path
@@ -1901,11 +1903,18 @@ action_sets:
             target_spin: 0.0
           - xyz: [-0.2, -0.0001, 0.27]
             target_spin: 0.0
+          - xyz: [-0.2, -0.0001, 0.35]
+            target_spin: 0.0
 
-      - type: send_can_frame
-        label: notify
-        can_id: 0x601
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_fixed_pose_mf
+        label: move_to_default_pose
+        xyz: [-0.2, 0.0001, 0.27]
+        j5_target_pos: 0.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_on
