@@ -58,23 +58,24 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.0]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 65.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, 0.04]
         j5_target_pos: 0.0
         target_spin: 90.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [0.07, 0.0, 0.04]
         j5_target_pos: 0.0
@@ -88,7 +89,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: 0.0
@@ -99,7 +100,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: 0.0
@@ -109,7 +110,7 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.3, -0.0001, 0.48]
         j5_target_pos: 0.01
@@ -119,7 +120,7 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.32, -0.0001, 0.33]
         j5_target_pos: 0.01
@@ -138,19 +139,19 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
@@ -182,23 +183,24 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 0.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, -0.09]
         j5_target_pos: 0.0
@@ -212,7 +214,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: 0.0
@@ -223,13 +225,13 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: 0.0
         target_spin: 100.0
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.2, -0.0001, 0.48]
         j5_target_pos: 0.01
@@ -239,7 +241,7 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.26, -0.0001, 0.33]
         j5_target_pos: 0.01
@@ -258,19 +260,19 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
@@ -298,23 +300,24 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.18, 0.0, 0.16]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 0.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, -0.1]
         j5_target_pos: 0.0
@@ -324,7 +327,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
@@ -335,7 +338,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.4, -0.0001, 0.65]
         j5_target_pos: 0.0
@@ -353,7 +356,7 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
@@ -380,23 +383,24 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 0.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, -0.07]
         j5_target_pos: 0.0
@@ -406,7 +410,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
@@ -417,7 +421,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.4, -0.0001, 0.65]
         j5_target_pos: 0.0
@@ -435,7 +439,7 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
@@ -454,10 +458,10 @@ action_sets:
         can_id: 0x604
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.0, 0.1172, 0.1172]
-        j5_target_pos: -0.1970
+        j5_target_pos: 0.0
         target_spin: 0.0
 
       - type: send_can_frame
@@ -481,23 +485,24 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.18, 0.0, 0.16]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 0.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, -0.07]
         j5_target_pos: 0.0
@@ -511,7 +516,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.4]
         j5_target_pos: 0.0
@@ -543,23 +548,24 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 0.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, 0.05]
         j5_target_pos: 0.0
         target_spin: 0.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, -0.09]
         j5_target_pos: 0.0
@@ -569,7 +575,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.4]
         j5_target_pos: 0.0
@@ -602,23 +608,24 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 65.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, 0.04]
         j5_target_pos: 0.0
         target_spin: 90.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [0.05, 0.0, 0.04]
         j5_target_pos: 0.0
@@ -632,7 +639,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: 0.0
@@ -643,7 +650,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: 0.0
@@ -653,7 +660,7 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.32, -0.0001, 0.48]
         j5_target_pos: 0.01
@@ -663,7 +670,7 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.33, -0.0001, 0.33]
         j5_target_pos: 0.01
@@ -682,19 +689,19 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
         j5_target_pos: 0.0
@@ -721,23 +728,24 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 65.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, -0.05]
         j5_target_pos: 0.0
         target_spin: 90.0
 
-      - type: move_target_offset_mrl_cartesian
+      - type: move_target_offset_cartesian
         label: move_to_default_pose
         offset_xyz: [0.05, 0.0, -0.05]
         j5_target_pos: 0.0
@@ -747,7 +755,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.4]
         j5_target_pos: 0.0
@@ -784,23 +792,24 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.3, 0.0, 0.26]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 65.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, -0.1]
         j5_target_pos: 0.0
         target_spin: 90.0
 
-      - type: move_target_offset_mrl
+      - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [0.05, 0.0, -0.1]
         j5_target_pos: 0.0
@@ -814,7 +823,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.7]
         j5_target_pos: 0.0
@@ -825,7 +834,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.7]
         j5_target_pos: 0.0
@@ -835,7 +844,7 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.22, -0.0001, 0.48]
         j5_target_pos: 0.01
@@ -845,7 +854,7 @@ action_sets:
         label: wait_after_move
         duration_sec: 0.5
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.28, -0.0001, 0.33]
         j5_target_pos: 0.01
@@ -864,19 +873,19 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.1, -0.0001, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
         target_spin: 100.0
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.35, 0.0, 0.45]
         j5_target_pos: 0.0
@@ -895,7 +904,7 @@ action_sets:
         can_id: 0x604
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.0, 0.1172, 0.1172]
         j5_target_pos: 0.0
@@ -922,7 +931,7 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.83]
         j5_target_pos: 0.0
@@ -949,13 +958,13 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.0, 0.1, 0.83]
         j5_target_pos: 0.0
         target_spin: 110.0
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.0, 0.1172, 0.1172]
         j5_target_pos: 0.0
@@ -978,13 +987,13 @@ action_sets:
         label: payload_off
         enabled: false
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.0, 0.3, 0.26]
         j5_target_pos: 0.0
         target_spin: 65.0
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.3, 0.0, 0.26]
         j5_target_pos: 0.0
@@ -1016,17 +1025,18 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.0]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 65.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_path_mrl
+      - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1045,7 +1055,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.01
         blend_radius: 0.0
@@ -1059,7 +1069,7 @@ action_sets:
           - xyz: [-0.3, -0.0001, 0.48]
             target_spin: 0.0
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.32, -0.0001, 0.33]
         j5_target_pos: 0.01
@@ -1078,7 +1088,7 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1117,17 +1127,18 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 0.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_path_mrl
+      - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1146,7 +1157,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.01
         blend_radius: 0.0
@@ -1158,7 +1169,7 @@ action_sets:
           - xyz: [-0.2, -0.0001, 0.48]
             target_spin: 0.0
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.26, -0.0001, 0.33]
         j5_target_pos: 0.01
@@ -1177,7 +1188,7 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1205,17 +1216,18 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.18, 0.0, 0.16]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 0.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_path_mrl
+      - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1234,7 +1246,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1252,7 +1264,7 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1283,17 +1295,18 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 0.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_path_mrl
+      - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1312,7 +1325,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1330,7 +1343,7 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1353,10 +1366,10 @@ action_sets:
         can_id: 0x604
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.0, 0.1172, 0.1172]
-        j5_target_pos: -0.1970
+        j5_target_pos: -0.06
         target_spin: 0.0
 
       - type: send_can_frame
@@ -1380,17 +1393,18 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.18, 0.0, 0.16]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 0.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_path_mrl
+      - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1404,7 +1418,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.4]
         j5_target_pos: 0.0
@@ -1436,17 +1450,18 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 0.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_path_mrl
+      - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1460,7 +1475,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.4]
         j5_target_pos: 0.0
@@ -1493,17 +1508,18 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 65.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_path_mrl
+      - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1522,7 +1538,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1536,7 +1552,7 @@ action_sets:
           - xyz: [-0.31, -0.0001, 0.48]
             target_spin: 0.0
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.32, -0.0001, 0.33]
         j5_target_pos: 0.01
@@ -1555,7 +1571,7 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1588,17 +1604,18 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 65.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_path_mrl
+      - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1612,7 +1629,7 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.25, 0.0, 0.4]
         j5_target_pos: 0.0
@@ -1649,17 +1666,18 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mrl
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.3, 0.0, 0.26]
-        j5_target_pos: 0.0
+        j5_target_pos: -0.06
         target_spin: 65.0
 
       - type: update_target_point
         label: update_vision_point
         timeout_sec: 1.0
+        target_y_offset: 0.06
 
-      - type: move_target_offset_path_mrl
+      - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1678,7 +1696,7 @@ action_sets:
         can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.01
         blend_radius: 0.0
@@ -1692,10 +1710,10 @@ action_sets:
           - xyz: [-0.2, -0.0001, 0.48]
             target_spin: 0.0
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [-0.22, -0.0001, 0.33]
-        j5_target_pos: 0.01
+        j5_target_pos: 0.0
         target_spin: 10.0
 
       - type: set_payload_active
@@ -1711,7 +1729,7 @@ action_sets:
         can_id: 0x603
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1736,7 +1754,7 @@ action_sets:
         can_id: 0x604
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.0, 0.1172, 0.1172]
         j5_target_pos: 0.0
@@ -1763,7 +1781,7 @@ action_sets:
         label: vacuum_on
         enabled: true
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.83]
         j5_target_pos: 0.0
@@ -1790,7 +1808,7 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1817,7 +1835,7 @@ action_sets:
         label: payload_off
         enabled: false
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1844,7 +1862,7 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2172, 0.0, 0.1171]
         j5_target_pos: 0.0
@@ -1866,13 +1884,7 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: move_fixed_pose_mf
-        label: move_to_default_pose
-        xyz: [0.0, 0.1172, 0.7171]
-        j5_target_pos: 0.0
-        target_spin: 65.0
-
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1172, 0.0, 0.1172]
         j5_target_pos: 0.0
@@ -1886,11 +1898,13 @@ action_sets:
         can_id: 0x604
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: set_vacuum
-        label: vacuum_on
-        enabled: true
+      - type: send_can_frame
+        label: notify
+        can_id: 0x601
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_path_mf
+
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1901,17 +1915,24 @@ action_sets:
             target_spin: 0.0
           - xyz: [-0.2, -0.0001, 0.27]
             target_spin: 0.0
+          - xyz: [-0.2, -0.0001, 0.35]
+            target_spin: 0.0
 
-      - type: send_can_frame
-        label: notify
-        can_id: 0x601
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+      - type: set_vacuum
+        label: vacuum_on
+        enabled: true
+
+      - type: move_fixed_pose
+        label: move_to_default_pose
+        xyz: [-0.2, 0.0001, 0.27]
+        j5_target_pos: 0.0
+        target_spin: 0.0
 
       - type: set_payload_active
         label: payload_on
         enabled: true
 
-      - type: move_fixed_path_mf
+      - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
         blend_radius: 0.0
@@ -1936,7 +1957,7 @@ action_sets:
         can_id: 0x604
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
-      - type: move_fixed_pose_mf
+      - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.1, 0.0, 0.78]
         j5_target_pos: 0.0
