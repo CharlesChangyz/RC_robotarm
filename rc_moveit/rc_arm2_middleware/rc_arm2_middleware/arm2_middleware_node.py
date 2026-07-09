@@ -111,6 +111,8 @@ def _motion_status_name(status: int) -> str:
 
 
 class Arm2MiddlewareNode(Node):
+    _FIXED_STEP_TIMEOUT_SEC = 10.0
+
     def __init__(self) -> None:
         super().__init__("arm2_middleware")
 
@@ -701,12 +703,20 @@ class Arm2MiddlewareNode(Node):
         if run is None or run.waiting_started_ns is None:
             return
 
+        timeout_skip_current_step = False
         if self._state == MiddlewareState.WAITING_MOTION_RESULT:
             timeout_sec = self._motion_wait_timeout
             if self._is_j5_wait_step(run.current_step):
                 timeout_detail = self._j5_joint_wait_timeout_detail(timeout_sec)
             else:
                 timeout_detail = f"motion wait timeout after {timeout_sec:.2f} sec"
+            if self._is_fixed_timeout_step(run.current_step):
+                timeout_sec = self._FIXED_STEP_TIMEOUT_SEC
+                timeout_detail = (
+                    f"{run.current_step.step_type} timeout after {timeout_sec:.2f} sec, "
+                    "skipping to next step"
+                )
+                timeout_skip_current_step = True
         elif self._state == MiddlewareState.TRACKING_TARGET_OFFSET:
             self._refresh_target_offset_target(run)
             laser_distance = self._latest_laser_distance
@@ -748,6 +758,10 @@ class Arm2MiddlewareNode(Node):
 
         elapsed = self.get_clock().now().nanoseconds - run.waiting_started_ns
         if elapsed < int(timeout_sec * 1_000_000_000):
+            return
+
+        if timeout_skip_current_step:
+            self._skip_current_step(timeout_detail)
             return
 
         self._fail_action_set(timeout_detail)
@@ -1311,6 +1325,9 @@ class Arm2MiddlewareNode(Node):
             "move_target_offset_path_mrl",
         }
 
+    def _is_fixed_timeout_step(self, step: Optional[ActionStep]) -> bool:
+        return step is not None and "_fixed_" in step.step_type
+
     def _is_j5_at_target(self, target_pos: Optional[float]) -> bool:
         if target_pos is None or self._latest_j5_position is None:
             return False
@@ -1358,17 +1375,17 @@ class Arm2MiddlewareNode(Node):
         run = self._active_run
         if run is None:
             return
-        run.waiting_started_ns = None
-        run.waiting_execution_baseline_id = self._latest_motion_execution_id
-        run.waiting_execution_id = None
-        run.waiting_target_point_baseline_sequence = None
-        run.desired_payload_active = None
-        run.last_target_offset_command = None
-        run.target_offset_publish_count = 0
-        run.waiting_motion_succeeded = False
-        run.waiting_j5_target_pos = None
-        run.last_j5_command_pos = None
+        self._reset_current_step_wait_state(run)
         self._record_step_result(True, detail)
+        run.step_index += 1
+        self._start_next_step()
+
+    def _skip_current_step(self, detail: str) -> None:
+        run = self._active_run
+        if run is None:
+            return
+        self._reset_current_step_wait_state(run)
+        self._record_step_result(False, detail)
         run.step_index += 1
         self._start_next_step()
 
@@ -1404,15 +1421,7 @@ class Arm2MiddlewareNode(Node):
             self._set_state(MiddlewareState.IDLE, "ready for next action set")
             return
 
-        run.waiting_started_ns = None
-        run.waiting_execution_id = None
-        run.waiting_target_point_baseline_sequence = None
-        run.desired_payload_active = None
-        run.last_target_offset_command = None
-        run.target_offset_publish_count = 0
-        run.waiting_motion_succeeded = False
-        run.waiting_j5_target_pos = None
-        run.last_j5_command_pos = None
+        self._reset_current_step_wait_state(run)
         if run.current_step is not None:
             self._record_step_result(False, detail)
         self._set_state(
@@ -1421,6 +1430,18 @@ class Arm2MiddlewareNode(Node):
         )
         self._active_run = None
         self._set_state(MiddlewareState.IDLE, "ready for next action set")
+
+    def _reset_current_step_wait_state(self, run: ActiveRun) -> None:
+        run.waiting_started_ns = None
+        run.waiting_execution_baseline_id = self._latest_motion_execution_id
+        run.waiting_execution_id = None
+        run.waiting_target_point_baseline_sequence = None
+        run.desired_payload_active = None
+        run.last_target_offset_command = None
+        run.target_offset_publish_count = 0
+        run.waiting_motion_succeeded = False
+        run.waiting_j5_target_pos = None
+        run.last_j5_command_pos = None
 
     def _refresh_dm_serial_bridge(self) -> None:
         allowed_action_set_ids = resolve_allowed_action_set_ids(

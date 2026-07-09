@@ -104,7 +104,7 @@ def generate_launch_description():
         DeclareLaunchArgument('target_pose_executor_j4_axis', default_value='y', description='目标姿态中 j4 对应的旋转轴（x/y/z）'),
         DeclareLaunchArgument('target_pose_executor_joint_state_topic', default_value='/joint_states', description='target_pose 执行器读取当前关节角用于分支选择的话题'),
         DeclareLaunchArgument('target_pose_executor_urdf_path', default_value='', description='target_pose 执行器共享 4DOF 几何 helper 的 URDF/Xacro 路径，留空则自动查找'),
-        DeclareLaunchArgument('target_pose_executor_status_log_period', default_value='1.0', description='target_pose 执行器状态心跳打印周期（秒，<=0 关闭）'),
+        DeclareLaunchArgument('target_pose_executor_status_log_period', default_value='0.0', description='target_pose 执行器状态心跳打印周期（秒，<=0 关闭）'),
         DeclareLaunchArgument('target_pose_executor_status_base_frame', default_value='world', description='状态打印使用的基坐标系'),
         DeclareLaunchArgument('target_pose_executor_status_eef_frame', default_value='end_effector', description='状态打印使用的末端坐标系'),
         DeclareLaunchArgument('target_pose_executor_avoid_collisions_enabled', default_value='true', description='target_pose 执行器是否启用 MoveIt 避障'),

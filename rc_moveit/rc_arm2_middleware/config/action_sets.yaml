@@ -1665,9 +1665,9 @@ action_sets:
         blend_radius: 0.0
         waypoints:
           - xyz: [-0.05, 0.0, -0.1]
-            target_spin: 98.0
+            target_spin: 90.0
           - xyz: [0.05, 0.0, -0.1]
-            target_spin: 98.0
+            target_spin: 90.0
 
       - type: set_payload_active
         label: payload_on
