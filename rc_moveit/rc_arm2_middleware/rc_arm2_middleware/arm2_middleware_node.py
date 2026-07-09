@@ -20,6 +20,10 @@ from rc_arm2_middleware.dm_serial_action_bridge import (
     RawCanFrame,
     resolve_allowed_action_set_ids,
 )
+from rc_arm2_middleware.target_point_sampling import (
+    TargetPointSample,
+    average_valid_target_point_samples,
+)
 
 
 class MiddlewareState(str, Enum):
@@ -50,6 +54,7 @@ class ActionStep:
     target_spin_deg: float = 0.0
     blend_radius: float = 0.0
     offset_xyz: Optional[Tuple[float, float, float]] = None
+    target_y_offset: float = 0.0
     xyz: Optional[Tuple[float, float, float]] = None
     waypoints: Optional[Tuple[TargetPoint, ...]] = None
     j5_target_pos: Optional[float] = None
@@ -87,6 +92,7 @@ class ActiveRun:
     waiting_execution_baseline_id: int = 0
     waiting_execution_id: Optional[int] = None
     waiting_target_point_baseline_sequence: Optional[int] = None
+    target_point_samples: List[TargetPoint] = field(default_factory=list)
     desired_payload_active: Optional[bool] = None
     last_target_offset_command: Optional[TargetPoint] = None
     target_offset_publish_count: int = 0
@@ -112,6 +118,9 @@ def _motion_status_name(status: int) -> str:
 
 class Arm2MiddlewareNode(Node):
     _FIXED_STEP_TIMEOUT_SEC = 10.0
+    _TARGET_POINT_SAMPLE_COUNT = 8
+    _TARGET_POINT_MIN_VALID_COUNT = 3
+    _TARGET_POINT_MAX_SAMPLE_DISTANCE = 0.03
 
     def __init__(self) -> None:
         super().__init__("arm2_middleware")
@@ -377,6 +386,7 @@ class Arm2MiddlewareNode(Node):
                 step_type=step_type,
                 label=label,
                 timeout_sec=self._parse_timeout_sec(raw_step, default_sec=1.0),
+                target_y_offset=float(raw_step.get("target_y_offset", 0.0)),
             )
 
         if step_type == "send_can_frame":
@@ -387,7 +397,7 @@ class Arm2MiddlewareNode(Node):
                 can_data=self._parse_can_data(raw_step.get("can_data")),
             )
 
-        if step_type in {"move_target_offset", "move_target_offset_noj5"}:
+        if step_type == "move_target_offset_noj5":
             return ActionStep(
                 step_type=step_type,
                 label=label,
@@ -396,10 +406,8 @@ class Arm2MiddlewareNode(Node):
             )
 
         if step_type in {
-            "move_target_offset_mf",
-            "move_target_offset_mrl",
-            "move_target_offset_mf_cartesian",
-            "move_target_offset_mrl_cartesian",
+            "move_target_offset",
+            "move_target_offset_cartesian",
         }:
             return ActionStep(
                 step_type=step_type,
@@ -409,18 +417,9 @@ class Arm2MiddlewareNode(Node):
                 j5_target_pos=float(raw_step["j5_target_pos"]),
             )
 
-        if step_type == "move_fixed_pose":
-            return ActionStep(
-                step_type=step_type,
-                label=label,
-                target_spin_deg=target_spin_deg,
-                xyz=self._parse_xyz(raw_step.get("xyz"), "xyz"),
-            )
-
         if step_type in {
-            "move_fixed_pose_mf",
-            "move_fixed_pose_mrl",
-            "move_fixed_pose_mrl_cartesian",
+            "move_fixed_pose",
+            "move_fixed_pose_cartesian",
         }:
             return ActionStep(
                 step_type=step_type,
@@ -430,7 +429,7 @@ class Arm2MiddlewareNode(Node):
                 j5_target_pos=float(raw_step["j5_target_pos"]),
             )
 
-        if step_type in {"move_fixed_path_mf", "move_target_offset_path_mrl"}:
+        if step_type in {"move_fixed_path", "move_target_offset_path"}:
             return ActionStep(
                 step_type=step_type,
                 label=label,
@@ -543,16 +542,12 @@ class Arm2MiddlewareNode(Node):
             and run.waiting_target_point_baseline_sequence is not None
             and self._target_point_sequence > run.waiting_target_point_baseline_sequence
         ):
-            old_target_point = run.target_point
-            run.target_point = self._cached_target_point
-            self._complete_current_step(
-                "updated target point %s -> %s seq=%d"
-                % (
-                    self._format_target_point(old_target_point),
-                    self._format_target_point(run.target_point),
-                    self._target_point_sequence,
+            run.target_point_samples.append(self._cached_target_point)
+            if len(run.target_point_samples) >= self._TARGET_POINT_SAMPLE_COUNT:
+                self._finish_target_point_update_from_samples(
+                    "collected %d target point samples"
+                    % len(run.target_point_samples)
                 )
-            )
 
     def _on_run_action_set(self, msg: Int32) -> None:
         requested_id = int(msg.data)
@@ -760,6 +755,10 @@ class Arm2MiddlewareNode(Node):
         if elapsed < int(timeout_sec * 1_000_000_000):
             return
 
+        if self._state == MiddlewareState.WAITING_TARGET_POINT_UPDATE:
+            self._finish_target_point_update_from_samples(timeout_detail)
+            return
+
         if timeout_skip_current_step:
             self._skip_current_step(timeout_detail)
             return
@@ -829,10 +828,14 @@ class Arm2MiddlewareNode(Node):
         if step.step_type == "update_target_point":
             timeout_sec = 1.0 if step.timeout_sec is None else float(step.timeout_sec)
             self._enter_target_point_update_wait(
-                "waiting target point update after seq=%d timeout=%.3f current=%s"
+                "waiting target point samples after seq=%d timeout=%.3f sample_count=%d "
+                "min_valid=%d max_distance=%.3f current=%s"
                 % (
                     self._target_point_sequence,
                     timeout_sec,
+                    self._TARGET_POINT_SAMPLE_COUNT,
+                    self._TARGET_POINT_MIN_VALID_COUNT,
+                    self._TARGET_POINT_MAX_SAMPLE_DISTANCE,
                     self._format_target_point(run.target_point),
                 )
             )
@@ -851,28 +854,6 @@ class Arm2MiddlewareNode(Node):
                 "sent can frame id=0x%X data=%s"
                 % (step.can_id, [int(value) for value in step.can_data])
             )
-            return
-
-        if step.step_type == "move_target_offset":
-            target_point = run.target_point
-            if target_point is None:
-                self._fail_action_set(
-                    "move_target_offset requested but no target point was captured at action start"
-                )
-                return
-            target_spin_deg = target_point.target_spin_deg
-            self._enter_target_offset_tracking(
-                "tracking target_offset offset=(%.4f, %.4f, %.4f) spin=%.2f threshold=%d timeout=%.2f"
-                % (
-                    float(step.offset_xyz[0]),
-                    float(step.offset_xyz[1]),
-                    float(step.offset_xyz[2]),
-                    target_spin_deg,
-                    self._laser_distance_threshold,
-                    self._laser_wait_timeout,
-                )
-            )
-            self._refresh_target_offset_target(run)
             return
 
         if step.step_type == "move_target_offset_noj5":
@@ -898,10 +879,8 @@ class Arm2MiddlewareNode(Node):
             return
 
         if step.step_type in {
-            "move_target_offset_mf",
-            "move_target_offset_mrl",
-            "move_target_offset_mf_cartesian",
-            "move_target_offset_mrl_cartesian",
+            "move_target_offset",
+            "move_target_offset_cartesian",
         }:
             target_point = run.target_point
             if target_point is None:
@@ -912,13 +891,18 @@ class Arm2MiddlewareNode(Node):
             x = target_point.x + float(step.offset_xyz[0])
             y = float(step.offset_xyz[1])
             z = target_point.z + float(step.offset_xyz[2])
-            j5_target_pos = step.j5_target_pos
-            if step.step_type in {"move_target_offset_mrl", "move_target_offset_mrl_cartesian"}:
-                j5_target_pos = float(target_point.y) + float(step.j5_target_pos)
+            j5_target_pos = float(target_point.y) + float(step.j5_target_pos)
             target_spin_deg = step.target_spin_deg
             self._enter_motion_wait(
                 "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
-                % (step.step_type, x, y, z, target_spin_deg, float(j5_target_pos)),
+                % (
+                    step.step_type,
+                    x,
+                    y,
+                    z,
+                    target_spin_deg,
+                    float(j5_target_pos),
+                ),
                 j5_target_pos=j5_target_pos,
             )
             if not self._publish_motion_target(
@@ -932,24 +916,12 @@ class Arm2MiddlewareNode(Node):
             self._publish_j5_target(j5_target_pos)
             return
 
-        if step.step_type == "move_fixed_pose":
-            x, y, z = step.xyz
-            self._enter_motion_wait(
-                f"waiting on fixed_pose x={x:.4f} y={y:.4f} z={z:.4f} spin={step.target_spin_deg:.2f}",
-            )
-            if not self._publish_motion_target(x, y, z, step.target_spin_deg):
-                return
-            return
-
         if step.step_type in {
-            "move_fixed_pose_mf",
-            "move_fixed_pose_mrl",
-            "move_fixed_pose_mrl_cartesian",
+            "move_fixed_pose",
+            "move_fixed_pose_cartesian",
         }:
             x, y, z = step.xyz
             j5_target_pos = step.j5_target_pos
-            if step.step_type in {"move_fixed_pose_mrl", "move_fixed_pose_mrl_cartesian"}:
-                j5_target_pos = float(step.xyz[1]) + float(step.j5_target_pos)
             self._enter_motion_wait(
                 "waiting on %s x=%.4f y=%.4f z=%.4f spin=%.2f j5=%.4f"
                 % (step.step_type, x, y, z, step.target_spin_deg, float(j5_target_pos)),
@@ -966,15 +938,15 @@ class Arm2MiddlewareNode(Node):
             self._publish_j5_target(j5_target_pos)
             return
 
-        if step.step_type == "move_target_offset_path_mrl":
+        if step.step_type == "move_target_offset_path":
             target_point = run.target_point
             if target_point is None:
                 self._fail_action_set(
-                    "move_target_offset_path_mrl requested but no target point was captured at action start"
+                    "move_target_offset_path requested but no target point was captured at action start"
                 )
                 return
             if not step.waypoints:
-                self._fail_action_set("move_target_offset_path_mrl missing waypoints")
+                self._fail_action_set("move_target_offset_path missing waypoints")
                 return
             waypoints = tuple(
                 TargetPoint(
@@ -1001,9 +973,9 @@ class Arm2MiddlewareNode(Node):
             self._publish_j5_target(j5_target_pos)
             return
 
-        if step.step_type == "move_fixed_path_mf":
+        if step.step_type == "move_fixed_path":
             if not step.waypoints:
-                self._fail_action_set("move_fixed_path_mf missing waypoints")
+                self._fail_action_set("move_fixed_path missing waypoints")
                 return
             j5_target_pos = step.j5_target_pos
             self._enter_motion_wait(
@@ -1105,6 +1077,7 @@ class Arm2MiddlewareNode(Node):
         run.waiting_execution_baseline_id = self._latest_motion_execution_id
         run.waiting_execution_id = None
         run.waiting_target_point_baseline_sequence = self._target_point_sequence
+        run.target_point_samples.clear()
         run.desired_payload_active = None
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
@@ -1112,6 +1085,74 @@ class Arm2MiddlewareNode(Node):
         run.waiting_j5_target_pos = None
         run.last_j5_command_pos = None
         self._set_state(MiddlewareState.WAITING_TARGET_POINT_UPDATE, detail)
+
+    def _finish_target_point_update_from_samples(self, reason: str) -> None:
+        run = self._active_run
+        if run is None:
+            self._fail_action_set("internal error: missing active run when finishing target point update")
+            return
+
+        old_target_point = run.target_point
+        result = average_valid_target_point_samples(
+            [
+                TargetPointSample(
+                    x=sample.x,
+                    y=sample.y,
+                    z=sample.z,
+                    target_spin_deg=sample.target_spin_deg,
+                )
+                for sample in run.target_point_samples
+            ],
+            min_valid_count=self._TARGET_POINT_MIN_VALID_COUNT,
+            max_sample_distance=self._TARGET_POINT_MAX_SAMPLE_DISTANCE,
+            max_x=(
+                self._target_point_guard_max_x
+                if self._target_point_guard_enabled
+                else float("inf")
+            ),
+            max_abs_y=(
+                self._target_point_guard_max_abs_y
+                if self._target_point_guard_enabled
+                else float("inf")
+            ),
+        )
+        if result.target is None:
+            self._fail_action_set(
+                "%s; %s samples=%d accepted=%d rejected=%d"
+                % (
+                    reason,
+                    result.detail,
+                    len(run.target_point_samples),
+                    result.accepted_count,
+                    result.rejected_count,
+                )
+            )
+            return
+
+        target_y_offset = (
+            float(run.current_step.target_y_offset)
+            if run.current_step is not None
+            else 0.0
+        )
+        run.target_point = TargetPoint(
+            x=result.target.x,
+            y=result.target.y + target_y_offset,
+            z=result.target.z,
+            target_spin_deg=result.target.target_spin_deg,
+        )
+        self._complete_current_step(
+            "%s; updated target point %s -> %s target_y_offset=%.4f "
+            "samples=%d accepted=%d rejected=%d"
+            % (
+                reason,
+                self._format_target_point(old_target_point),
+                self._format_target_point(run.target_point),
+                target_y_offset,
+                len(run.target_point_samples),
+                result.accepted_count,
+                result.rejected_count,
+            )
+        )
 
     def _refresh_target_offset_target(self, run: ActiveRun) -> None:
         step = run.current_step
@@ -1182,11 +1223,13 @@ class Arm2MiddlewareNode(Node):
         )
         current_target = self._format_target_point(run.target_point if run is not None else None)
         return (
-            "target point update timeout after %.2f sec baseline_seq=%s current_seq=%d current=%s"
+            "target point update timeout after %.2f sec baseline_seq=%s current_seq=%d "
+            "samples=%d current=%s"
             % (
                 timeout_sec,
                 baseline_sequence if baseline_sequence is not None else "none",
                 self._target_point_sequence,
+                len(run.target_point_samples) if run is not None else 0,
                 current_target,
             )
         )
@@ -1314,15 +1357,12 @@ class Arm2MiddlewareNode(Node):
 
     def _is_j5_wait_step(self, step: Optional[ActionStep]) -> bool:
         return step is not None and step.step_type in {
-            "move_target_offset_mf",
-            "move_target_offset_mrl",
-            "move_target_offset_mf_cartesian",
-            "move_target_offset_mrl_cartesian",
-            "move_fixed_pose_mf",
-            "move_fixed_pose_mrl",
-            "move_fixed_pose_mrl_cartesian",
-            "move_fixed_path_mf",
-            "move_target_offset_path_mrl",
+            "move_target_offset",
+            "move_target_offset_cartesian",
+            "move_fixed_pose",
+            "move_fixed_pose_cartesian",
+            "move_fixed_path",
+            "move_target_offset_path",
         }
 
     def _is_fixed_timeout_step(self, step: Optional[ActionStep]) -> bool:
@@ -1436,6 +1476,7 @@ class Arm2MiddlewareNode(Node):
         run.waiting_execution_baseline_id = self._latest_motion_execution_id
         run.waiting_execution_id = None
         run.waiting_target_point_baseline_sequence = None
+        run.target_point_samples.clear()
         run.desired_payload_active = None
         run.last_target_offset_command = None
         run.target_offset_publish_count = 0
