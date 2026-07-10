@@ -5,6 +5,7 @@ WORKSPACE_DIR="${RC_ROBOTARM_WORKSPACE:-/home/rc2/RC_robotarm}"
 KFS_DIR="${KFS_DIR:-/home/rc2/KFS}"
 KFS_SCRIPT="${KFS_SCRIPT:-7_1_copy.py}"
 KFS_CONDA_ENV="${KFS_CONDA_ENV:-camera_gpu}"
+KFS_CAMERA_ENABLE="${KFS_CAMERA_ENABLE:-1}"
 REALSENSE_SERIAL="${REALSENSE_SERIAL:-auto}"
 KFS_RESTART="${KFS_RESTART:-1}"
 KFS_READY_CHECK="${KFS_READY_CHECK:-1}"
@@ -253,12 +254,17 @@ log "starting TF target GUI"
 tf_pid="$!"
 children+=("${tf_pid}")
 
-log "starting KFS camera watchdog: script=${KFS_SCRIPT}, conda_env=${KFS_CONDA_ENV}, realsense=${REALSENSE_SERIAL}"
-(
-  kfs_watchdog
-) >>"${KFS_LOG}" 2>&1 &
-kfs_pid="$!"
-children+=("${kfs_pid}")
+kfs_pid=""
+if truthy "${KFS_CAMERA_ENABLE}"; then
+  log "starting KFS camera watchdog: script=${KFS_SCRIPT}, conda_env=${KFS_CONDA_ENV}, realsense=${REALSENSE_SERIAL}"
+  (
+    kfs_watchdog
+  ) >>"${KFS_LOG}" 2>&1 &
+  kfs_pid="$!"
+  children+=("${kfs_pid}")
+else
+  log "KFS camera autostart disabled by KFS_CAMERA_ENABLE=${KFS_CAMERA_ENABLE}"
+fi
 
 log "waiting ${START_REAL_DELAY_SEC}s before requesting start_real"
 sleep "${START_REAL_DELAY_SEC}"
@@ -280,7 +286,7 @@ done
 log "autostart processes are running; waiting for TF GUI exit"
 kfs_reported=0
 while kill -0 "${tf_pid}" >/dev/null 2>&1; do
-  if (( ! kfs_reported )) && ! kill -0 "${kfs_pid}" >/dev/null 2>&1; then
+  if [[ -n "${kfs_pid}" ]] && (( ! kfs_reported )) && ! kill -0 "${kfs_pid}" >/dev/null 2>&1; then
     set +e
     wait "${kfs_pid}" >/dev/null 2>&1
     kfs_status=$?

@@ -194,7 +194,7 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
-        fallback_xyz: [0.0, 0.0, 0.0]
+        fallback_xyz: [0.6, 0.0, -0.05]
 
       - type: move_target_offset
         label: move_to_default_pose
@@ -396,7 +396,7 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
-        fallback_xyz: [0.0, 0.0, 0.0]
+        fallback_xyz: [0.6, 0.0, -0.05]
 
       - type: move_target_offset
         label: move_to_default_pose
@@ -563,7 +563,7 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
-        fallback_xyz: [0.66, 0.0, 0.15]
+        fallback_xyz: [0.6, 0.0, -0.05]
 
       - type: move_target_offset
         label: move_to_default_pose
@@ -1147,7 +1147,7 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
-        fallback_xyz: [0.0, 0.0, 0.0]
+        fallback_xyz: [0.6, 0.0, -0.05]
 
       - type: move_target_offset_path
         label: smooth_target_path
@@ -1317,7 +1317,7 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
-        fallback_xyz: [0.0, 0.0, 0.0]
+        fallback_xyz: [0.6, 0.0, -0.05]
 
       - type: move_target_offset_path
         label: smooth_target_path
@@ -1474,7 +1474,7 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
-        fallback_xyz: [0.66, 0.0, 0.15]
+        fallback_xyz: [0.6, 0.0, -0.05]
 
       - type: move_target_offset_path
         label: smooth_target_path
@@ -1506,7 +1506,7 @@ action_sets:
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-  - id: 19 视觉抓取 200 KFS 正前方，入库（路径版）
+  - id: 19 #视觉抓取 200 KFS 正前方，入库（路径版）
     name: vision_catch_200_KFS_front_and_store_path
     steps:
       - type: send_can_frame
