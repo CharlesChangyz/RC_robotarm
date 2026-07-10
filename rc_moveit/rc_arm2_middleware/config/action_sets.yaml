@@ -68,6 +68,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, 0.04]
@@ -192,6 +194,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, 0.05]
@@ -308,6 +312,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, 0.05]
@@ -390,6 +396,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, 0.05]
@@ -491,6 +499,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, 0.05]
@@ -553,6 +563,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, 0.05]
@@ -612,6 +624,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, 0.04]
@@ -731,6 +745,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.1, 0.0, -0.05]
@@ -794,6 +810,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset
         label: move_to_default_pose
         offset_xyz: [-0.05, 0.0, -0.1]
@@ -1026,6 +1044,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
@@ -1127,6 +1147,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
@@ -1215,6 +1237,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
@@ -1293,6 +1317,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
@@ -1390,6 +1416,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
@@ -1446,6 +1474,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
@@ -1503,6 +1533,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
@@ -1598,6 +1630,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
@@ -1659,6 +1693,8 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
+        fallback_xyz: [0.0, 0.0, 0.0]
+
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0

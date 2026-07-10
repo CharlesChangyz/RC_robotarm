@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+import math
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -22,7 +23,7 @@ from rc_arm2_middleware.dm_serial_action_bridge import (
 )
 from rc_arm2_middleware.target_point_sampling import (
     TargetPointSample,
-    average_valid_target_point_samples,
+    select_target_point,
 )
 
 
@@ -55,6 +56,7 @@ class ActionStep:
     blend_radius: float = 0.0
     offset_xyz: Optional[Tuple[float, float, float]] = None
     target_y_offset: float = 0.0
+    fallback_xyz: Optional[Tuple[float, float, float]] = None
     xyz: Optional[Tuple[float, float, float]] = None
     waypoints: Optional[Tuple[TargetPoint, ...]] = None
     j5_target_pos: Optional[float] = None
@@ -382,11 +384,20 @@ class Arm2MiddlewareNode(Node):
             )
 
         if step_type == "update_target_point":
+            fallback_xyz = None
+            if "fallback_xyz" in raw_step:
+                fallback_xyz = self._parse_xyz(
+                    raw_step.get("fallback_xyz"),
+                    "fallback_xyz",
+                )
+                if not all(math.isfinite(value) for value in fallback_xyz):
+                    raise ValueError("fallback_xyz values must be finite")
             return ActionStep(
                 step_type=step_type,
                 label=label,
                 timeout_sec=self._parse_timeout_sec(raw_step, default_sec=1.0),
                 target_y_offset=float(raw_step.get("target_y_offset", 0.0)),
+                fallback_xyz=fallback_xyz,
             )
 
         if step_type == "send_can_frame":
@@ -546,7 +557,8 @@ class Arm2MiddlewareNode(Node):
             if len(run.target_point_samples) >= self._TARGET_POINT_SAMPLE_COUNT:
                 self._finish_target_point_update_from_samples(
                     "collected %d target point samples"
-                    % len(run.target_point_samples)
+                    % len(run.target_point_samples),
+                    allow_fallback=False,
                 )
 
     def _on_run_action_set(self, msg: Int32) -> None:
@@ -756,7 +768,10 @@ class Arm2MiddlewareNode(Node):
             return
 
         if self._state == MiddlewareState.WAITING_TARGET_POINT_UPDATE:
-            self._finish_target_point_update_from_samples(timeout_detail)
+            self._finish_target_point_update_from_samples(
+                timeout_detail,
+                allow_fallback=True,
+            )
             return
 
         if timeout_skip_current_step:
@@ -1086,14 +1101,27 @@ class Arm2MiddlewareNode(Node):
         run.last_j5_command_pos = None
         self._set_state(MiddlewareState.WAITING_TARGET_POINT_UPDATE, detail)
 
-    def _finish_target_point_update_from_samples(self, reason: str) -> None:
+    def _finish_target_point_update_from_samples(
+        self,
+        reason: str,
+        *,
+        allow_fallback: bool,
+    ) -> None:
         run = self._active_run
         if run is None:
             self._fail_action_set("internal error: missing active run when finishing target point update")
             return
 
         old_target_point = run.target_point
-        result = average_valid_target_point_samples(
+        step = run.current_step
+        target_y_offset = float(step.target_y_offset) if step is not None else 0.0
+        fallback_xyz = step.fallback_xyz if step is not None else None
+        fallback_spin_deg = (
+            float(old_target_point.target_spin_deg)
+            if old_target_point is not None
+            else 0.0
+        )
+        selection = select_target_point(
             [
                 TargetPointSample(
                     x=sample.x,
@@ -1115,42 +1143,49 @@ class Arm2MiddlewareNode(Node):
                 if self._target_point_guard_enabled
                 else float("inf")
             ),
+            target_y_offset=target_y_offset,
+            fallback_xyz=fallback_xyz,
+            fallback_spin_deg=fallback_spin_deg,
+            allow_fallback=allow_fallback,
         )
-        if result.target is None:
+        sampling = selection.sampling
+        if selection.target is None:
+            if not allow_fallback:
+                return
             self._fail_action_set(
                 "%s; %s samples=%d accepted=%d rejected=%d"
                 % (
                     reason,
-                    result.detail,
+                    sampling.detail,
                     len(run.target_point_samples),
-                    result.accepted_count,
-                    result.rejected_count,
+                    sampling.accepted_count,
+                    sampling.rejected_count,
                 )
             )
             return
 
-        target_y_offset = (
-            float(run.current_step.target_y_offset)
-            if run.current_step is not None
-            else 0.0
-        )
+        selected_target = selection.target
+        source = "fallback" if selection.used_fallback else "vision"
+        applied_target_y_offset = 0.0 if selection.used_fallback else target_y_offset
         run.target_point = TargetPoint(
-            x=result.target.x,
-            y=result.target.y + target_y_offset,
-            z=result.target.z,
-            target_spin_deg=result.target.target_spin_deg,
+            x=selected_target.x,
+            y=selected_target.y,
+            z=selected_target.z,
+            target_spin_deg=selected_target.target_spin_deg,
         )
         self._complete_current_step(
-            "%s; updated target point %s -> %s target_y_offset=%.4f "
+            "%s; updated target point %s -> %s source=%s "
+            "applied_target_y_offset=%.4f "
             "samples=%d accepted=%d rejected=%d"
             % (
                 reason,
                 self._format_target_point(old_target_point),
                 self._format_target_point(run.target_point),
-                target_y_offset,
+                source,
+                applied_target_y_offset,
                 len(run.target_point_samples),
-                result.accepted_count,
-                result.rejected_count,
+                sampling.accepted_count,
+                sampling.rejected_count,
             )
         )
 

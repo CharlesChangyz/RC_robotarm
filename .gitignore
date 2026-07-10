@@ -43,3 +43,5 @@ rc_moveit/rc_arm_moveit_config/test/
 .marscode/
 tmp/
 sketches/
+docs/
+

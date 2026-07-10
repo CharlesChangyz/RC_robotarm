@@ -24,6 +24,13 @@ class TargetPointSamplingResult:
     detail: str
 
 
+@dataclass(frozen=True)
+class TargetPointSelectionResult:
+    target: TargetPointSample | None
+    used_fallback: bool
+    sampling: TargetPointSamplingResult
+
+
 def average_valid_target_point_samples(
     samples: Sequence[TargetPointSample],
     *,
@@ -93,6 +100,57 @@ def average_valid_target_point_samples(
             "averaged %d valid target point samples, rejected %d"
             % (len(distance_valid), rejected_count)
         ),
+    )
+
+
+def select_target_point(
+    samples: Sequence[TargetPointSample],
+    *,
+    min_valid_count: int,
+    max_sample_distance: float,
+    max_x: float,
+    max_abs_y: float,
+    target_y_offset: float,
+    fallback_xyz: tuple[float, float, float] | None,
+    fallback_spin_deg: float,
+    allow_fallback: bool,
+) -> TargetPointSelectionResult:
+    sampling = average_valid_target_point_samples(
+        samples,
+        min_valid_count=min_valid_count,
+        max_sample_distance=max_sample_distance,
+        max_x=max_x,
+        max_abs_y=max_abs_y,
+    )
+    if sampling.target is not None:
+        visual = sampling.target
+        return TargetPointSelectionResult(
+            target=TargetPointSample(
+                x=visual.x,
+                y=visual.y + float(target_y_offset),
+                z=visual.z,
+                target_spin_deg=visual.target_spin_deg,
+            ),
+            used_fallback=False,
+            sampling=sampling,
+        )
+
+    if allow_fallback and fallback_xyz is not None:
+        return TargetPointSelectionResult(
+            target=TargetPointSample(
+                x=float(fallback_xyz[0]),
+                y=float(fallback_xyz[1]),
+                z=float(fallback_xyz[2]),
+                target_spin_deg=float(fallback_spin_deg),
+            ),
+            used_fallback=True,
+            sampling=sampling,
+        )
+
+    return TargetPointSelectionResult(
+        target=None,
+        used_fallback=False,
+        sampling=sampling,
     )
 
 
