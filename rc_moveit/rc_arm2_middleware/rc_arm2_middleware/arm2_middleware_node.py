@@ -1133,11 +1133,6 @@ class Arm2MiddlewareNode(Node):
             ],
             min_valid_count=self._TARGET_POINT_MIN_VALID_COUNT,
             max_sample_distance=self._TARGET_POINT_MAX_SAMPLE_DISTANCE,
-            max_x=(
-                self._target_point_guard_max_x
-                if self._target_point_guard_enabled
-                else float("inf")
-            ),
             max_abs_y=(
                 self._target_point_guard_max_abs_y
                 if self._target_point_guard_enabled

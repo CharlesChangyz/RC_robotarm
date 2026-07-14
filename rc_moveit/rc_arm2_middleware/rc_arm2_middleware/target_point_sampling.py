@@ -36,14 +36,12 @@ def average_valid_target_point_samples(
     *,
     min_valid_count: int,
     max_sample_distance: float,
-    max_x: float,
     max_abs_y: float,
 ) -> TargetPointSamplingResult:
     guard_valid = [
         sample
         for sample in samples
         if _sample_is_finite(sample)
-        and float(sample.x) <= float(max_x)
         and abs(float(sample.y)) <= float(max_abs_y)
     ]
     rejected_count = len(samples) - len(guard_valid)
@@ -108,7 +106,6 @@ def select_target_point(
     *,
     min_valid_count: int,
     max_sample_distance: float,
-    max_x: float,
     max_abs_y: float,
     target_y_offset: float,
     fallback_xyz: tuple[float, float, float] | None,
@@ -119,7 +116,6 @@ def select_target_point(
         samples,
         min_valid_count=min_valid_count,
         max_sample_distance=max_sample_distance,
-        max_x=max_x,
         max_abs_y=max_abs_y,
     )
     if sampling.target is not None:
