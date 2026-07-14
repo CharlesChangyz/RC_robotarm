@@ -120,8 +120,8 @@ def _motion_status_name(status: int) -> str:
 
 class Arm2MiddlewareNode(Node):
     _FIXED_STEP_TIMEOUT_SEC = 5.0
-    _TARGET_POINT_SAMPLE_COUNT = 8
-    _TARGET_POINT_MIN_VALID_COUNT = 3
+    _TARGET_POINT_SAMPLE_COUNT = 5
+    _TARGET_POINT_MIN_VALID_COUNT = 2
     _TARGET_POINT_MAX_SAMPLE_DISTANCE = 0.03
 
     def __init__(self) -> None:

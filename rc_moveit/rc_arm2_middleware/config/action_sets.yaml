@@ -1051,7 +1051,7 @@ action_sets:
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.05, 0.0, 0.04]
             target_spin: 90.0
@@ -1070,7 +1070,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.01
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.7]
             target_spin: 100.0
@@ -1103,7 +1103,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: -0.06
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, -0.0001, 0.8]
             target_spin: 100.0
@@ -1154,7 +1154,7 @@ action_sets:
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, 0.0, 0.05]
             target_spin: 0.0
@@ -1173,7 +1173,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.01
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.7]
             target_spin: 100.0
@@ -1204,7 +1204,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: -0.06
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, -0.0001, 0.8]
             target_spin: 100.0
@@ -1244,7 +1244,7 @@ action_sets:
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.05, 0.0, 0.05]
             target_spin: 0.0
@@ -1263,7 +1263,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.8]
             target_spin: 100.0
@@ -1281,7 +1281,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: -0.06
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.7]
             target_spin: 100.0
@@ -1324,7 +1324,7 @@ action_sets:
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.05, 0.0, 0.05]
             target_spin: 0.0
@@ -1343,7 +1343,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.8]
             target_spin: 100.0
@@ -1361,7 +1361,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: -0.06
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.7]
             target_spin: 100.0
@@ -1423,7 +1423,7 @@ action_sets:
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, 0.0, 0.05]
             target_spin: 0.0
@@ -1481,7 +1481,7 @@ action_sets:
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, 0.0, 0.05]
             target_spin: 0.0
@@ -1540,7 +1540,7 @@ action_sets:
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, 0.0, 0.04]
             target_spin: 90.0
@@ -1559,7 +1559,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.7]
             target_spin: 100.0
@@ -1592,7 +1592,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: -0.06
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, -0.0001, 0.8]
             target_spin: 100.0
@@ -1637,7 +1637,7 @@ action_sets:
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, 0.0, -0.05]
             target_spin: 90.0
@@ -1694,7 +1694,7 @@ action_sets:
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.05, 0.0, -0.1]
             target_spin: 90.0
@@ -1713,7 +1713,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.01
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.7]
             target_spin: 100.0
@@ -1746,7 +1746,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, -0.0001, 0.8]
             target_spin: 100.0
@@ -1842,7 +1842,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: -0.06
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [0.0, 0.3, 0.26]
             target_spin: 65.0
@@ -1938,7 +1938,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [0.1, 0.0, 0.8]
             target_spin: 100.0
@@ -1966,7 +1966,7 @@ action_sets:
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.2, -0.0001, 0.27]
             target_spin: 0.0
@@ -2011,7 +2011,7 @@ action_sets:
       - type: move_target_offset_path
         label: smooth_target_path
         j5_target_pos: 0.0
-        blend_radius: 0.01
+        blend_radius: 0.0
         waypoints:
           - xyz: [-0.1, 0.0, 0.05]
             target_spin: 0.0
