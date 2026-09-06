@@ -21,7 +21,7 @@ setup(
     zip_safe=True,
     maintainer='wy',
     maintainer_email='wy@todo.todo',
-    description='EL-A3 robot arm Xbox controller real-time control package',
+    description='Gamepad teleoperation package for the rc_arm_2 robot arm',
     license='Apache-2.0',
     extras_require={
         'test': [

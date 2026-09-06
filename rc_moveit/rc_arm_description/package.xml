@@ -3,7 +3,7 @@
 <package format="3">
   <name>rc_arm_description</name>
   <version>1.0.0</version>
-  <description>EL-A3 6-DOF robot arm URDF description with ros2_control support</description>
+  <description>URDF description for the rc_arm_2 robot arm with ros2_control support</description>
   <maintainer email="user@example.com">User</maintainer>
   <license>Apache-2.0</license>
 

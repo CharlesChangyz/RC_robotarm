@@ -3,19 +3,25 @@
 <package format="3">
   <name>rc_arm_teleop</name>
   <version>0.0.1</version>
-  <description>EL-A3 robot arm gamepad teleoperation package, supports Xbox controller and Joy-Con IMU control</description>
+  <description>Gamepad teleoperation package for the rc_arm_2 robot arm</description>
   <maintainer email="wy@todo.todo">wy</maintainer>
   <license>Apache-2.0</license>
 
   <depend>rclpy</depend>
+  <depend>builtin_interfaces</depend>
+  <depend>control_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
+  <depend>trajectory_msgs</depend>
   <depend>moveit_msgs</depend>
   <depend>shape_msgs</depend>
   <depend>joy</depend>
   
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
   <exec_depend>ros2launch</exec_depend>
 
   <test_depend>ament_copyright</test_depend>

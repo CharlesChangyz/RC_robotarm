@@ -37,7 +37,7 @@
 
 - Ubuntu + ROS 2 Humble
 - MoveIt 2、ros2_control、controller_manager、RViz2、xacro
-- Python 3.8+
+- Python 3.10+
 - MuJoCo、dm-control、NumPy、SciPy、OMPL、TOPP-RA
 - 实机模式需要 CAN/USB2CANFD 设备和正确的电机 ID 配置
 
@@ -79,6 +79,41 @@ ROS_DOMAIN_ID=0 ./scripts/run_rc_arm_mujoco.sh
 cd rc_moveit
 colcon build --symlink-install --cmake-clean-cache --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
 ```
+
+### 无实机离线验证
+
+下面的命令使用 `/tmp` 下的独立目录，不读取或删除项目内已有的
+`build/`、`install/`、`log/`，也不会启动机械臂或 MuJoCo：
+
+```bash
+cd /path/to/rc_robotarm_mujoco
+VERIFY_ROOT="$(mktemp -d /tmp/rc_robotarm_verify.XXXXXX)"
+source /opt/ros/humble/setup.bash
+
+colcon --log-base "${VERIFY_ROOT}/log" build \
+  --base-paths rc_moveit \
+  --build-base "${VERIFY_ROOT}/build" \
+  --install-base "${VERIFY_ROOT}/install" \
+  --symlink-install \
+  --cmake-args -DBUILD_TESTING=ON
+
+source "${VERIFY_ROOT}/install/setup.bash"
+colcon --log-base "${VERIFY_ROOT}/test-log" test \
+  --base-paths rc_moveit \
+  --build-base "${VERIFY_ROOT}/build" \
+  --install-base "${VERIFY_ROOT}/install" \
+  --packages-select rc_arm2_middleware rc_arm_hardware rc_arm_moveit_config \
+  --return-code-on-test-failure
+colcon test-result --test-result-base "${VERIFY_ROOT}/build" --verbose
+
+PYTHONDONTWRITEBYTECODE=1 \
+PYTHONPATH="$PWD/rc_moveit/rc_arm2_middleware:$PWD/rc_moveit/rc_arm_teleop:$PYTHONPATH" \
+python3 -m pytest -p no:cacheprovider -q tests
+```
+
+`colcon test` 负责各 ROS 包注册的测试；最后一条 pytest 命令负责仓库根目录下的
+GUI 和启动脚本静态契约测试。`arm_msgs` 的 XML Schema lint 在完全离线的环境中
+可能因无法访问远程 XSD 而失败，这与功能测试失败应分开判断。
 
 ## MuJoCo 仿真运行
 
@@ -449,7 +484,7 @@ Key features:
 
 - Ubuntu with ROS 2 Humble
 - MoveIt 2, ros2_control, controller_manager, RViz2, xacro
-- Python 3.8+
+- Python 3.10+
 - MuJoCo, dm-control, NumPy, SciPy, OMPL, TOPP-RA
 - Real-hardware mode requires a CAN/USB2CANFD device and correct motor ID configuration
 
@@ -491,6 +526,43 @@ If you previously configured the workspace with a different Python interpreter, 
 cd rc_moveit
 colcon build --symlink-install --cmake-clean-cache --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
 ```
+
+### Offline verification without hardware
+
+The commands below use isolated directories under `/tmp`. They neither read nor
+delete the existing project `build/`, `install/`, or `log/` directories, and do
+not start the robot or MuJoCo:
+
+```bash
+cd /path/to/rc_robotarm_mujoco
+VERIFY_ROOT="$(mktemp -d /tmp/rc_robotarm_verify.XXXXXX)"
+source /opt/ros/humble/setup.bash
+
+colcon --log-base "${VERIFY_ROOT}/log" build \
+  --base-paths rc_moveit \
+  --build-base "${VERIFY_ROOT}/build" \
+  --install-base "${VERIFY_ROOT}/install" \
+  --symlink-install \
+  --cmake-args -DBUILD_TESTING=ON
+
+source "${VERIFY_ROOT}/install/setup.bash"
+colcon --log-base "${VERIFY_ROOT}/test-log" test \
+  --base-paths rc_moveit \
+  --build-base "${VERIFY_ROOT}/build" \
+  --install-base "${VERIFY_ROOT}/install" \
+  --packages-select rc_arm2_middleware rc_arm_hardware rc_arm_moveit_config \
+  --return-code-on-test-failure
+colcon test-result --test-result-base "${VERIFY_ROOT}/build" --verbose
+
+PYTHONDONTWRITEBYTECODE=1 \
+PYTHONPATH="$PWD/rc_moveit/rc_arm2_middleware:$PWD/rc_moveit/rc_arm_teleop:$PYTHONPATH" \
+python3 -m pytest -p no:cacheprovider -q tests
+```
+
+`colcon test` runs tests registered by the ROS packages. The final pytest command
+runs repository-level static contract tests for the GUI and launch scripts. In a
+fully offline environment, the `arm_msgs` XML Schema lint may fail because its
+remote XSD cannot be reached; treat that separately from functional test failures.
 
 ## Run MuJoCo Simulation
 

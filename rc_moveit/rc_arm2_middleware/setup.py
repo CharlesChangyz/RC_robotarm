@@ -17,6 +17,7 @@ setup(
         (os.path.join("share", package_name, "config"), glob("config/*.yaml")),
     ],
     install_requires=["setuptools", "PyYAML"],
+    tests_require=["pytest"],
     zip_safe=True,
     maintainer="Codex",
     maintainer_email="codex@openai.com",

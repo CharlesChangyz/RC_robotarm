@@ -38,10 +38,7 @@ rc_moveit/rc_arm_description/urdf/rc_arm_2/rc_arm_2.pinocchio.urdf
 log/
 install/
 lib/
-tests/
-rc_moveit/rc_arm_moveit_config/test/
 .marscode/
 tmp/
 sketches/
 docs/
-

@@ -74,6 +74,17 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_payload_blend
+    test/test_payload_blend.cpp
+  )
+  target_include_directories(test_payload_blend PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+endif()
+
 
 ament_export_include_directories(include)
 ament_export_libraries(${PROJECT_NAME})

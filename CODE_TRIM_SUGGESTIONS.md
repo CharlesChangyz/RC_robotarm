@@ -1,5 +1,8 @@
 # 项目删减与简化建议
 
+> 历史快照：本文记录的是生成时的代码状态，表中的“已处理”和行号不保证仍与当前
+> 工作树一致；执行删除建议前必须重新检查引用和现有文件。
+
 目标：只讨论“删减、合并、去冗余、去闲置入口”。不把加锁、补状态位、补测试这类增强型修改列为主要建议。当前代码可用，所以每条都带“删除前确认点”。
 
 审查依据：`rg` 引用搜索、`git ls-files` 跟踪文件检查、三个只读子代理分别审查 C++ 硬件链路、ROS launch/config、根 Python/MuJoCo/资源文件。
@@ -79,7 +82,7 @@ done
 | `demo/rc_robotarm_demo.py:1`，`scripts/run_rc_arm_mujoco_bridge.sh:28` | 已把原 `rc_robotarm_demo_2.py` 实现合并到 `rc_robotarm_demo.py`；脚本入口保持不变 | 无需继续修改 | 若外部手动调用旧 `_2.py` 文件名需同步改命令 | 已处理：只保留一个真实入口 |
 done
 
-| `scripts/arm2_target_point_stdin_publisher.py` | stdin JSON 转 `Arm2TargetPoint` 的调试工具，仓内无主流程引用 | 无需继续修改 | 若外部还手动管道喂 JSON，改用 ROS 节点或恢复为本地工具 | 已处理：脚本已删除 |
+| `scripts/arm2_target_point_stdin_publisher.py` | stdin JSON 转 `Arm2TargetPoint` 的调试工具，仓内无主流程引用 | 当前仍保留；如需删减应重新确认 | 若外部还手动管道喂 JSON，需保留兼容入口或同步改命令 | 历史“已删除”记录已过期 |
 done
 
 | `rc_robotarm_mujoco/props/` | `Primitive` 抽象仓内未使用 | 无需继续修改 | 若外部 notebook/script 使用过 `rc_robotarm_mujoco.props`，需改为本地工具代码 | 已处理：`props` 包已删除 |

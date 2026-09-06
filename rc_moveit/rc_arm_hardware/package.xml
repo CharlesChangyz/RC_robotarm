@@ -3,7 +3,7 @@
 <package format="3">
   <name>rc_arm_hardware</name>
   <version>1.0.0</version>
-  <description>ROS2 Control hardware interface for the EL-A3 arm using the dmbot_serial DM motor backend</description>
+  <description>ROS 2 Control hardware interface for rc_arm_2 using the dmbot_serial DM motor backend</description>
   <maintainer email="user@example.com">User</maintainer>
   <license>Apache-2.0</license>
 
@@ -15,6 +15,9 @@
   <depend>hardware_interface</depend>
   <depend>pluginlib</depend>
   <depend>pinocchio</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>arm_msgs</depend>
   <depend>dmbot_serial</depend>
 
