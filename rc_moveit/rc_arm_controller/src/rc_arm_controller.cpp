@@ -25,6 +25,7 @@ controller_interface::CallbackReturn RcArmController::on_init()
   auto_declare<std::vector<std::string>>("joints", {});
   auto_declare<bool>("allow_topic_commands", false);
   auto_declare<double>("feedback_publish_rate", 20.0);
+  auto_declare<std::string>("execution_feedback_topic", "~/execution_feedback");
   auto_declare<double>("constraints.stopped_velocity_tolerance", 0.0);
   auto_declare<double>("constraints.goal_time", 0.0);
   return controller_interface::CallbackReturn::SUCCESS;
@@ -86,6 +87,11 @@ controller_interface::CallbackReturn RcArmController::on_configure(
     std::bind(&RcArmController::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
     std::bind(&RcArmController::handle_cancel, this, std::placeholders::_1),
     std::bind(&RcArmController::handle_accepted, this, std::placeholders::_1));
+
+  execution_feedback_publisher_ =
+    get_node()->create_publisher<FollowJointTrajectory::Feedback>(
+    get_node()->get_parameter("execution_feedback_topic").as_string(),
+    rclcpp::SystemDefaultsQoS());
 
   if (allow_topic_commands_) {
     topic_subscription_ = get_node()->create_subscription<trajectory_msgs::msg::JointTrajectory>(
@@ -634,6 +640,9 @@ void RcArmController::publish_feedback(
     feedback->error.effort[i] = desired.effort[i] - actual_effort;
   }
 
+  if (execution_feedback_publisher_) {
+    execution_feedback_publisher_->publish(*feedback);
+  }
   goal_handle->publish_feedback(feedback);
 }
 

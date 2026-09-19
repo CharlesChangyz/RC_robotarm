@@ -124,6 +124,7 @@ private:
 
   std::shared_ptr<rclcpp_action::Server<FollowJointTrajectory>> action_server_;
   rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr topic_subscription_;
+  rclcpp::Publisher<FollowJointTrajectory::Feedback>::SharedPtr execution_feedback_publisher_;
 
   mutable std::mutex trajectory_mutex_;
   std::shared_ptr<ActiveTrajectory> active_trajectory_;

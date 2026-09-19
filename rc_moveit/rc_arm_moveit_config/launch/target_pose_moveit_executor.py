@@ -2,13 +2,16 @@
 """Subscribe manual and middleware targets and drive MoveIt planning/execution."""
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 import json
 import math
+import os
 import threading
 from typing import Dict, List, Optional, Tuple
 
 from arm_msgs.msg import Arm2MotionExecution, Arm2TargetPath, Arm2TargetPoint
+from control_msgs.action import FollowJointTrajectory
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit_msgs.action import ExecuteTrajectory, MoveGroup, MoveGroupSequence
@@ -30,6 +33,13 @@ from shape_msgs.msg import SolidPrimitive
 import tf2_ros
 
 from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics
+from trajectory_execution_report import (
+    TrajectoryReportWriter,
+    classify_motion,
+    classify_status,
+    reorder_joint_values,
+    should_generate_report,
+)
 
 
 EXECUTION_ERROR_BUSY = -1
@@ -114,6 +124,51 @@ def _json_preview(text: str, limit: int = 160) -> str:
     return one_line[:limit] + "..."
 
 
+def _duration_sec(duration) -> float:
+    return float(duration.sec) + float(duration.nanosec) * 1.0e-9
+
+
+def _rotation_matrix_to_quat_xyzw(rotation) -> Tuple[float, float, float, float]:
+    trace = float(rotation[0, 0] + rotation[1, 1] + rotation[2, 2])
+    if trace > 0.0:
+        scale = math.sqrt(trace + 1.0) * 2.0
+        return _normalize_quat_xyzw(
+            (
+                (float(rotation[2, 1]) - float(rotation[1, 2])) / scale,
+                (float(rotation[0, 2]) - float(rotation[2, 0])) / scale,
+                (float(rotation[1, 0]) - float(rotation[0, 1])) / scale,
+                0.25 * scale,
+            )
+        )
+    diagonal = [float(rotation[index, index]) for index in range(3)]
+    index = max(range(3), key=lambda item: diagonal[item])
+    if index == 0:
+        scale = math.sqrt(max(0.0, 1.0 + diagonal[0] - diagonal[1] - diagonal[2])) * 2.0
+        quat = (
+            0.25 * scale,
+            (float(rotation[0, 1]) + float(rotation[1, 0])) / scale,
+            (float(rotation[0, 2]) + float(rotation[2, 0])) / scale,
+            (float(rotation[2, 1]) - float(rotation[1, 2])) / scale,
+        )
+    elif index == 1:
+        scale = math.sqrt(max(0.0, 1.0 + diagonal[1] - diagonal[0] - diagonal[2])) * 2.0
+        quat = (
+            (float(rotation[0, 1]) + float(rotation[1, 0])) / scale,
+            0.25 * scale,
+            (float(rotation[1, 2]) + float(rotation[2, 1])) / scale,
+            (float(rotation[0, 2]) - float(rotation[2, 0])) / scale,
+        )
+    else:
+        scale = math.sqrt(max(0.0, 1.0 + diagonal[2] - diagonal[0] - diagonal[1])) * 2.0
+        quat = (
+            (float(rotation[0, 2]) + float(rotation[2, 0])) / scale,
+            (float(rotation[1, 2]) + float(rotation[2, 1])) / scale,
+            0.25 * scale,
+            (float(rotation[1, 0]) - float(rotation[0, 1])) / scale,
+        )
+    return _normalize_quat_xyzw(quat)
+
+
 @dataclass
 class ExecutionRequest:
     source: str
@@ -124,6 +179,15 @@ class ExecutionRequest:
     use_sequence: bool = False
     sequence_waypoints: Optional[List[PoseStamped]] = None
     sequence_blend_radius: float = 0.0
+    report_id: str = ""
+    report_started_at: str = ""
+    feedback_start_sec: Optional[float] = None
+    execution_samples: List[dict] = field(default_factory=list)
+    planned_trajectory: List[dict] = field(default_factory=list)
+    planned_duration_sec: float = 0.0
+    planning_time_sec: float = 0.0
+    planning_started_sec: Optional[float] = None
+    cartesian_fraction: Optional[float] = None
 
 
 class TargetPoseMoveItExecutor(Node):
@@ -169,6 +233,10 @@ class TargetPoseMoveItExecutor(Node):
         cartesian_min_fraction: float,
         sequence_position_tolerance: float,
         sequence_orientation_tolerance: float,
+        report_enabled: bool,
+        report_dir: str,
+        execution_feedback_topic: str,
+        report_label: str,
     ) -> None:
         super().__init__("rc_arm_target_pose_moveit_executor")
 
@@ -217,6 +285,21 @@ class TargetPoseMoveItExecutor(Node):
             1.0e-4,
             float(sequence_orientation_tolerance),
         )
+        self._report_enabled = bool(report_enabled)
+        self._report_dir = os.path.expanduser(str(report_dir))
+        self._execution_feedback_topic = str(execution_feedback_topic)
+        self._report_label = str(report_label).strip()
+        self._report_sequence = 0
+        self._report_writer = None
+        if self._report_enabled:
+            try:
+                self._report_writer = TrajectoryReportWriter(self._report_dir)
+            except OSError as exc:
+                self._report_enabled = False
+                self.get_logger().error(
+                    "trajectory reporting disabled: cannot create %s: %s"
+                    % (self._report_dir, exc)
+                )
 
         self._manual_target_lock = threading.Lock()
         self._latest_manual_target: Optional[PoseStamped] = None
@@ -294,6 +377,12 @@ class TargetPoseMoveItExecutor(Node):
             20,
         )
         self.create_subscription(JointState, joint_state_topic, self._on_joint_state, 20)
+        self.create_subscription(
+            FollowJointTrajectory.Feedback,
+            self._execution_feedback_topic,
+            self._on_execution_feedback,
+            50,
+        )
         self._timer = self.create_timer(max(0.02, float(check_period)), self._on_timer)
         self._scene_timer = self.create_timer(1.0, self._publish_static_world_scene)
         if self._status_log_period > 0.0:
@@ -303,7 +392,8 @@ class TargetPoseMoveItExecutor(Node):
             "TargetPose->MoveIt executor started: manual_topic=%s middleware_target=%s middleware_result=%s "
             "middleware_motion_path=%s middleware_cartesian_target=%s middleware_cartesian_path=%s group=%s avoid_collisions=%d world_boxes=%d planning_scene_topic=%s "
             "cartesian_max_step=%.4f cartesian_min_fraction=%.3f sequence_pipeline=%s sequence_planner=%s single_pipeline=%s single_planner=%s "
-            "sequence_pos_tol=%.4f sequence_ori_tol=%.4f status_tf=%s->%s"
+            "sequence_pos_tol=%.4f sequence_ori_tol=%.4f status_tf=%s->%s "
+            "report_enabled=%d report_dir=%s report_label=%s feedback_topic=%s"
             % (
                 self._manual_target_topic,
                 self._middleware_target_topic,
@@ -325,6 +415,10 @@ class TargetPoseMoveItExecutor(Node):
                 self._sequence_orientation_tolerance,
                 self._status_base_frame,
                 self._status_eef_frame,
+                1 if self._report_enabled else 0,
+                self._report_dir,
+                self._report_label or "<none>",
+                self._execution_feedback_topic,
             )
         )
 
@@ -340,6 +434,266 @@ class TargetPoseMoveItExecutor(Node):
                 velocity_mapping[name] = float(msg.velocity[idx])
         self._latest_joint_map = mapping
         self._latest_joint_velocity_map = velocity_mapping
+
+    def _on_execution_feedback(self, msg: FollowJointTrajectory.Feedback) -> None:
+        request = self._active_request
+        if not self._report_enabled or request is None or self._active_goal_handle is None:
+            return
+
+        try:
+            desired_position = reorder_joint_values(
+                self._joint_names, msg.joint_names, msg.desired.positions
+            )
+            actual_position = reorder_joint_values(
+                self._joint_names, msg.joint_names, msg.actual.positions
+            )
+            position_error = reorder_joint_values(
+                self._joint_names,
+                msg.joint_names,
+                msg.error.positions,
+                [desired - actual for desired, actual in zip(desired_position, actual_position)],
+            )
+            desired_velocity = reorder_joint_values(
+                self._joint_names, msg.joint_names, msg.desired.velocities
+            )
+            actual_velocity = reorder_joint_values(
+                self._joint_names, msg.joint_names, msg.actual.velocities
+            )
+            velocity_error = reorder_joint_values(
+                self._joint_names,
+                msg.joint_names,
+                msg.error.velocities,
+                [desired - actual for desired, actual in zip(desired_velocity, actual_velocity)],
+            )
+        except ValueError:
+            return
+
+        stamp_sec = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1.0e-9
+        if stamp_sec <= 0.0:
+            stamp_sec = self._now_sec()
+        if request.feedback_start_sec is None:
+            request.feedback_start_sec = stamp_sec
+        elapsed_sec = max(0.0, stamp_sec - request.feedback_start_sec)
+        if request.execution_samples:
+            elapsed_sec = max(elapsed_sec, float(request.execution_samples[-1]["elapsed_sec"]))
+
+        sample = {
+            "stamp_sec": stamp_sec,
+            "elapsed_sec": elapsed_sec,
+            "desired_position": desired_position,
+            "actual_position": actual_position,
+            "position_error": position_error,
+            "desired_velocity": desired_velocity,
+            "actual_velocity": actual_velocity,
+            "velocity_error": velocity_error,
+        }
+        try:
+            desired_tf = self._kinematics.forward_transform(desired_position)
+            actual_tf = self._kinematics.forward_transform(actual_position)
+            desired_xyz = list(self._kinematics.forward_position(desired_position))
+            actual_xyz = list(self._kinematics.forward_position(actual_position))
+            desired_quat = _rotation_matrix_to_quat_xyzw(desired_tf[:3, :3])
+            actual_quat = _rotation_matrix_to_quat_xyzw(actual_tf[:3, :3])
+            desired_pitch = self._kinematics.forward_world_pitch(desired_position)
+            actual_pitch = self._kinematics.forward_world_pitch(actual_position)
+            sample.update(
+                {
+                    "desired_eef_position": desired_xyz,
+                    "actual_eef_position": actual_xyz,
+                    "desired_eef_quaternion_xyzw": list(desired_quat),
+                    "actual_eef_quaternion_xyzw": list(actual_quat),
+                    "desired_eef_pitch_rad": desired_pitch,
+                    "actual_eef_pitch_rad": actual_pitch,
+                    "eef_position_error_m": math.sqrt(
+                        sum((desired - actual) ** 2 for desired, actual in zip(desired_xyz, actual_xyz))
+                    ),
+                    "eef_orientation_error_rad": _quat_angle(desired_quat, actual_quat),
+                    "eef_pitch_error_rad": abs(
+                        math.atan2(
+                            math.sin(desired_pitch - actual_pitch),
+                            math.cos(desired_pitch - actual_pitch),
+                        )
+                    ),
+                }
+            )
+        except (KeyError, TypeError, ValueError):
+            sample.update(
+                {
+                    "desired_eef_position": [math.nan, math.nan, math.nan],
+                    "actual_eef_position": [math.nan, math.nan, math.nan],
+                    "desired_eef_quaternion_xyzw": [math.nan] * 4,
+                    "actual_eef_quaternion_xyzw": [math.nan] * 4,
+                    "desired_eef_pitch_rad": math.nan,
+                    "actual_eef_pitch_rad": math.nan,
+                    "eef_position_error_m": math.nan,
+                    "eef_orientation_error_rad": math.nan,
+                    "eef_pitch_error_rad": math.nan,
+                }
+            )
+        request.execution_samples.append(sample)
+
+    def _new_report_identity(self) -> Tuple[str, str]:
+        self._report_sequence += 1
+        now = datetime.now().astimezone()
+        run_id = "%s-p%d-%04d" % (
+            now.strftime("%Y%m%dT%H%M%S_%f"),
+            os.getpid(),
+            self._report_sequence,
+        )
+        return run_id, now.isoformat(timespec="milliseconds")
+
+    def _motion_type(self, request: ExecutionRequest) -> str:
+        return classify_motion(request.use_sequence, request.use_cartesian)
+
+    def _planning_identity(self, request: ExecutionRequest) -> Tuple[str, str]:
+        if request.use_sequence:
+            return self._sequence_pipeline_id, self._sequence_planner_id
+        if request.use_cartesian:
+            return "moveit_cartesian_path", "GetCartesianPath"
+        return self._single_pipeline_id, self._single_planner_id
+
+    def _capture_planned_trajectories(self, request: ExecutionRequest, trajectories) -> None:
+        rows = []
+        total_duration = 0.0
+        for segment, trajectory in enumerate(trajectories):
+            joint_trajectory = trajectory.joint_trajectory
+            segment_duration = 0.0
+            for point_index, point in enumerate(joint_trajectory.points):
+                point_time = _duration_sec(point.time_from_start)
+                segment_duration = max(segment_duration, point_time)
+                rows.append(
+                    {
+                        "segment": segment,
+                        "point": point_index,
+                        "time_from_start_sec": point_time,
+                        "joint_names": list(joint_trajectory.joint_names),
+                        "positions": list(point.positions),
+                        "velocities": list(point.velocities),
+                        "accelerations": list(point.accelerations),
+                    }
+                )
+            total_duration += segment_duration
+        request.planned_trajectory = rows
+        request.planned_duration_sec = total_duration
+
+    def _pose_dict(self, pose: PoseStamped) -> dict:
+        return {
+            "frame_id": pose.header.frame_id,
+            "position": [
+                float(pose.pose.position.x),
+                float(pose.pose.position.y),
+                float(pose.pose.position.z),
+            ],
+            "orientation_xyzw": [
+                float(pose.pose.orientation.x),
+                float(pose.pose.orientation.y),
+                float(pose.pose.orientation.z),
+                float(pose.pose.orientation.w),
+            ],
+        }
+
+    def _submit_execution_report(
+        self,
+        request: ExecutionRequest,
+        success: bool,
+        error_code: int,
+        detail: str,
+        reason: str,
+    ) -> None:
+        if self._report_writer is None or not should_generate_report(
+            self._report_enabled, request.execution_samples
+        ):
+            return
+        pipeline_id, planner_id = self._planning_identity(request)
+        status = classify_status(
+            success,
+            error_code,
+            reason,
+            EXECUTION_ERROR_PREEMPTED,
+        )
+        waypoints = request.sequence_waypoints or []
+        if request.use_cartesian and request.cartesian_waypoints:
+            waypoints = []
+            for pose in request.cartesian_waypoints:
+                stamped = PoseStamped()
+                stamped.header.frame_id = request.target.header.frame_id
+                stamped.pose = pose
+                waypoints.append(stamped)
+        metadata = {
+            "run_id": request.report_id,
+            "started_at": request.report_started_at,
+            "finished_at": datetime.now().astimezone().isoformat(timespec="milliseconds"),
+            "label": self._report_label,
+            "source": request.source,
+            "motion_type": self._motion_type(request),
+            "pipeline_id": pipeline_id or "<default>",
+            "planner_id": planner_id or "<default>",
+            "execution_id": request.execution_id if request.execution_id is not None else "",
+            "status": status,
+            "error_code": int(error_code),
+            "detail": str(detail),
+            "completion_reason": str(reason),
+            "planning_time_sec": float(request.planning_time_sec),
+            "cartesian_fraction": request.cartesian_fraction,
+            "velocity_scale": self._vel_scale,
+            "acceleration_scale": self._acc_scale,
+            "target_pose": self._pose_dict(request.target),
+            "waypoints": [self._pose_dict(item) for item in waypoints],
+        }
+        last_sample = request.execution_samples[-1]
+        target_position = metadata["target_pose"]["position"]
+        target_quaternion = metadata["target_pose"]["orientation_xyzw"]
+        actual_position = last_sample.get("actual_eef_position", [math.nan] * 3)
+        actual_quaternion = last_sample.get("actual_eef_quaternion_xyzw", [math.nan] * 4)
+        target_pitch = self._kinematics.world_pitch_from_quaternion(target_quaternion)
+        actual_pitch = float(last_sample.get("actual_eef_pitch_rad", math.nan))
+        position_error = math.nan
+        orientation_error = math.nan
+        pitch_error = math.nan
+        if all(math.isfinite(float(value)) for value in actual_position):
+            position_error = math.sqrt(
+                sum(
+                    (float(target) - float(actual)) ** 2
+                    for target, actual in zip(target_position, actual_position)
+                )
+            )
+        if all(math.isfinite(float(value)) for value in actual_quaternion):
+            orientation_error = _quat_angle(tuple(target_quaternion), tuple(actual_quaternion))
+        if math.isfinite(actual_pitch):
+            pitch_error = abs(
+                math.atan2(
+                    math.sin(target_pitch - actual_pitch),
+                    math.cos(target_pitch - actual_pitch),
+                )
+            )
+        metadata["target_final_error"] = {
+            "position_m": position_error,
+            "orientation_rad": orientation_error,
+            "pitch_rad": pitch_error,
+        }
+        report = {
+            "metadata": metadata,
+            "joint_names": list(self._joint_names),
+            "samples": list(request.execution_samples),
+            "planned_trajectory": list(request.planned_trajectory),
+            "planned_duration_sec": request.planned_duration_sec,
+        }
+        future = self._report_writer.submit(report)
+        future.add_done_callback(
+            lambda done, run_id=request.report_id: self._on_report_written(done, run_id)
+        )
+
+    def _on_report_written(self, future, run_id: str) -> None:
+        try:
+            report_path = future.result()
+        except Exception as exc:
+            self.get_logger().error("trajectory report %s failed: %s" % (run_id, exc))
+            return
+        self.get_logger().info("trajectory report written: %s" % report_path)
+
+    def close_report_writer(self) -> None:
+        if self._report_writer is not None:
+            self._report_writer.close(wait=True)
 
     def _now_sec(self) -> float:
         return self.get_clock().now().nanoseconds * 1.0e-9
@@ -931,6 +1285,7 @@ class TargetPoseMoveItExecutor(Node):
         if self._busy:
             return
         request.target = self._resolve_target_pose(request.target)
+        request.report_id, request.report_started_at = self._new_report_identity()
         if request.source == "manual":
             self._last_sent_manual_target = _copy_pose_stamped(request.target)
         self._active_request = request
@@ -1121,6 +1476,7 @@ class TargetPoseMoveItExecutor(Node):
         path_request.max_step = self._cartesian_max_step
         path_request.jump_threshold = 0.0
         path_request.avoid_collisions = self._avoid_collisions
+        request.planning_started_sec = self._now_sec()
 
         start_joints = self._current_seed_joints()
         if start_joints is not None:
@@ -1175,6 +1531,10 @@ class TargetPoseMoveItExecutor(Node):
             )
             return
 
+        request.cartesian_fraction = float(response.fraction)
+        if request.planning_started_sec is not None:
+            request.planning_time_sec = max(0.0, self._now_sec() - request.planning_started_sec)
+        self._capture_planned_trajectories(request, [response.solution])
         goal = ExecuteTrajectory.Goal()
         goal.trajectory = response.solution
         self._event(
@@ -1369,6 +1729,11 @@ class TargetPoseMoveItExecutor(Node):
             )
             return
 
+        request.planning_time_sec = float(result.response.planning_time)
+        self._capture_planned_trajectories(
+            request,
+            list(result.response.planned_trajectories),
+        )
         error_code = result.response.error_code
         if (
             self._canceling_request is request
@@ -1447,6 +1812,9 @@ class TargetPoseMoveItExecutor(Node):
             )
             return
 
+        if hasattr(result, "planned_trajectory"):
+            request.planning_time_sec = float(getattr(result, "planning_time", 0.0))
+            self._capture_planned_trajectories(request, [result.planned_trajectory])
         if (
             self._canceling_request is request
             and self._pending_request is not None
@@ -1500,6 +1868,14 @@ class TargetPoseMoveItExecutor(Node):
             if success
             else Arm2MotionExecution.STATUS_FAILED
         )
+
+        try:
+            self._submit_execution_report(request, success, error_code, detail, reason)
+        except Exception as exc:
+            self.get_logger().error(
+                "trajectory report submission failed for %s: %s"
+                % (request.report_id or "<unknown>", exc)
+            )
 
         self._active_goal_handle = None
         if self._canceling_request is request:
@@ -1571,6 +1947,13 @@ def parse_args():
     parser.add_argument("--cartesian-min-fraction", type=float, default=0.99)
     parser.add_argument("--sequence-position-tolerance", type=float, default=0.005)
     parser.add_argument("--sequence-orientation-tolerance", type=float, default=0.05)
+    parser.add_argument("--report-enabled", default="true")
+    parser.add_argument("--report-dir", default="~/.ros/rc_arm_2/trajectory_reports")
+    parser.add_argument(
+        "--execution-feedback-topic",
+        default="/arm_controller/execution_feedback",
+    )
+    parser.add_argument("--report-label", default="")
     return parser.parse_args()
 
 
@@ -1622,6 +2005,10 @@ def main() -> None:
         cartesian_min_fraction=args.cartesian_min_fraction,
         sequence_position_tolerance=args.sequence_position_tolerance,
         sequence_orientation_tolerance=args.sequence_orientation_tolerance,
+        report_enabled=_parse_bool(args.report_enabled),
+        report_dir=args.report_dir,
+        execution_feedback_topic=args.execution_feedback_topic,
+        report_label=args.report_label,
     )
 
     try:
@@ -1629,6 +2016,7 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        node.close_report_writer()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

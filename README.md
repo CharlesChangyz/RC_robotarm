@@ -145,6 +145,15 @@ USE_RVIZ=false ./scripts/run_rc_arm_real.sh
 1. `tf_target_pose_bridge.py`：从 `/tf` 中读取 `world -> rc_arm_2_target`。
 2. `target_pose_moveit_executor.py`：订阅 `/rc_arm_2/target_pose`，用仓库内共享 4DOF solver 先解出 `j1..j4`，再把 joint goal 交给 MoveIt 做规划、避障和执行。
 
+每条真正进入控制器的规划轨迹会默认生成执行效果报告，包含 CSV、JSON、PNG 曲线和 HTML 总览：
+
+```text
+~/.ros/rc_arm_2/trajectory_reports/index.html
+```
+
+可用 `TARGET_POSE_EXECUTOR_REPORT_ENABLED=false` 关闭，或用
+`TARGET_POSE_EXECUTOR_REPORT_DIR=/path/to/reports` 修改保存目录。
+
 可以使用 GUI 工具发布目标 TF：
 
 ```bash
@@ -556,6 +565,16 @@ USE_RVIZ=false ./scripts/run_rc_arm_real.sh
 
 1. `tf_target_pose_bridge.py`: reads `world -> rc_arm_2_target` from `/tf`.
 2. `target_pose_moveit_executor.py`: subscribes to `/rc_arm_2/target_pose`, solves `j1..j4` with the shared 4DOF solver in this repo, then passes the joint goal to MoveIt for planning, collision checking, and execution.
+
+Every planned trajectory that reaches the controller produces an execution report with CSV,
+JSON, PNG plots, and an HTML index at:
+
+```text
+~/.ros/rc_arm_2/trajectory_reports/index.html
+```
+
+Set `TARGET_POSE_EXECUTOR_REPORT_ENABLED=false` to disable reporting, or set
+`TARGET_POSE_EXECUTOR_REPORT_DIR=/path/to/reports` to change the output directory.
 
 Use the GUI TF publisher to command a target:
 

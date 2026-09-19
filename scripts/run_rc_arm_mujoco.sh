@@ -32,6 +32,9 @@ CAMERA_TARGET_POINT_SOURCE_FRAME="${CAMERA_TARGET_POINT_SOURCE_FRAME:-camera_d43
 CAMERA_TARGET_POINT_TARGET_FRAME="${CAMERA_TARGET_POINT_TARGET_FRAME:-world}"
 CAMERA_TARGET_POINT_TF_TIMEOUT_SEC="${CAMERA_TARGET_POINT_TF_TIMEOUT_SEC:-0.2}"
 TARGET_POSE_EXECUTOR_DEFAULT_FRAME="${TARGET_POSE_EXECUTOR_DEFAULT_FRAME:-world}"
+TARGET_POSE_EXECUTOR_REPORT_ENABLED="${TARGET_POSE_EXECUTOR_REPORT_ENABLED:-true}"
+TARGET_POSE_EXECUTOR_REPORT_DIR="${TARGET_POSE_EXECUTOR_REPORT_DIR:-~/.ros/rc_arm_2/trajectory_reports}"
+TARGET_POSE_EXECUTOR_REPORT_LABEL="${TARGET_POSE_EXECUTOR_REPORT_LABEL:-mujoco}"
 MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED="${MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED:-true}"
 MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS="${MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS:-}"
 
@@ -58,6 +61,8 @@ echo "[run_rc_arm_mujoco] camera_target_point_source_frame=${CAMERA_TARGET_POINT
 echo "[run_rc_arm_mujoco] camera_target_point_target_frame=${CAMERA_TARGET_POINT_TARGET_FRAME}"
 echo "[run_rc_arm_mujoco] camera_target_point_tf_timeout_sec=${CAMERA_TARGET_POINT_TF_TIMEOUT_SEC}"
 echo "[run_rc_arm_mujoco] target_pose_executor_default_frame=${TARGET_POSE_EXECUTOR_DEFAULT_FRAME}"
+echo "[run_rc_arm_mujoco] target_pose_executor_report_enabled=${TARGET_POSE_EXECUTOR_REPORT_ENABLED}"
+echo "[run_rc_arm_mujoco] target_pose_executor_report_dir=${TARGET_POSE_EXECUTOR_REPORT_DIR}"
 echo "[run_rc_arm_mujoco] middleware_dm_serial_bridge_enabled=${MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED}"
 echo "[run_rc_arm_mujoco] middleware_dm_serial_allowed_action_set_ids=${MIDDLEWARE_DM_SERIAL_ALLOWED_ACTION_SET_IDS}"
 echo "[run_rc_arm_mujoco] make sure your MuJoCo side publishes JointState and consumes commands using the topics configured in ${HARDWARE_CONFIG_FILE}"
@@ -80,6 +85,9 @@ LAUNCH_ARGS=(
   "camera_target_point_target_frame:=${CAMERA_TARGET_POINT_TARGET_FRAME}"
   "camera_target_point_tf_timeout_sec:=${CAMERA_TARGET_POINT_TF_TIMEOUT_SEC}"
   "target_pose_executor_default_frame:=${TARGET_POSE_EXECUTOR_DEFAULT_FRAME}"
+  "target_pose_executor_report_enabled:=${TARGET_POSE_EXECUTOR_REPORT_ENABLED}"
+  "target_pose_executor_report_dir:=${TARGET_POSE_EXECUTOR_REPORT_DIR}"
+  "target_pose_executor_report_label:=${TARGET_POSE_EXECUTOR_REPORT_LABEL}"
   "middleware_dm_serial_bridge_enabled:=${MIDDLEWARE_DM_SERIAL_BRIDGE_ENABLED}"
 )
 

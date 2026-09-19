@@ -40,8 +40,9 @@ install/
 lib/
 tests/
 rc_moveit/rc_arm_moveit_config/test/
+!rc_moveit/rc_arm_moveit_config/tests/
+!rc_moveit/rc_arm_moveit_config/tests/**
 .marscode/
 tmp/
 sketches/
 docs/
-

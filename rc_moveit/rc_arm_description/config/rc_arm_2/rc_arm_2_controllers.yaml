@@ -33,6 +33,9 @@ arm_controller:
     # FollowJointTrajectory feedback 发布频率，单位 Hz
     feedback_publish_rate: 20.0
 
+    # 供执行效果报告采集期望值、实际值和跟踪偏差
+    execution_feedback_topic: /arm_controller/execution_feedback
+
     constraints:
       # 判断“机械臂已停止”的速度容差，单位 rad/s
       stopped_velocity_tolerance: 0.25

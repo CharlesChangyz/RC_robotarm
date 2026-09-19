@@ -9,5 +9,13 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
-ament_package()
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(
+    trajectory_execution_report_test
+    tests/test_trajectory_execution_report.py
+    TIMEOUT 120
+  )
+endif()
 
+ament_package()
