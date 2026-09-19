@@ -2,6 +2,7 @@
 """Sequential middleware for rc_arm_2 task execution."""
 
 from __future__ import annotations
+ 
 
 from dataclasses import dataclass, field
 from enum import Enum
@@ -119,8 +120,8 @@ def _motion_status_name(status: int) -> str:
 
 
 class Arm2MiddlewareNode(Node):
-    _FIXED_STEP_TIMEOUT_SEC = 5.0
-    _TARGET_POINT_SAMPLE_COUNT = 5
+    _FIXED_STEP_TIMEOUT_SEC = 3.0
+    _TARGET_POINT_SAMPLE_COUNT = 9
     _TARGET_POINT_MIN_VALID_COUNT = 2
     _TARGET_POINT_MAX_SAMPLE_DISTANCE = 0.03
 
@@ -157,7 +158,7 @@ class Arm2MiddlewareNode(Node):
         self.declare_parameter("dm_serial_complete_id", 0x500)
         self.declare_parameter("dm_serial_allowed_action_set_ids", "")
         self.declare_parameter("target_point_guard_enabled", True)
-        self.declare_parameter("target_point_guard_max_x", 0.8)
+        self.declare_parameter("target_point_guard_max_x", 1.0)
         self.declare_parameter("target_point_guard_max_abs_y", 0.14)
         self.declare_parameter("target_point_guard_recovery_action_set_id", 81)
 
@@ -554,6 +555,19 @@ class Arm2MiddlewareNode(Node):
             and self._target_point_sequence > run.waiting_target_point_baseline_sequence
         ):
             run.target_point_samples.append(self._cached_target_point)
+            sample_index = len(run.target_point_samples)
+            self.get_logger().info(
+                "target point sample index=%d seq=%d "
+                "x=%.4f y=%.4f z=%.4f spin=%.2f deg"
+                % (
+                    sample_index,
+                    self._target_point_sequence,
+                    self._cached_target_point.x,
+                    self._cached_target_point.y,
+                    self._cached_target_point.z,
+                    self._cached_target_point.target_spin_deg,
+                )
+            )
             if len(run.target_point_samples) >= self._TARGET_POINT_SAMPLE_COUNT:
                 self._finish_target_point_update_from_samples(
                     "collected %d target point samples"

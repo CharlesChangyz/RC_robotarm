@@ -1061,7 +1061,7 @@ action_sets:
       - type: set_payload_active
         label: payload_on
         enabled: true
-
+     
       - type: send_can_frame
         label: notify
         can_id: 0x602
@@ -1095,11 +1095,6 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: send_can_frame
-        label: notify
-        can_id: 0x603
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: -0.06
@@ -1113,9 +1108,15 @@ action_sets:
             target_spin: 65.0
 
       - type: send_can_frame
+        label: notify
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: send_can_frame
         label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
 
   - id: 2 # 视觉抓取 -200 KFS 正前方，入库（路径版）
     name: vision_catch_neg_200_KFS_front_and_store_path
@@ -1165,11 +1166,6 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: send_can_frame
-        label: notify
-        can_id: 0x602
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.01
@@ -1198,7 +1194,7 @@ action_sets:
 
       - type: send_can_frame
         label: notify
-        can_id: 0x603
+        can_id: 0x602
         can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: move_fixed_path
@@ -1212,6 +1208,11 @@ action_sets:
             target_spin: 100.0
           - xyz: [0.2171, 0.0, 0.1171]
             target_spin: 65.0
+
+      - type: send_can_frame
+        label: notify
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: send_can_frame
         label: dm_serial_complete
@@ -1434,11 +1435,17 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.83]
+      - type: move_fixed_path
+        label: smooth_fixed_path
         j5_target_pos: 0.0
-        target_spin: 110.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [0.1, 0.0, 0.8]
+            target_spin: 110.0
+          - xyz: [-0.1, -0.0001, 0.8]
+            target_spin: 110.0
+          - xyz: [-0.2, -0.0001, 0.6]
+            target_spin: 110.0
 
       - type: send_can_frame
         label: notify
@@ -1466,6 +1473,18 @@ action_sets:
         label: vacuum_on
         enabled: true
 
+      # - type: move_fixed_path
+      #   label: smooth_fixed_path
+      #   j5_target_pos: 0.0
+      #   blend_radius: 0.0
+      #   waypoints:
+      #     - xyz: [0.68, 0.0, -0.05]
+      #       target_spin: 0.0
+      #     - xyz:  [0.68, 0.0 ,-0.09]
+      #       target_spin: 0.0
+      #     - xyz: [0.68, 0.0 , 0.0]
+      #       target_spin: 0.0
+
       - type: move_fixed_pose
         label: move_to_default_pose
         xyz: [0.2171, 0.0, 0.1171]
@@ -1476,7 +1495,7 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
-        fallback_xyz: [0.6, 0.0, -0.05]
+        fallback_xyz: [0.78, 0.0, 0.0]
 
       - type: move_target_offset_path
         label: smooth_target_path
@@ -1492,11 +1511,17 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.83]
+      - type: move_fixed_path
+        label: smooth_fixed_path
         j5_target_pos: 0.0
-        target_spin: 110.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [0.1, 0.0, 0.8]
+            target_spin: 110.0
+          - xyz: [-0.1, -0.0001, 0.8]
+            target_spin: 110.0
+          - xyz: [-0.2, -0.0001, 0.6]
+            target_spin: 110.0
 
       - type: send_can_frame
         label: notify
@@ -1584,11 +1609,6 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: send_can_frame
-        label: notify
-        can_id: 0x603
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: -0.06
@@ -1600,6 +1620,11 @@ action_sets:
             target_spin: 100.0
           - xyz: [0.2171, 0.0, 0.1171]
             target_spin: 65.0
+
+      - type: send_can_frame
+        label: notify
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: send_can_frame
         label: dm_serial_complete
@@ -1648,11 +1673,17 @@ action_sets:
         label: payload_on
         enabled: true
 
-      - type: move_fixed_pose
-        label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.83]
+      - type: move_fixed_path
+        label: smooth_fixed_path
         j5_target_pos: 0.0
-        target_spin: 110.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [0.1, 0.0, 0.8]
+            target_spin: 110.0
+          - xyz: [-0.1, -0.0001, 0.8]
+            target_spin: 110.0
+          - xyz: [-0.2, -0.0001, 0.6]
+            target_spin: 110.0
 
       - type: send_can_frame
         label: notify
@@ -1689,7 +1720,7 @@ action_sets:
         label: update_vision_point
         timeout_sec: 1.0
         target_y_offset: -0.06
-        fallback_xyz: [0.7, 0.0, 0.35]
+        fallback_xyz: [0.7, 0.0, 0.4]
 
       - type: move_target_offset_path
         label: smooth_target_path
@@ -1698,7 +1729,7 @@ action_sets:
         waypoints:
           - xyz: [-0.05, 0.0, -0.1]
             target_spin: 90.0
-          - xyz: [0.05, 0.0, -0.1]
+          - xyz: [0.07, 0.0, -0.1]
             target_spin: 90.0
 
       - type: set_payload_active
@@ -1738,11 +1769,6 @@ action_sets:
         label: vacuum_off
         enabled: false
 
-      - type: send_can_frame
-        label: notify
-        can_id: 0x603
-        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
-
       - type: move_fixed_path
         label: smooth_fixed_path
         j5_target_pos: 0.0
@@ -1754,6 +1780,11 @@ action_sets:
             target_spin: 100.0
           - xyz: [0.35, 0.0, 0.45]
             target_spin: 65.0
+
+      - type: send_can_frame
+        label: notify
+        can_id: 0x603
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
 
       - type: send_can_frame
         label: dm_serial_complete
@@ -1797,9 +1828,9 @@ action_sets:
 
       - type: move_fixed_pose
         label: move_to_default_pose
-        xyz: [0.1, 0.0, 0.83]
+        xyz: [0.1, 0.0, 0.8]
         j5_target_pos: 0.0
-        target_spin: 110.0
+        target_spin: 120.0
 
       - type: send_can_frame
         label: dm_serial_complete
@@ -1977,6 +2008,11 @@ action_sets:
 
       - type: send_can_frame
         label: dm_serial_complete
+        can_id: 0x603
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+      - type: send_can_frame
+        label: dm_serial_complete
         can_id: 0x500
         can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
@@ -2082,6 +2118,29 @@ action_sets:
         xyz: [0.154, 0.0, 0.58]
         j5_target_pos: 0.0
         target_spin: 110.0
+
+      - type: send_can_frame
+        label: dm_serial_complete
+        can_id: 0x500
+        can_data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+  - id: 32 # keep out
+    name: keep_out
+    steps:
+      - type: send_can_frame
+        label: received
+        can_id: 0x604
+        can_data: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc]
+
+      - type: move_fixed_path
+        label: smooth_fixed_path
+        j5_target_pos: 0.0
+        blend_radius: 0.0
+        waypoints:
+          - xyz: [-0.1, -0.0001, 0.8]
+            target_spin: 100.0
+          - xyz: [0.1, 0.0, 0.83]
+            target_spin: 110.0
 
       - type: send_can_frame
         label: dm_serial_complete

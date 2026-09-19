@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -57,6 +58,7 @@ from rc_arm_world_pitch_kinematics import RcArmWorldPitchKinematics  # noqa: E40
 SCRIPT_RUN_MUJOCO = ROOT_DIR / "scripts" / "run_rc_arm_mujoco.sh"
 SCRIPT_RUN_MUJOCO_BRIDGE = ROOT_DIR / "scripts" / "run_rc_arm_mujoco_bridge.sh"
 SCRIPT_RUN_REAL = ROOT_DIR / "scripts" / "run_rc_arm_real.sh"
+GUI_LOG_DIR = ROOT_DIR / "log" / "gui"
 AUTO_CLEANUP_WAIT_SEC = 1.0
 PROCESS_SIGINT_WAIT_MS = 15000
 PROCESS_SIGTERM_WAIT_MS = 5000
@@ -1026,6 +1028,10 @@ class TargetPublisherWindow(QMainWindow):
         self._actual_pose_ready = False
         self._syncing_editor = False
         self._shutdown_started = False
+        self._gui_log_saved = False
+        self._gui_log_path = GUI_LOG_DIR / "tf_target_gui_{}.log".format(
+            datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+        )
         self._settings = QSettings("RCArm", "TfTargetCliPublisher")
         self._language = str(self._settings.value("language", "en"))
         if self._language not in ("en", "zh"):
@@ -1864,18 +1870,44 @@ class TargetPublisherWindow(QMainWindow):
         self._log_view.appendPlainText(text)
         self._backend.publish_remote_log("host_gui", "info", text)
 
+    def _save_gui_log(self) -> None:
+        if self._gui_log_saved:
+            return
+
+        try:
+            self._gui_log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_text = self._log_view.toPlainText()
+            self._gui_log_path.write_text(
+                log_text + ("\n" if log_text and not log_text.endswith("\n") else ""),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(
+                "failed to save GUI log to {}: {}".format(self._gui_log_path, exc),
+                file=sys.stderr,
+            )
+            return
+
+        self._gui_log_saved = True
+        print("GUI log saved to {}".format(self._gui_log_path))
+
     def shutdown(self) -> None:
         if self._shutdown_started:
             return
         self._shutdown_started = True
-        self._mujoco_stack.stop()
-        self._mujoco_bridge.stop()
-        self._real_stack.stop()
-        self._cleanup_project_ros_processes(
-            prefix="shutdown cleanup",
-            announce="clearing project ROS processes",
-        )
-        self._backend.stop()
+        try:
+            self._mujoco_stack.stop()
+            self._mujoco_bridge.stop()
+            self._real_stack.stop()
+            self._cleanup_project_ros_processes(
+                prefix="shutdown cleanup",
+                announce="clearing project ROS processes",
+            )
+        finally:
+            try:
+                self._backend.stop()
+            finally:
+                self._save_gui_log()
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self.shutdown()
